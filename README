@@ -34,13 +34,22 @@ web/librxe.js       The library alone, with the binding in src/binding.c, for
                     routinely exceed what a double holds exactly, and a
                     decimal string round-trips through BigInt losslessly.
 
+                    web/engine.js wraps it and knows about neither the worker
+                    nor the page, so the same code is driven by the browser
+                    and by tests/node.mjs. web/worker.js is a module worker
+                    holding one instance of it; the page talks to that.
+
 
 STATUS
 ======
 
-The engine is built and verified. librxe's own suite -- 354 pinned cases, the
-66-pattern oracle and the shortlex brute-force -- passes in full against the
-WebAssembly build. The user interface is not written yet.
+Working. librxe's own suite passes in full against the WebAssembly build, and
+the interface runs on top of it: a library of examples with notes, in English
+and Brazilian Portuguese, exercising counting, seeking, the shuffle key, the
+direction flag and random choice.
+
+'make test' runs three things: librxe's suite through bin/rxenum-wasm, the
+binding layer under node, and the whole page in a real browser.
 
 Two things had to be dealt with, and both are worth knowing about.
 
@@ -53,6 +62,13 @@ traps with "table index is out of bounds".
 And Emscripten's libc is musl, whose getopt stops at the first non-option
 where the GNU one reorders argv. That turned up a real portability bug in
 rxenum rather than anything to do with WebAssembly, and was fixed there.
+
+A third thing is worth writing down because it wasted an hour: Chrome's
+--virtual-time-budget does not advance timers inside a worker. A page whose
+worker waits on any timer -- which every Emscripten module does while it
+instantiates -- appears to hang under --dump-dom while being perfectly well
+in a real browser. tests/browser.mjs therefore drives Chrome over the
+DevTools protocol in real time instead.
 
 
 REQUIREMENTS

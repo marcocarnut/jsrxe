@@ -37,8 +37,7 @@ CFLAGS   := -O2 -I$(RXE) -I$(GMP)
 # array from the number of decimal digits it is about to write, and the whole
 # point of this library is numbers with a great many of them: the cardinality
 # of '[a-z]{1,20000}' has 28,300, which overflows the stack and traps.
-COMMON   := -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8MB -sMODULARIZE=1 \
-            -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8
+COMMON   := -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8MB -sMODULARIZE=1
 
 all: bin/rxenum.js web/librxe.js
 
@@ -64,29 +63,49 @@ gmp: $(GMP_LIB)
 # ---- the demo program, for running librxe's own test suite ----------------
 
 bin/rxenum.js: $(RXE_SRC) $(RXE)/rxenum.c $(GMP_LIB)
-	$(EMCC) $(CFLAGS) $(COMMON) -sINVOKE_RUN=1 -sEXIT_RUNTIME=1 \
-	    -sENVIRONMENT=node -sMODULARIZE=0 \
+	$(EMCC) $(CFLAGS) -O2 -I$(RXE) -Ibuild/gmp -sALLOW_MEMORY_GROWTH=1 \
+	    -sSTACK_SIZE=8MB -sINVOKE_RUN=1 -sEXIT_RUNTIME=1 -sENVIRONMENT=node \
 	    $(RXE_SRC) $(RXE)/rxenum.c $(GMP_LIB) -lm -o $@
 
 # ---- the library, for the UI ---------------------------------------------
 
+# EXPORT_ES6 so the worker can be a module worker and import it, and so the
+# same file is importable from node for the headless test below. The heap
+# views have to be asked for by name: recent Emscripten does not put them on
+# the module object unless told, and reading an element's bytes needs them.
+LIBFLAGS := -sEXPORT_NAME=createLibrxe -sEXPORT_ES6=1 \
+            -sEXPORTED_FUNCTIONS=_malloc,_free \
+            -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,HEAPU8,HEAP32
+
 web/librxe.js: $(RXE_SRC) src/binding.c $(GMP_LIB)
-	$(EMCC) $(CFLAGS) $(COMMON) -sEXPORT_NAME=createLibrxe \
-	    -sENVIRONMENT=web,worker \
+	$(EMCC) $(CFLAGS) $(COMMON) $(LIBFLAGS) -sENVIRONMENT=web,worker \
+	    $(RXE_SRC) src/binding.c $(GMP_LIB) -lm -o $@
+
+# The same binding built for node, so that engine.js can be exercised without
+# a browser. Not shipped; it exists to be tested.
+build/librxe-node.mjs: $(RXE_SRC) src/binding.c $(GMP_LIB)
+	$(EMCC) $(CFLAGS) $(COMMON) $(LIBFLAGS) -sENVIRONMENT=node \
 	    $(RXE_SRC) src/binding.c $(GMP_LIB) -lm -o $@
 
 # ---- checks ---------------------------------------------------------------
 # The real test of the port: librxe's suite, unchanged, against this build.
 
-test: bin/rxenum.js
+# NODE22 needs a global WebSocket for the DevTools protocol, which arrived in
+# node 22. Emscripten ships one, so there is always a suitable one to hand.
+NODE22 ?= $(firstword $(wildcard $(EMSDK)/node/*/bin/node) node)
+
+test: bin/rxenum.js build/librxe-node.mjs web/librxe.js
 	cd $(RXE) && RXENUM=$(CURDIR)/bin/rxenum-wasm $(MAKE) test
+	node tests/node.mjs
+	$(NODE22) tests/browser.mjs
 
 serve: web/librxe.js
 	@echo "http://localhost:8000/web/"
 	python3 -m http.server 8000
 
 clean:
-	rm -f bin/rxenum.js bin/rxenum.wasm web/librxe.js web/librxe.wasm
+	rm -f bin/rxenum.js bin/rxenum.wasm web/librxe.js web/librxe.wasm \
+	      build/librxe-node.mjs build/librxe-node.wasm
 
 distclean: clean
 	rm -rf $(BUILD)

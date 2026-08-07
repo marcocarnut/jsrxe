@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>jsrxe self-test</title>
+<style>
+ body { font: 14px/1.5 ui-monospace, monospace; margin: 2rem; }
+ .ok { color: #176; } .bad { color: #a22; font-weight: bold; }
+ h1 { font-size: 1.1rem; } #sum { margin-top: 1rem; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>jsrxe self-test</h1>
+<div id="out">running…</div>
+<div id="sum"></div>
+
+<script type="module">
+// Checks the WebAssembly binding through the same worker the application
+// uses, in a real browser. The command-line suite already proves the engine;
+// what this proves is the layer between it and the page -- that indices
+// survive as decimal strings, that a member's bytes arrive intact, and that
+// the permutation and the length counts are reachable at all.
+
+const worker = new Worker("worker.js", { type: "module" });
+let seq = 0; const pending = new Map();
+function fatal(msg) {
+  document.getElementById("out").innerHTML =
+    `<div class="bad">FAIL ${String(msg).replace(/</g, "&lt;")}</div>`;
+  document.title = "FAIL setup";
+  globalThis.__selftest = { pass: 0, fail: 1, failures: [String(msg)] };
+}
+worker.onerror = (e) => fatal("worker: " + (e.message || e) +
+                              (e.filename ? " @ " + e.filename + ":" + e.lineno : ""));
+worker.onmessageerror = (e) => fatal("worker message: " + e);
+addEventListener("error", (e) => fatal("page: " + e.message));
+addEventListener("unhandledrejection", (e) => fatal("rejected: " + e.reason));
+setTimeout(() => { if (!seq) fatal("the worker never became ready"); }, 12000);
+worker.onmessage = (e) => {
+  if (e.data.fatal) { fatal("worker init: " + e.data.fatal); return; }
+  if (e.data.ready) { start(); return; }
+  const { id, ...rest } = e.data;
+  const r = pending.get(id); if (r) { pending.delete(id); r(rest); }
+};
+const call = (type, args = {}) => new Promise((res) => {
+  const id = ++seq; pending.set(id, res);
+  worker.postMessage({ id, type, ...args });
+});
+
+const out = document.getElementById("out");
+let pass = 0, fail = 0;
+const failures = [];
+function check(what, want, got) {
+  const ok = String(want) === String(got);
+  if (ok) pass++; else { fail++; failures.push(`${what}: want ${want}, got ${got}`); }
+  out.insertAdjacentHTML("beforeend",
+    `<div class="${ok ? "ok" : "bad"}">${ok ? "ok  " : "FAIL"} ${what}` +
+    (ok ? "" : `<br>&nbsp;&nbsp;&nbsp;&nbsp;want ${want}<br>&nbsp;&nbsp;&nbsp;&nbsp;got  ${got}`) +
+    `</div>`);
+}
+
+async function start() {
+  out.innerHTML = "";
+
+  // --- a finite set: the count must be exact, not a rounded double
+  let r = await call("parse", { pattern: "[0-9A-Za-z]{8}", flags: "" });
+  check("[0-9A-Za-z]{8} parses", true, r.ok);
+  check("  its count is exact", "218340105584896", r.count);
+  check("  it is finite", false, r.infinite);
+  check("  and ordered by place value", false, r.shortlex);
+
+  // --- radix conversion, the documented property of the default order
+  await call("parse", { pattern: "([0-9A-F]{4} ){2}", flags: "" });
+  r = await call("rows", { from: "3735928559", n: 1 });
+  check("index 3735928559 is DEAD BEEF", "DEAD BEEF ", r.rows[0].value);
+
+  // --- and it reverses under (?L)
+  await call("parse", { pattern: "([0-9A-F]{4} ){2}", flags: "L" });
+  r = await call("rows", { from: "3735928559", n: 1 });
+  check("  reversed under -L", "FEEB DAED ", r.rows[0].value);
+
+  // --- an index far past what a double holds exactly
+  await call("parse", { pattern: "[0-9]{40}", flags: "" });
+  const big = "1234567890123456789012345678901234567890";
+  r = await call("rows", { from: big, n: 1 });
+  check("a 40-digit index survives the boundary", big, r.rows[0].value);
+
+  // --- an infinite set: no count, but every index still resolves
+  r = await call("parse", { pattern: "[1-9][0-9]*", flags: "" });
+  check("[1-9][0-9]* is infinite", true, r.infinite);
+  check("  with no count", null, r.count);
+  check("  ordered shortest first", true, r.shortlex);
+  r = await call("rows", { from: "999999", n: 1 });
+  check("  and index 999999 is 1000000", "1000000", r.rows[0].value);
+
+  // --- the shape counting by length exists for
+  await call("parse", { pattern: "(\\d+,)*", flags: "" });
+  r = await call("lengths", { max: 4 });
+  check("(\\d+,)* members by length", "1,0,10,100,1100", r.counts.join(","));
+  r = await call("rows", { from: "1111", n: 1 });
+  check("  first two-element list at 1111", "0,0,", r.rows[0].value);
+
+  // --- a backreference keeps the diagonal order rather than being refused
+  r = await call("parse", { pattern: "([ab]+)\\1", flags: "" });
+  check("([ab]+)\\1 is infinite", true, r.infinite);
+  check("  but not shortest first", false, r.shortlex);
+  r = await call("rows", { from: "0", n: 4 });
+  check("  and still enumerates", "aa,bb,aaaa,abab",
+        r.rows.map((x) => x.value).join(","));
+
+  // --- the keyed permutation: same members, every one exactly once
+  await call("parse", { pattern: "[a-c][x-z]", flags: "" });
+  await call("key", { key: "hunter2", count: "9" });
+  r = await call("rows", { from: "0", n: 9 });
+  check("shuffled order is reproducible", "cx,az,by,bz,cy,cz,ay,ax,bx",
+        r.rows.map((x) => x.value).join(","));
+  check("  and visits all nine", 9, new Set(r.rows.map((x) => x.value)).size);
+  await call("key", { key: "", count: "9" });
+  r = await call("rows", { from: "0", n: 3 });
+  check("  clearing the key restores index order", "ax,ay,az",
+        r.rows.map((x) => x.value).join(","));
+
+  // --- the empty string is a member and must survive as one
+  await call("parse", { pattern: "a?", flags: "" });
+  r = await call("rows", { from: "0", n: 2 });
+  check("the empty string round-trips", "|a",
+        r.rows.map((x) => x.value).join("|"));
+
+  // --- bytes that are not text must arrive intact
+  await call("parse", { pattern: "\\x01\\xff", flags: "" });
+  r = await call("rows", { from: "0", n: 1 });
+  check("arbitrary bytes survive", "1,255",
+        [...r.rows[0].value].map((c) => c.charCodeAt(0)).join(","));
+
+  // --- a rejected expression reports why
+  r = await call("parse", { pattern: "a**", flags: "" });
+  check("a** is refused", false, r.ok);
+  check("  with a reason", "nested quantifiers", r.error);
+
+  // --- seeking past the end of a finite set stops rather than wrapping
+  await call("parse", { pattern: "[ab]", flags: "" });
+  r = await call("rows", { from: "0", n: 10 });
+  check("a two-member set yields two rows", 2, r.rows.length);
+
+  document.getElementById("sum").innerHTML =
+    fail ? `<span class="bad">${fail} FAILED, ${pass} passed</span>`
+         : `<span class="ok">all ${pass} checks passed</span>`;
+  document.title = fail ? `FAIL ${fail}` : `OK ${pass}`;
+  // Left for tests/browser.mjs to read over the DevTools protocol.
+  globalThis.__selftest = { pass, fail, failures };
+}
+</script>
+</body>
+</html>

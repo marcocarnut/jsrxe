@@ -1,7 +1,10 @@
 build/
+web/librxe.wasm
 bin/rxenum.js
 bin/rxenum.wasm
 web/librxe.js
 web/librxe.wasm
 node_modules/
 *~
+build/librxe-node.mjs
+build/librxe-node.wasm

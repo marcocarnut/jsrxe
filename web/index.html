@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rxenum</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <select id="lang" aria-label="Language"></select>
+  <h1 data-t="title">rxenum</h1>
+  <p class="sub" data-t="subtitle"></p>
+</header>
+
+<main>
+
+  <!-- ------------------------------------------------ the example library -->
+  <aside id="library">
+    <h2 data-t="library"></h2>
+    <input id="libsearch" type="search" data-tplace="libSearch">
+    <div id="libtabs">
+      <button class="tab on" data-filter="all">&#9679;</button>
+      <button class="tab" data-filter="finite" data-t="libFinite"></button>
+      <button class="tab" data-filter="infinite" data-t="libInfinite"></button>
+      <button class="tab" data-filter="mine" data-t="libMine"></button>
+    </div>
+    <ul id="liblist"></ul>
+    <button id="addown" class="wide" data-t="addOwn"></button>
+  </aside>
+
+  <!-- ------------------------------------------------------- the workbench -->
+  <section id="work">
+
+    <div class="panel">
+      <label for="pattern" data-t="patternLabel"></label>
+      <input id="pattern" type="text" spellcheck="false" autocapitalize="off"
+             autocomplete="off" data-tplace="patternPlace">
+      <div id="err" class="err" hidden></div>
+      <div class="flags">
+        <span class="flabel" data-t="flags"></span>
+        <label><input type="checkbox" id="fi"><span data-t="flagI"></span>
+               <em data-t="flagIHint"></em></label>
+        <label><input type="checkbox" id="fs"><span data-t="flagS"></span>
+               <em data-t="flagSHint"></em></label>
+        <label><input type="checkbox" id="fL"><span data-t="flagL"></span>
+               <em data-t="flagLHint"></em></label>
+      </div>
+    </div>
+
+    <div id="note" class="panel note" hidden></div>
+
+    <div class="row">
+      <div class="panel grow">
+        <h2 data-t="size"></h2>
+        <div id="count" class="big"></div>
+        <div id="approx" class="dim"></div>
+      </div>
+      <div class="panel grow">
+        <h2 data-t="order"></h2>
+        <div id="order" class="big"></div>
+        <div id="orderhint" class="dim"></div>
+      </div>
+    </div>
+
+    <details id="lenpanel" class="panel">
+      <summary><span data-t="lengths"></span></summary>
+      <p class="dim" data-t="lengthsHint"></p>
+      <div id="lengths"></div>
+    </details>
+
+    <div class="panel">
+      <h2 data-t="elements"></h2>
+
+      <div class="controls">
+        <label class="ctl"><span data-t="fromIndex"></span>
+          <input id="from" type="text" inputmode="numeric" value="0"></label>
+        <label class="ctl"><span data-t="perPage"></span>
+          <input id="per" type="number" min="1" max="1000" value="50"></label>
+        <label class="ctl chk"><input type="checkbox" id="zero" checked>
+          <span data-t="zeroBased"></span> <em data-t="zeroHint"></em></label>
+        <label class="ctl grow"><span data-t="key"></span>
+          <input id="key" type="text" data-tplace="keyPlace"></label>
+      </div>
+      <p class="dim" data-t="keyHint"></p>
+
+      <div class="nav">
+        <button id="first" data-t="first"></button>
+        <button id="prev" data-t="prev"></button>
+        <button id="next" data-t="next"></button>
+        <button id="last" data-t="last"></button>
+        <button id="random" data-t="random"></button>
+      </div>
+
+      <input id="slider" type="range" min="0" max="10000" value="0" hidden>
+
+      <table id="results">
+        <thead><tr><th class="ix" data-t="indexCol"></th>
+                   <th data-t="valueCol"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="status" class="dim"></div>
+    </div>
+
+    <details class="panel">
+      <summary data-t="aboutTitle"></summary>
+      <p class="dim" data-t="about"></p>
+    </details>
+
+  </section>
+</main>
+
+<!-- --------------------------------------------------- save-an-example form -->
+<dialog id="savebox">
+  <form method="dialog">
+    <label><span data-t="addName"></span>
+      <input id="savename" type="text" required></label>
+    <label><span data-t="addNote"></span>
+      <textarea id="savenote" rows="4"></textarea></label>
+    <p class="dim" data-t="savedHere"></p>
+    <menu>
+      <button value="cancel" data-t="addCancel"></button>
+      <button id="savego" value="save" data-t="addSave"></button>
+    </menu>
+  </form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

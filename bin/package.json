@@ -1,0 +1,4 @@
+{
+  "_comment": "Emscripten emits the demo program as CommonJS, and the project is otherwise ES modules. This overrides the type for this directory only.",
+  "type": "commonjs"
+}

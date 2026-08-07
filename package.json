@@ -1,0 +1,7 @@
+{
+  "name": "jsrxe",
+  "private": true,
+  "description": "librxe in the browser",
+  "license": "GPL-2.0-or-later",
+  "type": "module"
+}
