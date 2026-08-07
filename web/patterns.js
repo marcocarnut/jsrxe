@@ -116,64 +116,103 @@ export const BUILTIN = [
     }
   },
   {
-    id: "cnpj",
-    pattern: "[0-9A-Z]{8}0001",
+    id: "cnpj-all",
+    family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
+    pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}-\\d{2}",
     flags: "",
-    name: { en: "CNPJ, alphanumeric (2026)",
-            pt: "CNPJ alfanumérico (2026)" },
+    name: { en: "every check digit", pt: "todo verificador" },
     note: {
-      en: "From 2026 the Brazilian company number admits letters. The check " +
-          "digit still uses mod 11, and still takes each character as its " +
-          "code point minus 48 -- which is why it kept working unchanged: a " +
-          "digit is worth itself, and a letter carries on upward from A = 17. " +
-          "This is the pattern the library is made for: a base of a hundred " +
-          "billion (36^8) with a computed tail. Element for the base " +
-          "12ABC34501 gives check digits 35, the example in the official " +
-          "note. The branch is fixed at 0001 here to keep the set small; " +
-          "widen it to [0-9]{4} for the head offices and branches both.",
-      pt: "A partir de 2026 o CNPJ admite letras. O dígito verificador " +
-          "continua usando mod 11, e continua tomando cada caractere como seu " +
-          "código menos 48 — e é por isso que seguiu funcionando sem " +
-          "alteração: um algarismo vale ele mesmo, e uma letra segue para " +
-          "cima a partir de A = 17. É o padrão para o qual a biblioteca foi " +
-          "feita: uma base de cem bilhões (36^8) com uma cauda calculada. Com " +
-          "a base 12ABC34501 os dígitos dão 35, o exemplo da nota oficial. A " +
-          "filial está fixada em 0001 aqui para manter o conjunto pequeno; " +
-          "troque por [0-9]{4} para matrizes e filiais."
-    },
-    code:
-      "// Raiz + filial, doze caracteres, depois os dois verificadores.\n" +
-      "var base = value;\n" +
-      "return base + lib.checkDigits(base,\n" +
-      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
-      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);"
+      en: "From 2026 the Brazilian company number admits letters. This is " +
+          "the set of well-formed ones, punctuation and all: the two final " +
+          "digits range freely over 00 to 99, so a hundredth of these carry " +
+          "the correct checksum. Root and branch both vary " +
+          "small; the branch varies over all four characters here. Some 4.7 " +
+          "times 10^20 of them (36^12 times 100). Switch to the valid " +
+          "variant to see the checksum computed instead of enumerated.",
+      pt: "A partir de 2026 o CNPJ admite letras. Este é o conjunto dos bem " +
+          "formados, pontuação e tudo: os dois algarismos finais variam " +
+          "livremente de 00 a 99, então um centésimo destes carrega o " +
+          "verificador correto. Raiz e filial variam " +
+          "conjunto pequeno; aqui a filial varia nos quatro caracteres. " +
+          "Cerca de 4,7 vezes 10^20 (36^12 vezes 100). Troque para a " +
+          "variante válida para ver o verificador calculado em vez de " +
+          "válida para ver o verificador calculado em vez de enumerado."
+    }
   },
   {
-    id: "cpf",
-    pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
+    id: "cnpj-valid",
+    family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
+    pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}",
     flags: "",
-    name: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
+    name: { en: "valid check digit (code)", pt: "verificador válido (código)" },
     note: {
-      en: "The regular expression describes 10^11 well-formed CPFs, but only " +
-          "a hundredth of them are valid: the last two digits are a mod-11 " +
-          "checksum a regular expression cannot express. The code column " +
-          "computes it, so what you read there is a genuinely valid CPF for " +
-          "every row. This is the pattern that prompted the whole feature.",
-      pt: "A expressão regular descreve 10^11 CPFs bem formados, mas só um " +
-          "centésimo deles é válido: os dois últimos algarismos são um " +
-          "verificador mod 11 que uma expressão regular não expressa. A " +
-          "coluna de código o calcula, então o que se lê ali é um CPF de " +
-          "fato válido em cada linha. Foi este padrão que originou todo o " +
-          "recurso."
+      en: "Now the regex stops before the checksum and the code computes it, " +
+          "so every row is a genuinely valid CNPJ rather than one in a " +
+          "hundred. The check digit still uses mod 11 over each character's " +
+          "code point minus 48, which is exactly why it survived the letters " +
+          "unchanged -- a digit is worth itself, a letter carries on from " +
+          "A = 17. The bookmark lands on 12.ABC.345/01DE, whose digits are " +
+          "35, the example in Receita Federal's own note.",
+      pt: "Agora a expressão para antes do verificador e o código o calcula, " +
+          "então cada linha é um CNPJ de fato válido, e não um em cem. O " +
+          "dígito continua usando mod 11 sobre o código de cada caractere " +
+          "menos 48, e é por isso que sobreviveu às letras sem mudança — um " +
+          "algarismo vale ele mesmo, uma letra segue a partir de A = 17. O " +
+          "marcador cai em 12.ABC.345/01DE, cujos dígitos são 35, o exemplo " +
+          "da nota da Receita Federal."
     },
     code:
-      "// The first nine digits are the payload; append the two check\n" +
+      "// Strip the punctuation to the twelve-character base, then append\n" +
+      "// the two check digits computed as Receita Federal specifies.\n" +
+      "var base = lib.keep(value, \"0-9A-Z\");\n" +
+      "return value + \"-\" + lib.checkDigits(base,\n" +
+      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
+      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);",
+    bookmarks: [
+      // 12.ABC.345/01DE, base 12ABC34501DE in [0-9A-Z]{12}, whose check
+      // digits are 35 -- the worked example in Receita Federal's note.
+      { name: { en: "the RFB example", pt: "o exemplo da RFB" },
+        index: "139981599648639986" }
+    ]
+  },
+  {
+    id: "cpf-all",
+    family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
+    pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
+    flags: "",
+    name: { en: "every check digit", pt: "todo verificador" },
+    note: {
+      en: "All 10^11 well-formed CPFs. The last two digits range over 00 to " +
+          "99, so only a hundredth carry the mod-11 checksum a regular " +
+          "expression cannot express. Switch to the valid variant to have " +
+          "the code compute it instead.",
+      pt: "Todos os 10^11 CPFs bem formados. Os dois últimos algarismos " +
+          "variam de 00 a 99, então só um centésimo carrega o verificador " +
+          "mod 11 que uma expressão regular não expressa. Troque para a " +
+          "variante válida para que o código o calcule."
+    }
+  },
+  {
+    id: "cpf-valid",
+    family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
+    pattern: "\\d{3}\\.\\d{3}\\.\\d{3}",
+    flags: "",
+    name: { en: "valid check digit (code)", pt: "verificador válido (código)" },
+    note: {
+      en: "The regex stops before the checksum and the code appends it, so " +
+          "every row is a valid CPF rather than one in a hundred. This is " +
+          "the pattern that prompted the whole code feature.",
+      pt: "A expressão para antes do verificador e o código o acrescenta, " +
+          "então cada linha é um CPF válido, e não um em cem. Foi este " +
+          "padrão que originou todo o recurso de código."
+    },
+    code:
+      "// Strip the dots to the nine-digit base, append the two check\n" +
       "// digits, computed mod 11 exactly as Receita Federal specifies.\n" +
-      "var base = lib.keep(value, \"0-9\").slice(0, 9);\n" +
-      "return base.slice(0,3) + \".\" + base.slice(3,6) + \".\" +\n" +
-      "       base.slice(6,9) + \"-\" +\n" +
-      "       lib.checkDigits(base, [10,9,8,7,6,5,4,3,2],\n" +
-      "                             [11,10,9,8,7,6,5,4,3,2]);"
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + \"-\" + lib.checkDigits(base,\n" +
+      "  [10,9,8,7,6,5,4,3,2],\n" +
+      "  [11,10,9,8,7,6,5,4,3,2]);"
   },
   {
     id: "cep",
@@ -472,7 +511,10 @@ export const BUILTIN = [
       "var target = \"d0cc4101c015609d3e6e9bff2cfcf643\" +\n" +
       "             \"ec4b05330949c658472516e2220afae1\";\n" +
       "var h = lib.sha256(value);\n" +
-      "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);"
+      "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);",
+    bookmarks: [
+      { name: { en: "the hit: kiko", pt: "o acerto: kiko" }, index: "199720" }
+    ]
   },
   {
     id: "abba",

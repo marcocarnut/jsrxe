@@ -1,6 +1,7 @@
 import { LANGS, makeT, translateError } from "./i18n.js";
 import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
+import { HELPER_DOCS } from "./sandbox.js";
 
 /* --------------------------------------------------------------- transport */
 
@@ -22,6 +23,7 @@ function showFatal(msg) {
 const $ = (id) => document.getElementById(id);
 const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
+const STORE_MARKS = "jsrxe.bookmarks";
 
 let lang = localStorage.getItem(STORE_LANG) ||
            (navigator.language || "en").toLowerCase().startsWith("pt") ? "pt" : "en";
@@ -36,6 +38,12 @@ let state = {
 
 let mine = [];
 try { mine = JSON.parse(localStorage.getItem(STORE_MINE) || "[]"); } catch { mine = []; }
+
+// User-added bookmarks, keyed by example id, alongside whatever the example
+// itself ships. Same shape as examples: built-in plus mine, and only mine can
+// be removed.
+let marks = {};
+try { marks = JSON.parse(localStorage.getItem(STORE_MARKS) || "{}"); } catch { marks = {}; }
 
 /* --------------------------------------------------------------- utilities */
 
@@ -98,6 +106,8 @@ function applyLanguage() {
   for (const el of document.querySelectorAll("[data-tplace]"))
     el.placeholder = t(el.dataset.tplace);
   renderLibrary();
+  renderHelpers();
+  renderBookmarks();
   renderNote();
   renderCount();
   renderOrder();
@@ -112,6 +122,11 @@ function allExamples() {
 
 function exampleName(ex) {
   return typeof ex.name === "string" ? ex.name : (ex.name[lang] || ex.name.en);
+}
+
+function exampleFamily(ex) {
+  if (!ex.family) return null;
+  return typeof ex.family === "string" ? ex.family : (ex.family[lang] || ex.family.en);
 }
 
 function exampleNote(ex) {
@@ -144,16 +159,30 @@ function renderLibrary() {
   const q = $("libsearch").value.trim().toLowerCase();
   const list = $("liblist");
   list.innerHTML = "";
+  let lastFamily = null;
   for (const ex of allExamples()) {
     if (state.filter === "mine" && !ex.own) continue;
     if (state.filter === "finite" && looksInfinite(ex)) continue;
     if (state.filter === "infinite" && !looksInfinite(ex)) continue;
     const name = exampleName(ex);
+    const family = exampleFamily(ex);
     if (q && !name.toLowerCase().includes(q) &&
+        !(family || "").toLowerCase().includes(q) &&
         !ex.pattern.toLowerCase().includes(q)) continue;
 
+    // A run of examples sharing a family gets one heading, and its members
+    // are shown indented beneath it: two ways of the same thing -- every CPF
+    // against the valid ones, say -- read as one entry with a choice.
+    if (family && family !== lastFamily) {
+      const head = document.createElement("li");
+      head.className = "famhead";
+      head.textContent = family;
+      list.appendChild(head);
+    }
+    lastFamily = family;
+
     const li = document.createElement("li");
-    if (state.selected === ex.id) li.className = "on";
+    li.className = (family ? "child " : "") + (state.selected === ex.id ? "on" : "");
     li.innerHTML =
       `<button class="pick"><span class="nm"></span><code></code></button>` +
       (ex.own
@@ -174,12 +203,20 @@ function renderLibrary() {
   }
 }
 
+// The helper reference, filled from the docs kept beside the helpers.
+function renderHelpers() {
+  const dl = $("helperlist");
+  dl.innerHTML = HELPER_DOCS.map((h) =>
+    `<dt><code>${escapeAttr(h.sig)}</code></dt>` +
+    `<dd>${escapeAttr(h[lang] || h.en)}</dd>`).join("");
+}
+
 function selectExample(ex) {
   state.selected = ex.id;
-  $("pattern").value = ex.pattern;
-  $("fi").checked = (ex.flags || "").includes("i");
-  $("fs").checked = (ex.flags || "").includes("s");
-  $("fL").checked = (ex.flags || "").includes("L");
+  // Flags are expressed inline now, so an older example that still carries a
+  // 'flags' field has it folded onto the front of the pattern as (?...).
+  const inline = ex.flags ? "(?" + ex.flags + ")" : "";
+  $("pattern").value = inline + ex.pattern;
   $("from").value = "0";
   $("key").value = "";
   $("code").value = ex.code || "";
@@ -199,10 +236,9 @@ function renderNote() {
 
 /* ---------------------------------------------------------------- parsing */
 
-function currentFlags() {
-  return ($("fi").checked ? "i" : "") + ($("fs").checked ? "s" : "") +
-         ($("fL").checked ? "L" : "");
-}
+// Flags are written inline in the pattern, so there is nothing to gather from
+// the interface; the empty string keeps the engine's flags argument happy.
+function currentFlags() { return ""; }
 
 let reparseTimer = null;
 function scheduleReparse() {
@@ -353,6 +389,63 @@ async function loadRows() {
   const r = await call("rows", { from: state.from.toString(), n: state.per });
   renderRows(r.rows || []);
   syncSlider();
+  renderBookmarks();
+}
+
+// The bookmarks for the current example: whatever it ships plus whatever the
+// user has added for it, each a named jump to an index.
+function currentBookmarks() {
+  const ex = allExamples().find((e) => e.id === state.selected);
+  const built = (ex && ex.bookmarks) || [];
+  const mfam = state.selected ? (marks[state.selected] || []) : [];
+  return built.map((b) => ({
+    name: typeof b.name === "string" ? b.name : (b.name[lang] || b.name.en),
+    index: b.index, own: false
+  })).concat(mfam.map((b) => ({ name: b.name, index: b.index, own: true })));
+}
+
+function renderBookmarks() {
+  const box = $("bookmarks");
+  const list = currentBookmarks();
+  const canAdd = state.ok && !!state.selected;
+  let html = list.map((b, i) =>
+    `<span class="mark"><button class="markgo" data-i="${i}">` +
+    `${escapeAttr(b.name)}</button>` +
+    (b.own ? `<button class="markdel" data-i="${i}" title="${t("deleteOne")}">&times;</button>` : "") +
+    `</span>`).join("");
+  if (canAdd)
+    html += `<button id="markadd" title="${t("addBookmark")}">&#9733; +</button>`;
+  box.innerHTML = html;
+  for (const b of box.querySelectorAll(".markgo"))
+    b.onclick = () => { const bm = list[+b.dataset.i]; if (bm) jumpToIndex(bm.index); };
+  for (const b of box.querySelectorAll(".markdel"))
+    b.onclick = () => { deleteBookmark(list[+b.dataset.i]); };
+  const add = $("markadd");
+  if (add) add.onclick = openBookmarkBox;
+}
+
+// Move to an absolute (zero-based) index, wherever the reader currently is.
+function jumpToIndex(index) {
+  let v;
+  try { v = BigInt(index); } catch { return; }
+  setFrom(v < 0n ? 0n : v);
+}
+
+function deleteBookmark(bm) {
+  if (!state.selected || !bm || !bm.own) return;
+  marks[state.selected] = (marks[state.selected] || [])
+    .filter((m) => !(m.name === bm.name && m.index === bm.index));
+  localStorage.setItem(STORE_MARKS, JSON.stringify(marks));
+  renderBookmarks();
+}
+
+function openBookmarkBox() {
+  if (!state.selected) return;
+  $("bmname").value = "";
+  // The index shown is the one the reader is looking at, in their numbering.
+  $("bmindex").textContent =
+    group((state.from + (state.zeroBased ? 0n : 1n)).toString());
+  $("bmbox").showModal();
 }
 
 function syncSlider() {
@@ -381,8 +474,10 @@ function wire() {
     applyLanguage();
   };
 
-  $("pattern").oninput = () => { state.selected = null; renderNote(); renderLibrary(); scheduleReparse(); };
-  for (const f of ["fi", "fs", "fL"]) $(f).onchange = reparse;
+  $("pattern").oninput = () => {
+    state.selected = null; renderNote(); renderLibrary(); renderBookmarks();
+    scheduleReparse();
+  };
   $("code").oninput = () => {
     state.selected = null; renderNote(); renderLibrary();
     clearTimeout(reparseTimer);
@@ -452,6 +547,26 @@ function wire() {
 
   $("addown").onclick = () => openSaveBox(null);
   $("savebox").addEventListener("close", saveFromBox);
+
+  // The two side views: the examples, and the helper reference for the code.
+  for (const b of document.querySelectorAll("#sidetabs .stab")) b.onclick = () => {
+    const side = b.dataset.side;
+    for (const o of document.querySelectorAll("#sidetabs .stab"))
+      o.classList.toggle("on", o === b);
+    show($("examples-view"), side === "examples");
+    show($("helpers-view"), side === "helpers");
+  };
+
+  $("bmbox").addEventListener("close", () => {
+    if ($("bmbox").returnValue !== "save") return;
+    const name = $("bmname").value.trim();
+    if (!name || !state.selected) return;
+    // Stored as a zero-based index, whatever numbering was on screen.
+    const idx = (state.from).toString();
+    (marks[state.selected] = marks[state.selected] || []).push({ name, index: idx });
+    localStorage.setItem(STORE_MARKS, JSON.stringify(marks));
+    renderBookmarks();
+  });
 }
 
 // Opens the form for a new example, or for one of your own to be edited. An
@@ -467,10 +582,8 @@ function openSaveBox(ex) {
                                     : "");
   $("savenote").value = editing ? exampleNote(editing) : "";
   if (editing) {
-    $("pattern").value = editing.pattern;
-    $("fi").checked = (editing.flags || "").includes("i");
-    $("fs").checked = (editing.flags || "").includes("s");
-    $("fL").checked = (editing.flags || "").includes("L");
+    $("pattern").value = (editing.flags ? "(?" + editing.flags + ")" : "") +
+                         editing.pattern;
     $("code").value = editing.code || "";
     $("codepanel").open = !!editing.code;
   }
@@ -504,6 +617,7 @@ function saveFromBox() {
 }
 
 async function onReady() {
+  renderHelpers();
   await classifyExamples();
   if ($("pattern").value) reparse();
   else selectExample(BUILTIN[0]);

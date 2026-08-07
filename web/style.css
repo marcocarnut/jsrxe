@@ -61,6 +61,19 @@ main {
         border: 1px solid var(--line); border-radius: 6px; padding: .5rem .55rem;
         font-family: var(--mono); font-size: .86rem; resize: vertical;
         margin-top: .3rem; }
+#sidetabs { display: flex; gap: .3rem; margin-bottom: .6rem; }
+.stab { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent;
+        padding: .3rem .2rem; color: var(--dim); font: inherit;
+        font-size: .82rem; font-weight: 600; text-transform: uppercase;
+        letter-spacing: .06em; cursor: pointer; }
+.stab.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+#helperlist { margin: 0; }
+#helperlist dt { margin-top: .6rem; }
+#helperlist dt code { font-family: var(--mono); font-size: .82rem;
+                      color: var(--accent); }
+#helperlist dd { margin: .1rem 0 0; font-size: .85rem; color: var(--dim); }
+
 #libtabs { display: flex; gap: .25rem; margin: .5rem 0; }
 .tab { flex: 1; background: none; border: 1px solid var(--line);
        border-radius: 6px; padding: .22rem; color: var(--dim);
@@ -73,6 +86,11 @@ main {
               border-radius: 6px; min-width: 0; }
 #liblist .pick { min-width: 0; }
 #liblist li.on { background: var(--accent-bg); }
+#liblist li.famhead { padding: .4rem .3rem .1rem; font-size: .78rem;
+                      font-weight: 600; color: var(--dim);
+                      text-transform: uppercase; letter-spacing: .05em; }
+#liblist li.child { margin-left: .7rem;
+                    border-left: 2px solid var(--line); }
 #liblist .pick { flex: 1; text-align: left; background: none; border: 0;
                  color: inherit; padding: .32rem .4rem; cursor: pointer;
                  border-radius: 6px; font: inherit; }
@@ -125,6 +143,24 @@ main {
 .nav button:hover:not(:disabled) { border-color: var(--accent);
                                    color: var(--accent); }
 .nav button:disabled { opacity: .4; cursor: default; }
+
+#bookmarks { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 .6rem;
+             align-items: center; }
+#bookmarks:empty { margin: 0; }
+.mark { display: inline-flex; align-items: center;
+        border: 1px solid var(--accent); border-radius: 999px;
+        overflow: hidden; }
+.mark .markgo { background: var(--accent-bg); color: var(--accent); border: 0;
+                padding: .18rem .6rem; font: inherit; font-size: .82rem;
+                cursor: pointer; }
+.mark .markdel { background: var(--accent-bg); color: var(--accent); border: 0;
+                 border-left: 1px solid var(--accent); padding: .18rem .4rem;
+                 cursor: pointer; }
+.mark .markdel:hover { color: var(--err); }
+#markadd { background: none; border: 1px dashed var(--line); border-radius: 999px;
+           color: var(--dim); padding: .18rem .55rem; font-size: .82rem;
+           cursor: pointer; }
+#markadd:hover { border-color: var(--accent); color: var(--accent); }
 #coarse { margin: .2rem 0 .7rem; }
 #slider { width: 100%; margin: 0; }
 #sliderhint { margin-top: .15rem; }

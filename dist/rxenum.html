@@ -68,6 +68,19 @@ main {
         border: 1px solid var(--line); border-radius: 6px; padding: .5rem .55rem;
         font-family: var(--mono); font-size: .86rem; resize: vertical;
         margin-top: .3rem; }
+#sidetabs { display: flex; gap: .3rem; margin-bottom: .6rem; }
+.stab { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent;
+        padding: .3rem .2rem; color: var(--dim); font: inherit;
+        font-size: .82rem; font-weight: 600; text-transform: uppercase;
+        letter-spacing: .06em; cursor: pointer; }
+.stab.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+#helperlist { margin: 0; }
+#helperlist dt { margin-top: .6rem; }
+#helperlist dt code { font-family: var(--mono); font-size: .82rem;
+                      color: var(--accent); }
+#helperlist dd { margin: .1rem 0 0; font-size: .85rem; color: var(--dim); }
+
 #libtabs { display: flex; gap: .25rem; margin: .5rem 0; }
 .tab { flex: 1; background: none; border: 1px solid var(--line);
        border-radius: 6px; padding: .22rem; color: var(--dim);
@@ -80,6 +93,11 @@ main {
               border-radius: 6px; min-width: 0; }
 #liblist .pick { min-width: 0; }
 #liblist li.on { background: var(--accent-bg); }
+#liblist li.famhead { padding: .4rem .3rem .1rem; font-size: .78rem;
+                      font-weight: 600; color: var(--dim);
+                      text-transform: uppercase; letter-spacing: .05em; }
+#liblist li.child { margin-left: .7rem;
+                    border-left: 2px solid var(--line); }
 #liblist .pick { flex: 1; text-align: left; background: none; border: 0;
                  color: inherit; padding: .32rem .4rem; cursor: pointer;
                  border-radius: 6px; font: inherit; }
@@ -132,6 +150,24 @@ main {
 .nav button:hover:not(:disabled) { border-color: var(--accent);
                                    color: var(--accent); }
 .nav button:disabled { opacity: .4; cursor: default; }
+
+#bookmarks { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 .6rem;
+             align-items: center; }
+#bookmarks:empty { margin: 0; }
+.mark { display: inline-flex; align-items: center;
+        border: 1px solid var(--accent); border-radius: 999px;
+        overflow: hidden; }
+.mark .markgo { background: var(--accent-bg); color: var(--accent); border: 0;
+                padding: .18rem .6rem; font: inherit; font-size: .82rem;
+                cursor: pointer; }
+.mark .markdel { background: var(--accent-bg); color: var(--accent); border: 0;
+                 border-left: 1px solid var(--accent); padding: .18rem .4rem;
+                 cursor: pointer; }
+.mark .markdel:hover { color: var(--err); }
+#markadd { background: none; border: 1px dashed var(--line); border-radius: 999px;
+           color: var(--dim); padding: .18rem .55rem; font-size: .82rem;
+           cursor: pointer; }
+#markadd:hover { border-color: var(--accent); color: var(--accent); }
 #coarse { margin: .2rem 0 .7rem; }
 #slider { width: 100%; margin: 0; }
 #sliderhint { margin-top: .15rem; }
@@ -186,18 +222,29 @@ dialog menu button { background: var(--bg); color: var(--fg);
 
 <main>
 
-  <!-- ------------------------------------------------ the example library -->
+  <!-- ------------------------------------------ examples and the helper docs -->
   <aside id="library">
-    <h2 data-t="library"></h2>
-    <input id="libsearch" type="search" data-tplace="libSearch">
-    <div id="libtabs">
-      <button class="tab on" data-filter="all">&#9679;</button>
-      <button class="tab" data-filter="finite" data-t="libFinite"></button>
-      <button class="tab" data-filter="infinite" data-t="libInfinite"></button>
-      <button class="tab" data-filter="mine" data-t="libMine"></button>
+    <div id="sidetabs">
+      <button class="stab on" data-side="examples" data-t="library"></button>
+      <button class="stab" data-side="helpers" data-t="helpers"></button>
     </div>
-    <ul id="liblist"></ul>
-    <button id="addown" class="wide" data-t="addOwn"></button>
+
+    <div id="examples-view">
+      <input id="libsearch" type="search" data-tplace="libSearch">
+      <div id="libtabs">
+        <button class="tab on" data-filter="all">&#9679;</button>
+        <button class="tab" data-filter="finite" data-t="libFinite"></button>
+        <button class="tab" data-filter="infinite" data-t="libInfinite"></button>
+        <button class="tab" data-filter="mine" data-t="libMine"></button>
+      </div>
+      <ul id="liblist"></ul>
+      <button id="addown" class="wide" data-t="addOwn"></button>
+    </div>
+
+    <div id="helpers-view" hidden>
+      <p class="dim" data-t="helpersHint"></p>
+      <dl id="helperlist"></dl>
+    </div>
   </aside>
 
   <!-- ------------------------------------------------------- the workbench -->
@@ -208,15 +255,6 @@ dialog menu button { background: var(--bg); color: var(--fg);
       <input id="pattern" type="text" spellcheck="false" autocapitalize="off"
              autocomplete="off" data-tplace="patternPlace">
       <div id="err" class="err" hidden></div>
-      <div class="flags">
-        <span class="flabel" data-t="flags"></span>
-        <label><input type="checkbox" id="fi"><span data-t="flagI"></span>
-               <em data-t="flagIHint"></em></label>
-        <label><input type="checkbox" id="fs"><span data-t="flagS"></span>
-               <em data-t="flagSHint"></em></label>
-        <label><input type="checkbox" id="fL"><span data-t="flagL"></span>
-               <em data-t="flagLHint"></em></label>
-      </div>
     </div>
 
     <div id="note" class="panel note" hidden></div>
@@ -265,6 +303,8 @@ dialog menu button { background: var(--bg); color: var(--fg);
         <button id="random" data-t="random"></button>
       </div>
 
+      <div id="bookmarks"></div>
+
       <div id="coarse">
         <input id="slider" type="range" min="0" max="10000" value="0">
         <div class="dim" id="sliderhint"></div>
@@ -306,6 +346,19 @@ dialog menu button { background: var(--bg); color: var(--fg);
     <menu>
       <button value="cancel" data-t="addCancel"></button>
       <button id="savego" value="save" data-t="addSave"></button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- ------------------------------------------------------ add-a-bookmark form -->
+<dialog id="bmbox">
+  <form method="dialog">
+    <label><span data-t="bmName"></span>
+      <input id="bmname" type="text" required></label>
+    <p class="dim"><span data-t="bmAt"></span> <code id="bmindex"></code></p>
+    <menu>
+      <button value="cancel" data-t="addCancel"></button>
+      <button value="save" data-t="addSave"></button>
     </menu>
   </form>
 </dialog>
@@ -455,6 +508,26 @@ const HELPERS = {
   }
 };
 
+// Documentation for the Helpers tab, kept next to the helpers themselves so
+// the two cannot drift. Signature and a line in each language.
+const HELPER_DOCS = [
+  { sig: "lib.sha256(s)",
+    en: "SHA-256 of the string's bytes, as 64 hex characters.",
+    pt: "SHA-256 dos bytes da cadeia, em 64 caracteres hexadecimais." },
+  { sig: "lib.mod11(chars, weights)",
+    en: "One Brazilian check digit: sum of (code point − 48) times weight, mod 11, folded to 0 above 9.",
+    pt: "Um dígito verificador brasileiro: soma de (código − 48) vezes peso, mod 11, dobrado a 0 acima de 9." },
+  { sig: "lib.checkDigits(base, w1, w2)",
+    en: "Both check digits as a two-character string, the second computed over the base plus the first.",
+    pt: "Os dois dígitos como texto de dois caracteres, o segundo calculado sobre a base mais o primeiro." },
+  { sig: 'lib.keep(s, "0-9A-Z")',
+    en: "Keep only the characters in the class, e.g. stripping punctuation back to a payload.",
+    pt: "Mantém só os caracteres da classe, p.ex. removendo pontuação para voltar à carga útil." },
+  { sig: "lib.toHex(s)",
+    en: "The bytes of the string as hexadecimal.",
+    pt: "Os bytes da cadeia em hexadecimal." }
+];
+
 // Compile 'source' into (value, index) => result. Throws on a syntax error,
 // which the caller reports; a run-time throw is left to the caller's per-row
 // handling, since it may be true of some elements and not others.
@@ -477,17 +550,15 @@ const STRINGS = {
     subtitle:         "Regular expressions as sets you can count and walk",
 
     patternLabel:     "Regular expression",
-    patternPlace:     "[0-9A-Za-z]{8}",
-
-    flags:            "Flags",
-    flagI:            "Case insensitive",
-    flagIHint:        "-i — 'a' also matches 'A'",
-    flagS:            "Dot matches newline",
-    flagSHint:        "-s — makes '.' cover all 256 byte values",
-    flagL:            "Left to right",
-    flagLHint:        "-L — the first position varies fastest instead of the last",
+    patternPlace:     "[0-9A-Za-z]{8}   —   flags go inline: (?i) (?s) (?L)",
 
     library:          "Examples",
+    helpers:          "Helpers",
+    helpersHint:      "Functions the code section can call, as lib.name. All are pure, so an example behaves the same wherever it runs.",
+    bookmarks:        "Bookmarks",
+    addBookmark:      "Bookmark this index",
+    bmName:           "Name",
+    bmAt:             "At index",
     editOne:          "Edit",
     addEdit:          "Edit example",
     libSearch:        "Filter…",
@@ -568,17 +639,15 @@ const STRINGS = {
     subtitle:         "Expressões regulares como conjuntos que se pode contar e percorrer",
 
     patternLabel:     "Expressão regular",
-    patternPlace:     "[0-9A-Za-z]{8}",
-
-    flags:            "Opções",
-    flagI:            "Ignorar maiúsculas",
-    flagIHint:        "-i — 'a' também casa com 'A'",
-    flagS:            "Ponto casa quebra de linha",
-    flagSHint:        "-s — faz '.' cobrir todos os 256 valores de byte",
-    flagL:            "Da esquerda para a direita",
-    flagLHint:        "-L — a primeira posição varia mais rápido, em vez da última",
+    patternPlace:     "[0-9A-Za-z]{8}   —   opções inline: (?i) (?s) (?L)",
 
     library:          "Exemplos",
+    helpers:          "Auxiliares",
+    helpersHint:      "Funções que a seção de código pode chamar, como lib.nome. Todas são puras, então um exemplo se comporta igual onde quer que rode.",
+    bookmarks:        "Marcadores",
+    addBookmark:      "Marcar este índice",
+    bmName:           "Nome",
+    bmAt:             "No índice",
     editOne:          "Editar",
     addEdit:          "Editar exemplo",
     libSearch:        "Filtrar…",
@@ -812,64 +881,103 @@ const BUILTIN = [
     }
   },
   {
-    id: "cnpj",
-    pattern: "[0-9A-Z]{8}0001",
+    id: "cnpj-all",
+    family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
+    pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}-\\d{2}",
     flags: "",
-    name: { en: "CNPJ, alphanumeric (2026)",
-            pt: "CNPJ alfanumérico (2026)" },
+    name: { en: "every check digit", pt: "todo verificador" },
     note: {
-      en: "From 2026 the Brazilian company number admits letters. The check " +
-          "digit still uses mod 11, and still takes each character as its " +
-          "code point minus 48 -- which is why it kept working unchanged: a " +
-          "digit is worth itself, and a letter carries on upward from A = 17. " +
-          "This is the pattern the library is made for: a base of a hundred " +
-          "billion (36^8) with a computed tail. Element for the base " +
-          "12ABC34501 gives check digits 35, the example in the official " +
-          "note. The branch is fixed at 0001 here to keep the set small; " +
-          "widen it to [0-9]{4} for the head offices and branches both.",
-      pt: "A partir de 2026 o CNPJ admite letras. O dígito verificador " +
-          "continua usando mod 11, e continua tomando cada caractere como seu " +
-          "código menos 48 — e é por isso que seguiu funcionando sem " +
-          "alteração: um algarismo vale ele mesmo, e uma letra segue para " +
-          "cima a partir de A = 17. É o padrão para o qual a biblioteca foi " +
-          "feita: uma base de cem bilhões (36^8) com uma cauda calculada. Com " +
-          "a base 12ABC34501 os dígitos dão 35, o exemplo da nota oficial. A " +
-          "filial está fixada em 0001 aqui para manter o conjunto pequeno; " +
-          "troque por [0-9]{4} para matrizes e filiais."
-    },
-    code:
-      "// Raiz + filial, doze caracteres, depois os dois verificadores.\n" +
-      "var base = value;\n" +
-      "return base + lib.checkDigits(base,\n" +
-      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
-      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);"
+      en: "From 2026 the Brazilian company number admits letters. This is " +
+          "the set of well-formed ones, punctuation and all: the two final " +
+          "digits range freely over 00 to 99, so a hundredth of these carry " +
+          "the correct checksum. Root and branch both vary " +
+          "small; the branch varies over all four characters here. Some 4.7 " +
+          "times 10^20 of them (36^12 times 100). Switch to the valid " +
+          "variant to see the checksum computed instead of enumerated.",
+      pt: "A partir de 2026 o CNPJ admite letras. Este é o conjunto dos bem " +
+          "formados, pontuação e tudo: os dois algarismos finais variam " +
+          "livremente de 00 a 99, então um centésimo destes carrega o " +
+          "verificador correto. Raiz e filial variam " +
+          "conjunto pequeno; aqui a filial varia nos quatro caracteres. " +
+          "Cerca de 4,7 vezes 10^20 (36^12 vezes 100). Troque para a " +
+          "variante válida para ver o verificador calculado em vez de " +
+          "válida para ver o verificador calculado em vez de enumerado."
+    }
   },
   {
-    id: "cpf",
-    pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
+    id: "cnpj-valid",
+    family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
+    pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}",
     flags: "",
-    name: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
+    name: { en: "valid check digit (code)", pt: "verificador válido (código)" },
     note: {
-      en: "The regular expression describes 10^11 well-formed CPFs, but only " +
-          "a hundredth of them are valid: the last two digits are a mod-11 " +
-          "checksum a regular expression cannot express. The code column " +
-          "computes it, so what you read there is a genuinely valid CPF for " +
-          "every row. This is the pattern that prompted the whole feature.",
-      pt: "A expressão regular descreve 10^11 CPFs bem formados, mas só um " +
-          "centésimo deles é válido: os dois últimos algarismos são um " +
-          "verificador mod 11 que uma expressão regular não expressa. A " +
-          "coluna de código o calcula, então o que se lê ali é um CPF de " +
-          "fato válido em cada linha. Foi este padrão que originou todo o " +
-          "recurso."
+      en: "Now the regex stops before the checksum and the code computes it, " +
+          "so every row is a genuinely valid CNPJ rather than one in a " +
+          "hundred. The check digit still uses mod 11 over each character's " +
+          "code point minus 48, which is exactly why it survived the letters " +
+          "unchanged -- a digit is worth itself, a letter carries on from " +
+          "A = 17. The bookmark lands on 12.ABC.345/01DE, whose digits are " +
+          "35, the example in Receita Federal's own note.",
+      pt: "Agora a expressão para antes do verificador e o código o calcula, " +
+          "então cada linha é um CNPJ de fato válido, e não um em cem. O " +
+          "dígito continua usando mod 11 sobre o código de cada caractere " +
+          "menos 48, e é por isso que sobreviveu às letras sem mudança — um " +
+          "algarismo vale ele mesmo, uma letra segue a partir de A = 17. O " +
+          "marcador cai em 12.ABC.345/01DE, cujos dígitos são 35, o exemplo " +
+          "da nota da Receita Federal."
     },
     code:
-      "// The first nine digits are the payload; append the two check\n" +
+      "// Strip the punctuation to the twelve-character base, then append\n" +
+      "// the two check digits computed as Receita Federal specifies.\n" +
+      "var base = lib.keep(value, \"0-9A-Z\");\n" +
+      "return value + \"-\" + lib.checkDigits(base,\n" +
+      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
+      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);",
+    bookmarks: [
+      // 12.ABC.345/01DE, base 12ABC34501DE in [0-9A-Z]{12}, whose check
+      // digits are 35 -- the worked example in Receita Federal's note.
+      { name: { en: "the RFB example", pt: "o exemplo da RFB" },
+        index: "139981599648639986" }
+    ]
+  },
+  {
+    id: "cpf-all",
+    family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
+    pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
+    flags: "",
+    name: { en: "every check digit", pt: "todo verificador" },
+    note: {
+      en: "All 10^11 well-formed CPFs. The last two digits range over 00 to " +
+          "99, so only a hundredth carry the mod-11 checksum a regular " +
+          "expression cannot express. Switch to the valid variant to have " +
+          "the code compute it instead.",
+      pt: "Todos os 10^11 CPFs bem formados. Os dois últimos algarismos " +
+          "variam de 00 a 99, então só um centésimo carrega o verificador " +
+          "mod 11 que uma expressão regular não expressa. Troque para a " +
+          "variante válida para que o código o calcule."
+    }
+  },
+  {
+    id: "cpf-valid",
+    family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
+    pattern: "\\d{3}\\.\\d{3}\\.\\d{3}",
+    flags: "",
+    name: { en: "valid check digit (code)", pt: "verificador válido (código)" },
+    note: {
+      en: "The regex stops before the checksum and the code appends it, so " +
+          "every row is a valid CPF rather than one in a hundred. This is " +
+          "the pattern that prompted the whole code feature.",
+      pt: "A expressão para antes do verificador e o código o acrescenta, " +
+          "então cada linha é um CPF válido, e não um em cem. Foi este " +
+          "padrão que originou todo o recurso de código."
+    },
+    code:
+      "// Strip the dots to the nine-digit base, append the two check\n" +
       "// digits, computed mod 11 exactly as Receita Federal specifies.\n" +
-      "var base = lib.keep(value, \"0-9\").slice(0, 9);\n" +
-      "return base.slice(0,3) + \".\" + base.slice(3,6) + \".\" +\n" +
-      "       base.slice(6,9) + \"-\" +\n" +
-      "       lib.checkDigits(base, [10,9,8,7,6,5,4,3,2],\n" +
-      "                             [11,10,9,8,7,6,5,4,3,2]);"
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + \"-\" + lib.checkDigits(base,\n" +
+      "  [10,9,8,7,6,5,4,3,2],\n" +
+      "  [11,10,9,8,7,6,5,4,3,2]);"
   },
   {
     id: "cep",
@@ -1168,7 +1276,10 @@ const BUILTIN = [
       "var target = \"d0cc4101c015609d3e6e9bff2cfcf643\" +\n" +
       "             \"ec4b05330949c658472516e2220afae1\";\n" +
       "var h = lib.sha256(value);\n" +
-      "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);"
+      "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);",
+    bookmarks: [
+      { name: { en: "the hit: kiko", pt: "o acerto: kiko" }, index: "199720" }
+    ]
   },
   {
     id: "abba",
@@ -1419,6 +1530,7 @@ function makeEngine(Module, {
 
 
 
+
 /* --------------------------------------------------------------- transport */
 
 // The single-file build sets this to a transport that calls the library on
@@ -1439,6 +1551,7 @@ function showFatal(msg) {
 const $ = (id) => document.getElementById(id);
 const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
+const STORE_MARKS = "jsrxe.bookmarks";
 
 let lang = localStorage.getItem(STORE_LANG) ||
            (navigator.language || "en").toLowerCase().startsWith("pt") ? "pt" : "en";
@@ -1453,6 +1566,12 @@ let state = {
 
 let mine = [];
 try { mine = JSON.parse(localStorage.getItem(STORE_MINE) || "[]"); } catch { mine = []; }
+
+// User-added bookmarks, keyed by example id, alongside whatever the example
+// itself ships. Same shape as examples: built-in plus mine, and only mine can
+// be removed.
+let marks = {};
+try { marks = JSON.parse(localStorage.getItem(STORE_MARKS) || "{}"); } catch { marks = {}; }
 
 /* --------------------------------------------------------------- utilities */
 
@@ -1515,6 +1634,8 @@ function applyLanguage() {
   for (const el of document.querySelectorAll("[data-tplace]"))
     el.placeholder = t(el.dataset.tplace);
   renderLibrary();
+  renderHelpers();
+  renderBookmarks();
   renderNote();
   renderCount();
   renderOrder();
@@ -1529,6 +1650,11 @@ function allExamples() {
 
 function exampleName(ex) {
   return typeof ex.name === "string" ? ex.name : (ex.name[lang] || ex.name.en);
+}
+
+function exampleFamily(ex) {
+  if (!ex.family) return null;
+  return typeof ex.family === "string" ? ex.family : (ex.family[lang] || ex.family.en);
 }
 
 function exampleNote(ex) {
@@ -1561,16 +1687,30 @@ function renderLibrary() {
   const q = $("libsearch").value.trim().toLowerCase();
   const list = $("liblist");
   list.innerHTML = "";
+  let lastFamily = null;
   for (const ex of allExamples()) {
     if (state.filter === "mine" && !ex.own) continue;
     if (state.filter === "finite" && looksInfinite(ex)) continue;
     if (state.filter === "infinite" && !looksInfinite(ex)) continue;
     const name = exampleName(ex);
+    const family = exampleFamily(ex);
     if (q && !name.toLowerCase().includes(q) &&
+        !(family || "").toLowerCase().includes(q) &&
         !ex.pattern.toLowerCase().includes(q)) continue;
 
+    // A run of examples sharing a family gets one heading, and its members
+    // are shown indented beneath it: two ways of the same thing -- every CPF
+    // against the valid ones, say -- read as one entry with a choice.
+    if (family && family !== lastFamily) {
+      const head = document.createElement("li");
+      head.className = "famhead";
+      head.textContent = family;
+      list.appendChild(head);
+    }
+    lastFamily = family;
+
     const li = document.createElement("li");
-    if (state.selected === ex.id) li.className = "on";
+    li.className = (family ? "child " : "") + (state.selected === ex.id ? "on" : "");
     li.innerHTML =
       `<button class="pick"><span class="nm"></span><code></code></button>` +
       (ex.own
@@ -1591,12 +1731,20 @@ function renderLibrary() {
   }
 }
 
+// The helper reference, filled from the docs kept beside the helpers.
+function renderHelpers() {
+  const dl = $("helperlist");
+  dl.innerHTML = HELPER_DOCS.map((h) =>
+    `<dt><code>${escapeAttr(h.sig)}</code></dt>` +
+    `<dd>${escapeAttr(h[lang] || h.en)}</dd>`).join("");
+}
+
 function selectExample(ex) {
   state.selected = ex.id;
-  $("pattern").value = ex.pattern;
-  $("fi").checked = (ex.flags || "").includes("i");
-  $("fs").checked = (ex.flags || "").includes("s");
-  $("fL").checked = (ex.flags || "").includes("L");
+  // Flags are expressed inline now, so an older example that still carries a
+  // 'flags' field has it folded onto the front of the pattern as (?...).
+  const inline = ex.flags ? "(?" + ex.flags + ")" : "";
+  $("pattern").value = inline + ex.pattern;
   $("from").value = "0";
   $("key").value = "";
   $("code").value = ex.code || "";
@@ -1616,10 +1764,9 @@ function renderNote() {
 
 /* ---------------------------------------------------------------- parsing */
 
-function currentFlags() {
-  return ($("fi").checked ? "i" : "") + ($("fs").checked ? "s" : "") +
-         ($("fL").checked ? "L" : "");
-}
+// Flags are written inline in the pattern, so there is nothing to gather from
+// the interface; the empty string keeps the engine's flags argument happy.
+function currentFlags() { return ""; }
 
 let reparseTimer = null;
 function scheduleReparse() {
@@ -1770,6 +1917,63 @@ async function loadRows() {
   const r = await call("rows", { from: state.from.toString(), n: state.per });
   renderRows(r.rows || []);
   syncSlider();
+  renderBookmarks();
+}
+
+// The bookmarks for the current example: whatever it ships plus whatever the
+// user has added for it, each a named jump to an index.
+function currentBookmarks() {
+  const ex = allExamples().find((e) => e.id === state.selected);
+  const built = (ex && ex.bookmarks) || [];
+  const mfam = state.selected ? (marks[state.selected] || []) : [];
+  return built.map((b) => ({
+    name: typeof b.name === "string" ? b.name : (b.name[lang] || b.name.en),
+    index: b.index, own: false
+  })).concat(mfam.map((b) => ({ name: b.name, index: b.index, own: true })));
+}
+
+function renderBookmarks() {
+  const box = $("bookmarks");
+  const list = currentBookmarks();
+  const canAdd = state.ok && !!state.selected;
+  let html = list.map((b, i) =>
+    `<span class="mark"><button class="markgo" data-i="${i}">` +
+    `${escapeAttr(b.name)}</button>` +
+    (b.own ? `<button class="markdel" data-i="${i}" title="${t("deleteOne")}">&times;</button>` : "") +
+    `</span>`).join("");
+  if (canAdd)
+    html += `<button id="markadd" title="${t("addBookmark")}">&#9733; +</button>`;
+  box.innerHTML = html;
+  for (const b of box.querySelectorAll(".markgo"))
+    b.onclick = () => { const bm = list[+b.dataset.i]; if (bm) jumpToIndex(bm.index); };
+  for (const b of box.querySelectorAll(".markdel"))
+    b.onclick = () => { deleteBookmark(list[+b.dataset.i]); };
+  const add = $("markadd");
+  if (add) add.onclick = openBookmarkBox;
+}
+
+// Move to an absolute (zero-based) index, wherever the reader currently is.
+function jumpToIndex(index) {
+  let v;
+  try { v = BigInt(index); } catch { return; }
+  setFrom(v < 0n ? 0n : v);
+}
+
+function deleteBookmark(bm) {
+  if (!state.selected || !bm || !bm.own) return;
+  marks[state.selected] = (marks[state.selected] || [])
+    .filter((m) => !(m.name === bm.name && m.index === bm.index));
+  localStorage.setItem(STORE_MARKS, JSON.stringify(marks));
+  renderBookmarks();
+}
+
+function openBookmarkBox() {
+  if (!state.selected) return;
+  $("bmname").value = "";
+  // The index shown is the one the reader is looking at, in their numbering.
+  $("bmindex").textContent =
+    group((state.from + (state.zeroBased ? 0n : 1n)).toString());
+  $("bmbox").showModal();
 }
 
 function syncSlider() {
@@ -1798,8 +2002,10 @@ function wire() {
     applyLanguage();
   };
 
-  $("pattern").oninput = () => { state.selected = null; renderNote(); renderLibrary(); scheduleReparse(); };
-  for (const f of ["fi", "fs", "fL"]) $(f).onchange = reparse;
+  $("pattern").oninput = () => {
+    state.selected = null; renderNote(); renderLibrary(); renderBookmarks();
+    scheduleReparse();
+  };
   $("code").oninput = () => {
     state.selected = null; renderNote(); renderLibrary();
     clearTimeout(reparseTimer);
@@ -1869,6 +2075,26 @@ function wire() {
 
   $("addown").onclick = () => openSaveBox(null);
   $("savebox").addEventListener("close", saveFromBox);
+
+  // The two side views: the examples, and the helper reference for the code.
+  for (const b of document.querySelectorAll("#sidetabs .stab")) b.onclick = () => {
+    const side = b.dataset.side;
+    for (const o of document.querySelectorAll("#sidetabs .stab"))
+      o.classList.toggle("on", o === b);
+    show($("examples-view"), side === "examples");
+    show($("helpers-view"), side === "helpers");
+  };
+
+  $("bmbox").addEventListener("close", () => {
+    if ($("bmbox").returnValue !== "save") return;
+    const name = $("bmname").value.trim();
+    if (!name || !state.selected) return;
+    // Stored as a zero-based index, whatever numbering was on screen.
+    const idx = (state.from).toString();
+    (marks[state.selected] = marks[state.selected] || []).push({ name, index: idx });
+    localStorage.setItem(STORE_MARKS, JSON.stringify(marks));
+    renderBookmarks();
+  });
 }
 
 // Opens the form for a new example, or for one of your own to be edited. An
@@ -1884,10 +2110,8 @@ function openSaveBox(ex) {
                                     : "");
   $("savenote").value = editing ? exampleNote(editing) : "";
   if (editing) {
-    $("pattern").value = editing.pattern;
-    $("fi").checked = (editing.flags || "").includes("i");
-    $("fs").checked = (editing.flags || "").includes("s");
-    $("fL").checked = (editing.flags || "").includes("L");
+    $("pattern").value = (editing.flags ? "(?" + editing.flags + ")" : "") +
+                         editing.pattern;
     $("code").value = editing.code || "";
     $("codepanel").open = !!editing.code;
   }
@@ -1921,6 +2145,7 @@ function saveFromBox() {
 }
 
 async function onReady() {
+  renderHelpers();
   await classifyExamples();
   if ($("pattern").value) reparse();
   else selectExample(BUILTIN[0]);

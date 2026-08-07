@@ -51,6 +51,26 @@ const HELPERS = {
   }
 };
 
+// Documentation for the Helpers tab, kept next to the helpers themselves so
+// the two cannot drift. Signature and a line in each language.
+export const HELPER_DOCS = [
+  { sig: "lib.sha256(s)",
+    en: "SHA-256 of the string's bytes, as 64 hex characters.",
+    pt: "SHA-256 dos bytes da cadeia, em 64 caracteres hexadecimais." },
+  { sig: "lib.mod11(chars, weights)",
+    en: "One Brazilian check digit: sum of (code point − 48) times weight, mod 11, folded to 0 above 9.",
+    pt: "Um dígito verificador brasileiro: soma de (código − 48) vezes peso, mod 11, dobrado a 0 acima de 9." },
+  { sig: "lib.checkDigits(base, w1, w2)",
+    en: "Both check digits as a two-character string, the second computed over the base plus the first.",
+    pt: "Os dois dígitos como texto de dois caracteres, o segundo calculado sobre a base mais o primeiro." },
+  { sig: 'lib.keep(s, "0-9A-Z")',
+    en: "Keep only the characters in the class, e.g. stripping punctuation back to a payload.",
+    pt: "Mantém só os caracteres da classe, p.ex. removendo pontuação para voltar à carga útil." },
+  { sig: "lib.toHex(s)",
+    en: "The bytes of the string as hexadecimal.",
+    pt: "Os bytes da cadeia em hexadecimal." }
+];
+
 // Compile 'source' into (value, index) => result. Throws on a syntax error,
 // which the caller reports; a run-time throw is left to the caller's per-row
 // handling, since it may be true of some elements and not others.

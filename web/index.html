@@ -16,18 +16,29 @@
 
 <main>
 
-  <!-- ------------------------------------------------ the example library -->
+  <!-- ------------------------------------------ examples and the helper docs -->
   <aside id="library">
-    <h2 data-t="library"></h2>
-    <input id="libsearch" type="search" data-tplace="libSearch">
-    <div id="libtabs">
-      <button class="tab on" data-filter="all">&#9679;</button>
-      <button class="tab" data-filter="finite" data-t="libFinite"></button>
-      <button class="tab" data-filter="infinite" data-t="libInfinite"></button>
-      <button class="tab" data-filter="mine" data-t="libMine"></button>
+    <div id="sidetabs">
+      <button class="stab on" data-side="examples" data-t="library"></button>
+      <button class="stab" data-side="helpers" data-t="helpers"></button>
     </div>
-    <ul id="liblist"></ul>
-    <button id="addown" class="wide" data-t="addOwn"></button>
+
+    <div id="examples-view">
+      <input id="libsearch" type="search" data-tplace="libSearch">
+      <div id="libtabs">
+        <button class="tab on" data-filter="all">&#9679;</button>
+        <button class="tab" data-filter="finite" data-t="libFinite"></button>
+        <button class="tab" data-filter="infinite" data-t="libInfinite"></button>
+        <button class="tab" data-filter="mine" data-t="libMine"></button>
+      </div>
+      <ul id="liblist"></ul>
+      <button id="addown" class="wide" data-t="addOwn"></button>
+    </div>
+
+    <div id="helpers-view" hidden>
+      <p class="dim" data-t="helpersHint"></p>
+      <dl id="helperlist"></dl>
+    </div>
   </aside>
 
   <!-- ------------------------------------------------------- the workbench -->
@@ -38,15 +49,6 @@
       <input id="pattern" type="text" spellcheck="false" autocapitalize="off"
              autocomplete="off" data-tplace="patternPlace">
       <div id="err" class="err" hidden></div>
-      <div class="flags">
-        <span class="flabel" data-t="flags"></span>
-        <label><input type="checkbox" id="fi"><span data-t="flagI"></span>
-               <em data-t="flagIHint"></em></label>
-        <label><input type="checkbox" id="fs"><span data-t="flagS"></span>
-               <em data-t="flagSHint"></em></label>
-        <label><input type="checkbox" id="fL"><span data-t="flagL"></span>
-               <em data-t="flagLHint"></em></label>
-      </div>
     </div>
 
     <div id="note" class="panel note" hidden></div>
@@ -95,6 +97,8 @@
         <button id="random" data-t="random"></button>
       </div>
 
+      <div id="bookmarks"></div>
+
       <div id="coarse">
         <input id="slider" type="range" min="0" max="10000" value="0">
         <div class="dim" id="sliderhint"></div>
@@ -136,6 +140,19 @@
     <menu>
       <button value="cancel" data-t="addCancel"></button>
       <button id="savego" value="save" data-t="addSave"></button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- ------------------------------------------------------ add-a-bookmark form -->
+<dialog id="bmbox">
+  <form method="dialog">
+    <label><span data-t="bmName"></span>
+      <input id="bmname" type="text" required></label>
+    <p class="dim"><span data-t="bmAt"></span> <code id="bmindex"></code></p>
+    <menu>
+      <button value="cancel" data-t="addCancel"></button>
+      <button value="save" data-t="addSave"></button>
     </menu>
   </form>
 </dialog>
