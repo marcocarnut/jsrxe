@@ -35,13 +35,34 @@ web/librxe.js       The library alone, with the binding in src/binding.c, for
                     decimal string round-trips through BigInt losslessly.
 
 
+STATUS
+======
+
+The engine is built and verified. librxe's own suite -- 354 pinned cases, the
+66-pattern oracle and the shortlex brute-force -- passes in full against the
+WebAssembly build. The user interface is not written yet.
+
+Two things had to be dealt with, and both are worth knowing about.
+
+The stack has to be raised from the default 64KB. print_grouped sizes a
+variable-length array from the number of decimal digits it is about to write,
+and this library's whole business is numbers with a great many of them: the
+cardinality of '[a-z]{1,20000}' has 28,300, which overflows the stack and
+traps with "table index is out of bounds".
+
+And Emscripten's libc is musl, whose getopt stops at the first non-option
+where the GNU one reorders argv. That turned up a real portability bug in
+rxenum rather than anything to do with WebAssembly, and was fixed there.
+
+
 REQUIREMENTS
 ============
 
-Emscripten, from the official SDK. The Debian and Ubuntu package is version
-3.1.6, released in early 2022, and does not work with Node 18 or later: its
-generated loader calls fetch() on a filesystem path, and a main() taking argc
-and argv is not run at all. Install the SDK instead, which needs no root:
+Emscripten, from the official SDK; version 6.0.6 is what this was built with.
+The Debian and Ubuntu package is 3.1.6, released in early 2022, and does not
+work with Node 18 or later: its generated loader calls fetch() on a filesystem
+path, and a main() taking argc and argv is not run at all. Install the SDK
+instead, which needs no root:
 
     git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
     cd ~/emsdk && ./emsdk install latest && ./emsdk activate latest

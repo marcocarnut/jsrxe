@@ -33,7 +33,12 @@ CFLAGS   := -O2 -I$(RXE) -I$(GMP)
 
 # Asyncify and threads are deliberately absent: every entry point returns
 # promptly, and the UI keeps the module in a worker instead.
-COMMON   := -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8
+# The default 64KB stack is not enough. print_grouped sizes a variable-length
+# array from the number of decimal digits it is about to write, and the whole
+# point of this library is numbers with a great many of them: the cardinality
+# of '[a-z]{1,20000}' has 28,300, which overflows the stack and traps.
+COMMON   := -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8MB -sMODULARIZE=1 \
+            -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToUTF8
 
 all: bin/rxenum.js web/librxe.js
 
