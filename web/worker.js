@@ -10,6 +10,7 @@
 
 import createLibrxe from "./librxe.js";
 import { makeEngine } from "./engine.js";
+import { makeTransform } from "./sandbox.js";
 
 let engine = null;
 
@@ -28,5 +29,5 @@ self.onmessage = (ev) => {
 // which the page never sees: it would simply wait for a 'ready' that never
 // came, with nothing to say why.
 createLibrxe()
-  .then((Module) => { engine = makeEngine(Module); self.postMessage({ ready: true }); })
+  .then((Module) => { engine = makeEngine(Module, { makeTransform }); self.postMessage({ ready: true }); })
   .catch((e) => self.postMessage({ fatal: String(e && e.stack ? e.stack : e) }));

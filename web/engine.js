@@ -16,13 +16,19 @@ export const RXE_LEFT_TO_RIGHT = 0x0004;
 // 'randomBytes' is the one thing here that cannot be pure, so it is passed in
 // rather than reached for: browsers have had globalThis.crypto for years, node
 // only since 19, and a caller may reasonably want a seeded source instead.
+//
+// 'makeTransform' turns an example's code into a function applied to each
+// generated element. It is injected the same way, so that engine.js has no
+// opinion on how the code is compiled and the tests can hand it a plain
+// function instead of a string.
 
 export function makeEngine(Module, {
   randomBytes = (n) => {
     const buf = new Uint8Array(n);
     globalThis.crypto.getRandomValues(buf);
     return buf;
-  }
+  },
+  makeTransform = null
 } = {}) {
   const c = (name, ret, args) => Module.cwrap(name, ret, args);
   const api = {
@@ -42,8 +48,9 @@ export function makeEngine(Module, {
     permMap:      c("rxe_js_permutation_map",     "number", ["number","string"])
   };
 
-  let rxe = 0;    // the parsed expression
-  let perm = 0;   // the keyed permutation, when one is set
+  let rxe = 0;        // the parsed expression
+  let perm = 0;       // the keyed permutation, when one is set
+  let transform = null; // the example's code, applied to each element
 
   // Take ownership of a char* the library allocated.
   const takeString = (ptr) => {
@@ -79,6 +86,18 @@ export function makeEngine(Module, {
   const targetFor = (index) =>
     perm ? (takeString(api.permMap(perm, index)) || index) : index;
 
+  // A row, with the transform's output attached when there is one. The
+  // transform runs in its own try: an example's code is under the user's
+  // control and may throw, and one bad row should not blank the page.
+  const withTransform = (index, value) => {
+    const row = { index, value };
+    if (transform) {
+      try { row.output = String(transform(value, index)); }
+      catch (e) { row.output = ""; row.error = String(e && e.message ? e.message : e); }
+    }
+    return row;
+  };
+
   return {
 
     parse({ pattern, flags }) {
@@ -103,6 +122,16 @@ export function makeEngine(Module, {
       };
     },
 
+    // Compile and install an example's code, or clear it. Returns whether it
+    // compiled; a transform that throws only at run time fails per row, which
+    // is the row's business rather than this call's.
+    code({ source }) {
+      transform = null;
+      if (!source || !makeTransform) return { ok: true, active: false };
+      try { transform = makeTransform(source); return { ok: true, active: true }; }
+      catch (e) { return { ok: false, error: String(e && e.message ? e.message : e) }; }
+    },
+
     // Set or clear the shuffle key. A permutation is over [0, count), so it
     // needs a finite set to be a permutation of.
     key({ key, count }) {
@@ -113,7 +142,9 @@ export function makeEngine(Module, {
     },
 
     // A window of the enumeration. Each row is sought independently, which is
-    // why a page anywhere in the set costs the same as the first one.
+    // why a page anywhere in the set costs the same as the first one. When an
+    // example carries code, each element is passed through it and the result
+    // shown alongside -- a check digit appended, a hash compared, and so on.
     rows({ from, n }) {
       if (!rxe) return { rows: [] };
       const rows = [];
@@ -121,7 +152,7 @@ export function makeEngine(Module, {
       for (let i = 0; i < n; i++) {
         if (index < 0n) break;
         if (api.seek(rxe, targetFor(index.toString()))) break;
-        rows.push({ index: index.toString(), value: currentElement() });
+        rows.push(withTransform(index.toString(), currentElement()));
         index += 1n;
       }
       return { rows };
@@ -141,7 +172,7 @@ export function makeEngine(Module, {
         for (const b of buf) v = (v << 8n) | BigInt(b);
         const index = v % total;
         if (api.seek(rxe, index.toString())) continue;
-        rows.push({ index: index.toString(), value: currentElement() });
+        rows.push(withTransform(index.toString(), currentElement()));
       }
       return { rows };
     },

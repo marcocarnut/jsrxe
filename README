@@ -39,6 +39,17 @@ web/librxe.js       The library alone, with the binding in src/binding.c, for
                     and by tests/node.mjs. web/worker.js is a module worker
                     holding one instance of it; the page talks to that.
 
+                    An example may carry a snippet of code, run on each
+                    generated element and shown alongside it -- appending a
+                    CPF or CNPJ check digit, hashing a candidate password.
+                    web/sandbox.js compiles it in strict mode with no reach
+                    into the surrounding scope and a small pure helper library
+                    (sha256, mod11, checkDigits); web/sha256.js is a
+                    synchronous SHA-256, since crypto.subtle is asynchronous
+                    and absent from a file:// page. It is not a security
+                    boundary in the strong sense, only enough that the
+                    accidental case is safe and the interface small.
+
 
 STATUS
 ======

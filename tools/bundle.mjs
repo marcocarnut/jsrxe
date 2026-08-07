@@ -30,9 +30,10 @@ function demodule(src) {
     .replace(/^export\s+(const|let|function|class)\s/gm, "$1 ");
 }
 
-const [libSingle, i18n, patterns, engine, app, css, html] = await Promise.all([
+const [libSingle, i18n, patterns, engine, sandbox, sha, app, css, html] = await Promise.all([
   read("build/librxe-single.js"),
   read("web/i18n.js"), read("web/patterns.js"), read("web/engine.js"),
+  read("web/sandbox.js"), read("web/sha256.js"),
   read("web/app.js"), read("web/style.css"), read("web/index.html")
 ]);
 
@@ -52,7 +53,7 @@ globalThis.__rxeTransport = function () {
 
 const boot = `
 createLibrxe().then(function (Module) {
-  __rxeEngine = makeEngine(Module);
+  __rxeEngine = makeEngine(Module, { makeTransform: makeTransform });
   if (__rxeReady) __rxeReady();
 }).catch(function (e) { if (__rxeFatal) __rxeFatal(String(e)); });
 `;
@@ -67,8 +68,9 @@ const body = html
   .replace(/<link rel="stylesheet"[^>]*>/, () => `<style>\n${css}\n</style>`)
   .replace(/<script type="module" src="app\.js"><\/script>/, () =>
     `<script>\n${libSingle}\n</script>\n` +
-    `<script>\n${direct}\n${demodule(i18n)}\n${demodule(patterns)}\n` +
-    `${demodule(engine)}\n${demodule(app)}\n${boot}\n</script>`)
+    `<script>\n${direct}\n${demodule(sha)}\n${demodule(sandbox)}\n` +
+    `${demodule(i18n)}\n${demodule(patterns)}\n${demodule(engine)}\n` +
+    `${demodule(app)}\n${boot}\n</script>`)
   .replace(/<title>[^<]*<\/title>/, () => "<title>rxenum</title>");
 
 await mkdir(root + "dist", { recursive: true });

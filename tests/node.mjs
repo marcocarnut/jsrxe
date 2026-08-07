@@ -13,6 +13,7 @@
 import { randomFillSync } from "node:crypto";
 import createLibrxe from "../build/librxe-node.mjs";
 import { makeEngine } from "../web/engine.js";
+import { makeTransform } from "../web/sandbox.js";
 
 let pass = 0, fail = 0;
 
@@ -25,7 +26,10 @@ function check(what, want, got) {
 const Module = await createLibrxe();
 // node only made globalThis.crypto a global in version 19, and this should
 // run under whatever node is to hand.
-const e = makeEngine(Module, { randomBytes: (n) => randomFillSync(new Uint8Array(n)) });
+const e = makeEngine(Module, {
+  randomBytes: (n) => randomFillSync(new Uint8Array(n)),
+  makeTransform
+});
 const value = (r) => r.rows.map((x) => x.value).join(",");
 
 // --- a finite set: the count is exact, not a rounded double
@@ -113,6 +117,53 @@ check("  and so is (a*)*", "unbounded repetition of a possibly empty expression"
 e.parse({ pattern: "[ab]", flags: "" });
 check("a two-member set yields two rows", 2,
       e.rows({ from: "0", n: 10 }).rows.length);
+
+// --- the code column: a transform applied to each element
+e.parse({ pattern: "[0-9]{9}", flags: "" });
+e.code({ source:
+  'var b = value.slice(0,9);' +
+  'return b + lib.checkDigits(b, [10,9,8,7,6,5,4,3,2], [11,10,9,8,7,6,5,4,3,2]);' });
+r = e.rows({ from: "111444777", n: 1 });
+check("CPF check digits are computed", "11144477735", r.rows[0].output);
+
+// the alphanumeric CNPJ, against Receita Federal's published example
+e.parse({ pattern: "[0-9A-Z]{12}", flags: "" });
+e.code({ source:
+  'return value + lib.checkDigits(value,' +
+  ' [5,4,3,2,9,8,7,6,5,4,3,2], [6,5,4,3,2,9,8,7,6,5,4,3,2]);' });
+// 12ABC34501DE seeks to a specific index; check the digits directly instead.
+check("CNPJ 12ABC34501DE check digits are 35", "12ABC34501DE35",
+      e.rows({ from: (() => {
+        // find the index of 12ABC34501DE in [0-9A-Z]{12}
+        const alpha = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let n = 0n;
+        for (const ch of "12ABC34501DE") n = n * 36n + BigInt(alpha.indexOf(ch));
+        return n.toString();
+      })(), n: 1 }).rows[0].output);
+
+// clearing the code drops the output again
+e.code({ source: "" });
+check("clearing the code removes the output", undefined,
+      e.rows({ from: "0", n: 1 }).rows[0].output);
+
+// a syntax error is reported, not thrown
+let cr = e.code({ source: "return (" });
+check("a syntax error in code is reported", false, cr.ok);
+
+// a run-time throw is per-row, not fatal
+e.parse({ pattern: "[ab]", flags: "" });
+e.code({ source: "if (value === 'b') throw new Error('nope'); return value.toUpperCase();" });
+r = e.rows({ from: "0", n: 2 });
+check("a good row still computes", "A", r.rows[0].output);
+check("a throwing row is flagged, not fatal", "nope", r.rows[1].error);
+e.code({ source: "" });
+
+// the sandbox has no reach into the surrounding scope
+cr = e.code({ source: "return typeof makeEngine;" });
+e.parse({ pattern: "a", flags: "" });
+check("code cannot see the module's own names", "undefined",
+      e.rows({ from: "0", n: 1 }).rows[0].output);
+e.code({ source: "" });
 
 // --- random members really are members
 e.parse({ pattern: "[a-c][x-z]", flags: "" });

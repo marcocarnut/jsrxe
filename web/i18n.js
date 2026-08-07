@@ -69,7 +69,12 @@ export const STRINGS = {
 
     indexCol:         "index",
     valueCol:         "element",
+    outputCol:        "output",
     emptyString:      "(empty string)",
+
+    codeTitle:        "Code",
+    codeHint:         "JavaScript run on each element. 'value' is the element, 'index' its index, 'lib' a helper with sha256, mod11, checkDigits, keep and toHex. Return what to show. Left empty, the output column is hidden.",
+    codePlace:        "return value + lib.checkDigits(lib.keep(value, \"0-9\"), [10,9,8,7,6,5,4,3,2], [11,10,9,8,7,6,5,4,3,2]);",
 
     working:          "Working…",
     parseError:       "Cannot read that expression",
@@ -155,7 +160,12 @@ export const STRINGS = {
 
     indexCol:         "índice",
     valueCol:         "elemento",
+    outputCol:        "saída",
     emptyString:      "(cadeia vazia)",
+
+    codeTitle:        "Código",
+    codeHint:         "JavaScript executado em cada elemento. 'value' é o elemento, 'index' o índice, 'lib' um auxiliar com sha256, mod11, checkDigits, keep e toHex. Retorne o que exibir. Vazio, a coluna de saída fica oculta.",
+    codePlace:        "return value + lib.checkDigits(lib.keep(value, \"0-9\"), [10,9,8,7,6,5,4,3,2], [11,10,9,8,7,6,5,4,3,2]);",
 
     working:          "Trabalhando…",
     parseError:       "Não consigo ler essa expressão",

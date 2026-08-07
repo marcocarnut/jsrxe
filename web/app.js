@@ -31,7 +31,7 @@ let t = makeT(lang);
 let state = {
   ok: false, infinite: false, shortlex: false, count: null,
   from: 0n, per: 50, zeroBased: true, keyActive: false, filter: "all",
-  selected: null, slider: "none"
+  selected: null, slider: "none", codeActive: false
 };
 
 let mine = [];
@@ -182,6 +182,8 @@ function selectExample(ex) {
   $("fL").checked = (ex.flags || "").includes("L");
   $("from").value = "0";
   $("key").value = "";
+  $("code").value = ex.code || "";
+  $("codepanel").open = !!ex.code;
   state.from = 0n;
   renderLibrary();
   renderNote();
@@ -228,9 +230,19 @@ async function reparse() {
   state.shortlex = r.shortlex;
   state.count = r.count;
   await applyKey();
+  await applyCode();
   renderAll();
   await loadLengthStarts();
   loadRows();
+}
+
+async function applyCode() {
+  const source = $("code").value.trim();
+  const r = await call("code", { source });
+  state.codeActive = !!r.active;
+  if (r.ok) { show($("codeerr"), false); }
+  else { $("codeerr").textContent = r.error; show($("codeerr"), true); }
+  show($("outcol"), state.codeActive);
 }
 
 async function applyKey() {
@@ -318,10 +330,22 @@ function renderRows(rows) {
   lastRows = rows;
   const body = $("results").querySelector("tbody");
   const off = state.zeroBased ? 0n : 1n;
-  body.innerHTML = rows.map((r) =>
-    `<tr><td class="ix">${group((BigInt(r.index) + off).toString())}</td>` +
-    `<td class="val">${renderValue(r.value)}</td></tr>`).join("");
+  body.innerHTML = rows.map((r) => {
+    let out = "";
+    if (state.codeActive) {
+      out = r.error
+        ? `<td class="out err-cell" title="${escapeAttr(r.error)}">!</td>`
+        : `<td class="out">${renderValue(r.output || "")}</td>`;
+    }
+    return `<tr><td class="ix">${group((BigInt(r.index) + off).toString())}</td>` +
+           `<td class="val">${renderValue(r.value)}</td>${out}</tr>`;
+  }).join("");
   $("status").textContent = rows.length ? "" : (state.ok ? t("pastEnd") : "");
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;")
+                  .replace(/</g, "&lt;");
 }
 
 async function loadRows() {
@@ -359,6 +383,11 @@ function wire() {
 
   $("pattern").oninput = () => { state.selected = null; renderNote(); renderLibrary(); scheduleReparse(); };
   for (const f of ["fi", "fs", "fL"]) $(f).onchange = reparse;
+  $("code").oninput = () => {
+    state.selected = null; renderNote(); renderLibrary();
+    clearTimeout(reparseTimer);
+    reparseTimer = setTimeout(async () => { await applyCode(); loadRows(); }, 300);
+  };
   $("key").oninput = () => { clearTimeout(reparseTimer); reparseTimer = setTimeout(async () => { await applyKey(); loadRows(); }, 250); };
 
   $("per").onchange = () => {
@@ -442,6 +471,8 @@ function openSaveBox(ex) {
     $("fi").checked = (editing.flags || "").includes("i");
     $("fs").checked = (editing.flags || "").includes("s");
     $("fL").checked = (editing.flags || "").includes("L");
+    $("code").value = editing.code || "";
+    $("codepanel").open = !!editing.code;
   }
   $("savebox").showModal();
 }
@@ -456,6 +487,7 @@ function saveFromBox() {
     flags: currentFlags(),
     name,
     note: $("savenote").value.trim(),
+    code: $("code").value.trim(),
     infinite: state.infinite
   };
   const at = editing ? mine.findIndex((m) => m.id === editing.id) : -1;

@@ -51,6 +51,14 @@
 
     <div id="note" class="panel note" hidden></div>
 
+    <details id="codepanel" class="panel">
+      <summary><span data-t="codeTitle"></span></summary>
+      <p class="dim" data-t="codeHint"></p>
+      <textarea id="code" rows="3" spellcheck="false" autocapitalize="off"
+                autocomplete="off" data-tplace="codePlace"></textarea>
+      <div id="codeerr" class="err" hidden></div>
+    </details>
+
     <div class="row">
       <div class="panel grow">
         <h2 data-t="size"></h2>
@@ -94,7 +102,8 @@
 
       <table id="results">
         <thead><tr><th class="ix" data-t="indexCol"></th>
-                   <th data-t="valueCol"></th></tr></thead>
+                   <th data-t="valueCol"></th>
+                   <th id="outcol" data-t="outputCol" hidden></th></tr></thead>
         <tbody></tbody>
       </table>
       <div id="status" class="dim"></div>

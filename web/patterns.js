@@ -116,21 +116,64 @@ export const BUILTIN = [
     }
   },
   {
+    id: "cnpj",
+    pattern: "[0-9A-Z]{8}0001",
+    flags: "",
+    name: { en: "CNPJ, alphanumeric (2026)",
+            pt: "CNPJ alfanumérico (2026)" },
+    note: {
+      en: "From 2026 the Brazilian company number admits letters. The check " +
+          "digit still uses mod 11, and still takes each character as its " +
+          "code point minus 48 -- which is why it kept working unchanged: a " +
+          "digit is worth itself, and a letter carries on upward from A = 17. " +
+          "This is the pattern the library is made for: a base of a hundred " +
+          "billion (36^8) with a computed tail. Element for the base " +
+          "12ABC34501 gives check digits 35, the example in the official " +
+          "note. The branch is fixed at 0001 here to keep the set small; " +
+          "widen it to [0-9]{4} for the head offices and branches both.",
+      pt: "A partir de 2026 o CNPJ admite letras. O dígito verificador " +
+          "continua usando mod 11, e continua tomando cada caractere como seu " +
+          "código menos 48 — e é por isso que seguiu funcionando sem " +
+          "alteração: um algarismo vale ele mesmo, e uma letra segue para " +
+          "cima a partir de A = 17. É o padrão para o qual a biblioteca foi " +
+          "feita: uma base de cem bilhões (36^8) com uma cauda calculada. Com " +
+          "a base 12ABC34501 os dígitos dão 35, o exemplo da nota oficial. A " +
+          "filial está fixada em 0001 aqui para manter o conjunto pequeno; " +
+          "troque por [0-9]{4} para matrizes e filiais."
+    },
+    code:
+      "// Raiz + filial, doze caracteres, depois os dois verificadores.\n" +
+      "var base = value;\n" +
+      "return base + lib.checkDigits(base,\n" +
+      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
+      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);"
+  },
+  {
     id: "cpf",
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
     flags: "",
     name: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
     note: {
-      en: "The written form, all 10^11 of them. Note that this is the set of " +
-          "well-formed CPFs, not of valid ones: the last two digits are a " +
-          "checksum, so only a hundredth of these would actually pass " +
-          "validation. A regular expression cannot express the checksum.",
-      pt: "A forma escrita, todos os 10^11. Repare que este é o conjunto dos " +
-          "CPFs bem formados, não dos válidos: os dois últimos algarismos " +
-          "são dígitos verificadores, então só um centésimo destes passaria " +
-          "na validação. Uma expressão regular não consegue expressar o " +
-          "cálculo do verificador."
-    }
+      en: "The regular expression describes 10^11 well-formed CPFs, but only " +
+          "a hundredth of them are valid: the last two digits are a mod-11 " +
+          "checksum a regular expression cannot express. The code column " +
+          "computes it, so what you read there is a genuinely valid CPF for " +
+          "every row. This is the pattern that prompted the whole feature.",
+      pt: "A expressão regular descreve 10^11 CPFs bem formados, mas só um " +
+          "centésimo deles é válido: os dois últimos algarismos são um " +
+          "verificador mod 11 que uma expressão regular não expressa. A " +
+          "coluna de código o calcula, então o que se lê ali é um CPF de " +
+          "fato válido em cada linha. Foi este padrão que originou todo o " +
+          "recurso."
+    },
+    code:
+      "// The first nine digits are the payload; append the two check\n" +
+      "// digits, computed mod 11 exactly as Receita Federal specifies.\n" +
+      "var base = lib.keep(value, \"0-9\").slice(0, 9);\n" +
+      "return base.slice(0,3) + \".\" + base.slice(3,6) + \".\" +\n" +
+      "       base.slice(6,9) + \"-\" +\n" +
+      "       lib.checkDigits(base, [10,9,8,7,6,5,4,3,2],\n" +
+      "                             [11,10,9,8,7,6,5,4,3,2]);"
   },
   {
     id: "cep",
@@ -400,6 +443,36 @@ export const BUILTIN = [
           "índice cresce depressa: o elemento um milhão tem apenas dez " +
           "bases. Bom para ver no painel de comprimentos."
     }
+  },
+  {
+    id: "crack",
+    pattern: "[a-z]{1,6}",
+    flags: "",
+    name: { en: "Brute-force a hash", pt: "Quebra de hash por força bruta" },
+    note: {
+      en: "Every lower-case word up to six letters, in order, with its " +
+          "SHA-256 in the code column -- a brute-force search laid out as a " +
+          "set. The word whose hash is d0cc4101c015609d3e6e9bff2cfcf643ec4b" +
+          "05330949c658472516e2220afae1 is somewhere in here; the code " +
+          "flags it. Because the seek is per index, you could hand each of a " +
+          "thousand machines a range and none would repeat another's work -- " +
+          "which is what the -k key and, in a real tool, a GPU kernel are " +
+          "for.",
+      pt: "Toda palavra minúscula de até seis letras, em ordem, com seu " +
+          "SHA-256 na coluna de código — uma busca por força bruta disposta " +
+          "como um conjunto. A palavra cujo hash é d0cc4101c015609d3e6e9bff2" +
+          "cfcf643ec4b05330949c658472516e2220afae1 está em algum lugar aqui; " +
+          "o código a assinala. Como a busca é por índice, dava para entregar " +
+          "a cada uma de mil máquinas uma faixa e nenhuma repetiria o " +
+          "trabalho da outra — que é para o que servem a chave -k e, numa " +
+          "ferramenta real, um núcleo de GPU."
+    },
+    code:
+      "// Flag the row whose hash matches the target.\n" +
+      "var target = \"d0cc4101c015609d3e6e9bff2cfcf643\" +\n" +
+      "             \"ec4b05330949c658472516e2220afae1\";\n" +
+      "var h = lib.sha256(value);\n" +
+      "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);"
   },
   {
     id: "abba",

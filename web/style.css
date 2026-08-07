@@ -57,6 +57,10 @@ main {
   font: inherit;
 }
 #pattern { font-family: var(--mono); font-size: 1.02rem; }
+#code { width: 100%; background: var(--bg); color: var(--fg);
+        border: 1px solid var(--line); border-radius: 6px; padding: .5rem .55rem;
+        font-family: var(--mono); font-size: .86rem; resize: vertical;
+        margin-top: .3rem; }
 #libtabs { display: flex; gap: .25rem; margin: .5rem 0; }
 .tab { flex: 1; background: none; border: 1px solid var(--line);
        border-radius: 6px; padding: .22rem; color: var(--dim);
@@ -135,6 +139,10 @@ main {
 #results .ix { text-align: right; color: var(--dim); white-space: nowrap;
                width: 1%; }
 #results .val { word-break: break-all; }
+#results .out { word-break: break-all; color: var(--accent);
+                font-family: var(--mono); }
+#results .err-cell { color: var(--err); text-align: center; cursor: help;
+                     font-weight: bold; }
 .ctrl { color: var(--err); font-size: .8em; opacity: .8; }
 .sp { background: var(--line); border-radius: 2px; }
 

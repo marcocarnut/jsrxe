@@ -64,6 +64,10 @@ main {
   font: inherit;
 }
 #pattern { font-family: var(--mono); font-size: 1.02rem; }
+#code { width: 100%; background: var(--bg); color: var(--fg);
+        border: 1px solid var(--line); border-radius: 6px; padding: .5rem .55rem;
+        font-family: var(--mono); font-size: .86rem; resize: vertical;
+        margin-top: .3rem; }
 #libtabs { display: flex; gap: .25rem; margin: .5rem 0; }
 .tab { flex: 1; background: none; border: 1px solid var(--line);
        border-radius: 6px; padding: .22rem; color: var(--dim);
@@ -142,6 +146,10 @@ main {
 #results .ix { text-align: right; color: var(--dim); white-space: nowrap;
                width: 1%; }
 #results .val { word-break: break-all; }
+#results .out { word-break: break-all; color: var(--accent);
+                font-family: var(--mono); }
+#results .err-cell { color: var(--err); text-align: center; cursor: help;
+                     font-weight: bold; }
 .ctrl { color: var(--err); font-size: .8em; opacity: .8; }
 .sp { background: var(--line); border-radius: 2px; }
 
@@ -213,6 +221,14 @@ dialog menu button { background: var(--bg); color: var(--fg);
 
     <div id="note" class="panel note" hidden></div>
 
+    <details id="codepanel" class="panel">
+      <summary><span data-t="codeTitle"></span></summary>
+      <p class="dim" data-t="codeHint"></p>
+      <textarea id="code" rows="3" spellcheck="false" autocapitalize="off"
+                autocomplete="off" data-tplace="codePlace"></textarea>
+      <div id="codeerr" class="err" hidden></div>
+    </details>
+
     <div class="row">
       <div class="panel grow">
         <h2 data-t="size"></h2>
@@ -256,7 +272,8 @@ dialog menu button { background: var(--bg); color: var(--fg);
 
       <table id="results">
         <thead><tr><th class="ix" data-t="indexCol"></th>
-                   <th data-t="valueCol"></th></tr></thead>
+                   <th data-t="valueCol"></th>
+                   <th id="outcol" data-t="outputCol" hidden></th></tr></thead>
         <tbody></tbody>
       </table>
       <div id="status" class="dim"></div>
@@ -310,6 +327,145 @@ globalThis.__rxeTransport = function () {
     fatal: (fn) => { __rxeFatal = fn; }
   };
 };
+
+// SHA-256, synchronous, over bytes rather than text.
+//
+// The browser already has one in crypto.subtle, and it is not usable here for
+// two reasons: it is asynchronous, which would make a per-element transform
+// awkward for no gain, and it is unavailable outside a secure context -- so a
+// page opened from a file:// URL, which is exactly what the single-file build
+// is for, would not have it.
+//
+// Elements can hold any byte value, so this hashes the code units of the
+// string one to one rather than encoding them as UTF-8: that is the same view
+// of the data the library itself has.
+
+const K = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
+  0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+  0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
+  0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
+  0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+  0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+  0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
+  0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+  0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+]);
+
+const rr = (x, n) => (x >>> n) | (x << (32 - n));
+
+function sha256(str) {
+  const bytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
+
+  const bitLen = bytes.length * 8;
+  const withPad = new Uint8Array((((bytes.length + 8) >> 6) + 1) << 6);
+  withPad.set(bytes);
+  withPad[bytes.length] = 0x80;
+  // The length goes in the last eight bytes, big endian. Only the low 32 bits
+  // are written: nothing here hashes half a gigabyte.
+  new DataView(withPad.buffer).setUint32(withPad.length - 4, bitLen, false);
+
+  const h = new Uint32Array([
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  ]);
+  const w = new Uint32Array(64);
+  const view = new DataView(withPad.buffer);
+
+  for (let off = 0; off < withPad.length; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4, false);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rr(w[i-15], 7) ^ rr(w[i-15], 18) ^ (w[i-15] >>> 3);
+      const s1 = rr(w[i-2], 17) ^ rr(w[i-2], 19) ^ (w[i-2] >>> 10);
+      w[i] = (w[i-16] + s0 + w[i-7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rr(e, 6) ^ rr(e, 11) ^ rr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (hh + S1 + ch + K[i] + w[i]) | 0;
+      const S0 = rr(a, 2) ^ rr(a, 13) ^ rr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0;
+      d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    h[0] = (h[0] + a) | 0; h[1] = (h[1] + b) | 0;
+    h[2] = (h[2] + c) | 0; h[3] = (h[3] + d) | 0;
+    h[4] = (h[4] + e) | 0; h[5] = (h[5] + f) | 0;
+    h[6] = (h[6] + g) | 0; h[7] = (h[7] + hh) | 0;
+  }
+
+  let out = "";
+  for (let i = 0; i < 8; i++) out += (h[i] >>> 0).toString(16).padStart(8, "0");
+  return out;
+}
+
+// Compiling an example's code into a function.
+//
+// The code is the user's own, but examples are meant to be shared -- exported,
+// pasted, in time perhaps fetched -- so it is treated as if it came from
+// somewhere untrusted. It is not a security boundary in the strong sense; a
+// determined script can still reach the globals a worker exposes. What this
+// does is make the accidental case safe and the interface small: the code is a
+// function body with two parameters and a helper object, compiled in strict
+// mode, with no lexical access to anything around it.
+//
+// The helper object is the whole standard library the code gets. Everything in
+// it is pure and self-contained, so an example is reproducible and does not
+// depend on what the host happens to have: the SHA-256 here is the one in
+// sha256.js, not the browser's.
+
+// mod 11 with the classic Brazilian weighting, shared by CPF and CNPJ. Each
+// character counts as its code point minus 48, which is why the alphanumeric
+// CNPJ works unchanged: a digit's value is itself, and a letter continues
+// upward from A = 17.
+function mod11(chars, weights) {
+  let sum = 0;
+  for (let i = 0; i < chars.length; i++)
+    sum += (chars.charCodeAt(i) - 48) * weights[i];
+  const r = 11 - (sum % 11);
+  return r > 9 ? 0 : r;
+}
+
+const HELPERS = {
+  sha256,
+  mod11,
+
+  // The two Brazilian check digits, given the base and the two weight rows.
+  // Returned as a two-character string, most significant first.
+  checkDigits(base, w1, w2) {
+    const d1 = mod11(base, w1);
+    const d2 = mod11(base + d1, w2);
+    return "" + d1 + d2;
+  },
+
+  // Keep only the characters matching a class, e.g. digitsOf("12.345") ==
+  // "12345". Handy for stripping a formatted number back to its payload.
+  keep(s, re) { return s.replace(new RegExp("[^" + re + "]", "g"), ""); },
+
+  toHex(s) {
+    let out = "";
+    for (let i = 0; i < s.length; i++)
+      out += s.charCodeAt(i).toString(16).padStart(2, "0");
+    return out;
+  }
+};
+
+// Compile 'source' into (value, index) => result. Throws on a syntax error,
+// which the caller reports; a run-time throw is left to the caller's per-row
+// handling, since it may be true of some elements and not others.
+function makeTransform(source) {
+  // Strict mode, three named parameters, and nothing else in scope: the
+  // Function constructor closes over the global scope, not over this module,
+  // so the code cannot see sha256 or anything else here except through 'lib'.
+  const fn = new Function("value", "index", "lib",
+    '"use strict";\n' + source);
+  return (value, index) => fn(value, index, HELPERS);
+}
 
 // English and Brazilian Portuguese. The selector sits in the top left corner.
 
@@ -382,7 +538,12 @@ const STRINGS = {
 
     indexCol:         "index",
     valueCol:         "element",
+    outputCol:        "output",
     emptyString:      "(empty string)",
+
+    codeTitle:        "Code",
+    codeHint:         "JavaScript run on each element. 'value' is the element, 'index' its index, 'lib' a helper with sha256, mod11, checkDigits, keep and toHex. Return what to show. Left empty, the output column is hidden.",
+    codePlace:        "return value + lib.checkDigits(lib.keep(value, \"0-9\"), [10,9,8,7,6,5,4,3,2], [11,10,9,8,7,6,5,4,3,2]);",
 
     working:          "Working…",
     parseError:       "Cannot read that expression",
@@ -468,7 +629,12 @@ const STRINGS = {
 
     indexCol:         "índice",
     valueCol:         "elemento",
+    outputCol:        "saída",
     emptyString:      "(cadeia vazia)",
+
+    codeTitle:        "Código",
+    codeHint:         "JavaScript executado em cada elemento. 'value' é o elemento, 'index' o índice, 'lib' um auxiliar com sha256, mod11, checkDigits, keep e toHex. Retorne o que exibir. Vazio, a coluna de saída fica oculta.",
+    codePlace:        "return value + lib.checkDigits(lib.keep(value, \"0-9\"), [10,9,8,7,6,5,4,3,2], [11,10,9,8,7,6,5,4,3,2]);",
 
     working:          "Trabalhando…",
     parseError:       "Não consigo ler essa expressão",
@@ -646,21 +812,64 @@ const BUILTIN = [
     }
   },
   {
+    id: "cnpj",
+    pattern: "[0-9A-Z]{8}0001",
+    flags: "",
+    name: { en: "CNPJ, alphanumeric (2026)",
+            pt: "CNPJ alfanumérico (2026)" },
+    note: {
+      en: "From 2026 the Brazilian company number admits letters. The check " +
+          "digit still uses mod 11, and still takes each character as its " +
+          "code point minus 48 -- which is why it kept working unchanged: a " +
+          "digit is worth itself, and a letter carries on upward from A = 17. " +
+          "This is the pattern the library is made for: a base of a hundred " +
+          "billion (36^8) with a computed tail. Element for the base " +
+          "12ABC34501 gives check digits 35, the example in the official " +
+          "note. The branch is fixed at 0001 here to keep the set small; " +
+          "widen it to [0-9]{4} for the head offices and branches both.",
+      pt: "A partir de 2026 o CNPJ admite letras. O dígito verificador " +
+          "continua usando mod 11, e continua tomando cada caractere como seu " +
+          "código menos 48 — e é por isso que seguiu funcionando sem " +
+          "alteração: um algarismo vale ele mesmo, e uma letra segue para " +
+          "cima a partir de A = 17. É o padrão para o qual a biblioteca foi " +
+          "feita: uma base de cem bilhões (36^8) com uma cauda calculada. Com " +
+          "a base 12ABC34501 os dígitos dão 35, o exemplo da nota oficial. A " +
+          "filial está fixada em 0001 aqui para manter o conjunto pequeno; " +
+          "troque por [0-9]{4} para matrizes e filiais."
+    },
+    code:
+      "// Raiz + filial, doze caracteres, depois os dois verificadores.\n" +
+      "var base = value;\n" +
+      "return base + lib.checkDigits(base,\n" +
+      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
+      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);"
+  },
+  {
     id: "cpf",
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
     flags: "",
     name: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
     note: {
-      en: "The written form, all 10^11 of them. Note that this is the set of " +
-          "well-formed CPFs, not of valid ones: the last two digits are a " +
-          "checksum, so only a hundredth of these would actually pass " +
-          "validation. A regular expression cannot express the checksum.",
-      pt: "A forma escrita, todos os 10^11. Repare que este é o conjunto dos " +
-          "CPFs bem formados, não dos válidos: os dois últimos algarismos " +
-          "são dígitos verificadores, então só um centésimo destes passaria " +
-          "na validação. Uma expressão regular não consegue expressar o " +
-          "cálculo do verificador."
-    }
+      en: "The regular expression describes 10^11 well-formed CPFs, but only " +
+          "a hundredth of them are valid: the last two digits are a mod-11 " +
+          "checksum a regular expression cannot express. The code column " +
+          "computes it, so what you read there is a genuinely valid CPF for " +
+          "every row. This is the pattern that prompted the whole feature.",
+      pt: "A expressão regular descreve 10^11 CPFs bem formados, mas só um " +
+          "centésimo deles é válido: os dois últimos algarismos são um " +
+          "verificador mod 11 que uma expressão regular não expressa. A " +
+          "coluna de código o calcula, então o que se lê ali é um CPF de " +
+          "fato válido em cada linha. Foi este padrão que originou todo o " +
+          "recurso."
+    },
+    code:
+      "// The first nine digits are the payload; append the two check\n" +
+      "// digits, computed mod 11 exactly as Receita Federal specifies.\n" +
+      "var base = lib.keep(value, \"0-9\").slice(0, 9);\n" +
+      "return base.slice(0,3) + \".\" + base.slice(3,6) + \".\" +\n" +
+      "       base.slice(6,9) + \"-\" +\n" +
+      "       lib.checkDigits(base, [10,9,8,7,6,5,4,3,2],\n" +
+      "                             [11,10,9,8,7,6,5,4,3,2]);"
   },
   {
     id: "cep",
@@ -932,6 +1141,36 @@ const BUILTIN = [
     }
   },
   {
+    id: "crack",
+    pattern: "[a-z]{1,6}",
+    flags: "",
+    name: { en: "Brute-force a hash", pt: "Quebra de hash por força bruta" },
+    note: {
+      en: "Every lower-case word up to six letters, in order, with its " +
+          "SHA-256 in the code column -- a brute-force search laid out as a " +
+          "set. The word whose hash is d0cc4101c015609d3e6e9bff2cfcf643ec4b" +
+          "05330949c658472516e2220afae1 is somewhere in here; the code " +
+          "flags it. Because the seek is per index, you could hand each of a " +
+          "thousand machines a range and none would repeat another's work -- " +
+          "which is what the -k key and, in a real tool, a GPU kernel are " +
+          "for.",
+      pt: "Toda palavra minúscula de até seis letras, em ordem, com seu " +
+          "SHA-256 na coluna de código — uma busca por força bruta disposta " +
+          "como um conjunto. A palavra cujo hash é d0cc4101c015609d3e6e9bff2" +
+          "cfcf643ec4b05330949c658472516e2220afae1 está em algum lugar aqui; " +
+          "o código a assinala. Como a busca é por índice, dava para entregar " +
+          "a cada uma de mil máquinas uma faixa e nenhuma repetiria o " +
+          "trabalho da outra — que é para o que servem a chave -k e, numa " +
+          "ferramenta real, um núcleo de GPU."
+    },
+    code:
+      "// Flag the row whose hash matches the target.\n" +
+      "var target = \"d0cc4101c015609d3e6e9bff2cfcf643\" +\n" +
+      "             \"ec4b05330949c658472516e2220afae1\";\n" +
+      "var h = lib.sha256(value);\n" +
+      "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);"
+  },
+  {
     id: "abba",
     pattern: "(ab|ba)*",
     flags: "",
@@ -965,13 +1204,19 @@ const RXE_LEFT_TO_RIGHT = 0x0004;
 // 'randomBytes' is the one thing here that cannot be pure, so it is passed in
 // rather than reached for: browsers have had globalThis.crypto for years, node
 // only since 19, and a caller may reasonably want a seeded source instead.
+//
+// 'makeTransform' turns an example's code into a function applied to each
+// generated element. It is injected the same way, so that engine.js has no
+// opinion on how the code is compiled and the tests can hand it a plain
+// function instead of a string.
 
 function makeEngine(Module, {
   randomBytes = (n) => {
     const buf = new Uint8Array(n);
     globalThis.crypto.getRandomValues(buf);
     return buf;
-  }
+  },
+  makeTransform = null
 } = {}) {
   const c = (name, ret, args) => Module.cwrap(name, ret, args);
   const api = {
@@ -991,8 +1236,9 @@ function makeEngine(Module, {
     permMap:      c("rxe_js_permutation_map",     "number", ["number","string"])
   };
 
-  let rxe = 0;    // the parsed expression
-  let perm = 0;   // the keyed permutation, when one is set
+  let rxe = 0;        // the parsed expression
+  let perm = 0;       // the keyed permutation, when one is set
+  let transform = null; // the example's code, applied to each element
 
   // Take ownership of a char* the library allocated.
   const takeString = (ptr) => {
@@ -1028,6 +1274,18 @@ function makeEngine(Module, {
   const targetFor = (index) =>
     perm ? (takeString(api.permMap(perm, index)) || index) : index;
 
+  // A row, with the transform's output attached when there is one. The
+  // transform runs in its own try: an example's code is under the user's
+  // control and may throw, and one bad row should not blank the page.
+  const withTransform = (index, value) => {
+    const row = { index, value };
+    if (transform) {
+      try { row.output = String(transform(value, index)); }
+      catch (e) { row.output = ""; row.error = String(e && e.message ? e.message : e); }
+    }
+    return row;
+  };
+
   return {
 
     parse({ pattern, flags }) {
@@ -1052,6 +1310,16 @@ function makeEngine(Module, {
       };
     },
 
+    // Compile and install an example's code, or clear it. Returns whether it
+    // compiled; a transform that throws only at run time fails per row, which
+    // is the row's business rather than this call's.
+    code({ source }) {
+      transform = null;
+      if (!source || !makeTransform) return { ok: true, active: false };
+      try { transform = makeTransform(source); return { ok: true, active: true }; }
+      catch (e) { return { ok: false, error: String(e && e.message ? e.message : e) }; }
+    },
+
     // Set or clear the shuffle key. A permutation is over [0, count), so it
     // needs a finite set to be a permutation of.
     key({ key, count }) {
@@ -1062,7 +1330,9 @@ function makeEngine(Module, {
     },
 
     // A window of the enumeration. Each row is sought independently, which is
-    // why a page anywhere in the set costs the same as the first one.
+    // why a page anywhere in the set costs the same as the first one. When an
+    // example carries code, each element is passed through it and the result
+    // shown alongside -- a check digit appended, a hash compared, and so on.
     rows({ from, n }) {
       if (!rxe) return { rows: [] };
       const rows = [];
@@ -1070,7 +1340,7 @@ function makeEngine(Module, {
       for (let i = 0; i < n; i++) {
         if (index < 0n) break;
         if (api.seek(rxe, targetFor(index.toString()))) break;
-        rows.push({ index: index.toString(), value: currentElement() });
+        rows.push(withTransform(index.toString(), currentElement()));
         index += 1n;
       }
       return { rows };
@@ -1090,7 +1360,7 @@ function makeEngine(Module, {
         for (const b of buf) v = (v << 8n) | BigInt(b);
         const index = v % total;
         if (api.seek(rxe, index.toString())) continue;
-        rows.push({ index: index.toString(), value: currentElement() });
+        rows.push(withTransform(index.toString(), currentElement()));
       }
       return { rows };
     },
@@ -1178,7 +1448,7 @@ let t = makeT(lang);
 let state = {
   ok: false, infinite: false, shortlex: false, count: null,
   from: 0n, per: 50, zeroBased: true, keyActive: false, filter: "all",
-  selected: null, slider: "none"
+  selected: null, slider: "none", codeActive: false
 };
 
 let mine = [];
@@ -1329,6 +1599,8 @@ function selectExample(ex) {
   $("fL").checked = (ex.flags || "").includes("L");
   $("from").value = "0";
   $("key").value = "";
+  $("code").value = ex.code || "";
+  $("codepanel").open = !!ex.code;
   state.from = 0n;
   renderLibrary();
   renderNote();
@@ -1375,9 +1647,19 @@ async function reparse() {
   state.shortlex = r.shortlex;
   state.count = r.count;
   await applyKey();
+  await applyCode();
   renderAll();
   await loadLengthStarts();
   loadRows();
+}
+
+async function applyCode() {
+  const source = $("code").value.trim();
+  const r = await call("code", { source });
+  state.codeActive = !!r.active;
+  if (r.ok) { show($("codeerr"), false); }
+  else { $("codeerr").textContent = r.error; show($("codeerr"), true); }
+  show($("outcol"), state.codeActive);
 }
 
 async function applyKey() {
@@ -1465,10 +1747,22 @@ function renderRows(rows) {
   lastRows = rows;
   const body = $("results").querySelector("tbody");
   const off = state.zeroBased ? 0n : 1n;
-  body.innerHTML = rows.map((r) =>
-    `<tr><td class="ix">${group((BigInt(r.index) + off).toString())}</td>` +
-    `<td class="val">${renderValue(r.value)}</td></tr>`).join("");
+  body.innerHTML = rows.map((r) => {
+    let out = "";
+    if (state.codeActive) {
+      out = r.error
+        ? `<td class="out err-cell" title="${escapeAttr(r.error)}">!</td>`
+        : `<td class="out">${renderValue(r.output || "")}</td>`;
+    }
+    return `<tr><td class="ix">${group((BigInt(r.index) + off).toString())}</td>` +
+           `<td class="val">${renderValue(r.value)}</td>${out}</tr>`;
+  }).join("");
   $("status").textContent = rows.length ? "" : (state.ok ? t("pastEnd") : "");
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;")
+                  .replace(/</g, "&lt;");
 }
 
 async function loadRows() {
@@ -1506,6 +1800,11 @@ function wire() {
 
   $("pattern").oninput = () => { state.selected = null; renderNote(); renderLibrary(); scheduleReparse(); };
   for (const f of ["fi", "fs", "fL"]) $(f).onchange = reparse;
+  $("code").oninput = () => {
+    state.selected = null; renderNote(); renderLibrary();
+    clearTimeout(reparseTimer);
+    reparseTimer = setTimeout(async () => { await applyCode(); loadRows(); }, 300);
+  };
   $("key").oninput = () => { clearTimeout(reparseTimer); reparseTimer = setTimeout(async () => { await applyKey(); loadRows(); }, 250); };
 
   $("per").onchange = () => {
@@ -1589,6 +1888,8 @@ function openSaveBox(ex) {
     $("fi").checked = (editing.flags || "").includes("i");
     $("fs").checked = (editing.flags || "").includes("s");
     $("fL").checked = (editing.flags || "").includes("L");
+    $("code").value = editing.code || "";
+    $("codepanel").open = !!editing.code;
   }
   $("savebox").showModal();
 }
@@ -1603,6 +1904,7 @@ function saveFromBox() {
     flags: currentFlags(),
     name,
     note: $("savenote").value.trim(),
+    code: $("code").value.trim(),
     infinite: state.infinite
   };
   const at = editing ? mine.findIndex((m) => m.id === editing.id) : -1;
@@ -1631,7 +1933,7 @@ applyLanguage();
 
 
 createLibrxe().then(function (Module) {
-  __rxeEngine = makeEngine(Module);
+  __rxeEngine = makeEngine(Module, { makeTransform: makeTransform });
   if (__rxeReady) __rxeReady();
 }).catch(function (e) { if (__rxeFatal) __rxeFatal(String(e)); });
 
