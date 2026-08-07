@@ -1,0 +1,11 @@
+#!/bin/sh
+# Presents the wasm build with the same interface as the native rxenum, so
+# that librxe's own test suite can be pointed at it unchanged:
+#
+#     cd ../rxe && RXENUM=../jsrxe/bin/rxenum-wasm make test
+#
+# There is no option parsing or output formatting here on purpose. This is
+# rxenum.c itself compiled to wasm, so anything it prints is what the native
+# program would have printed; a shim that reimplemented the interface could
+# drift from it, which is exactly what the port must not do.
+exec node "$(dirname "$0")/rxenum.js" "$@"

@@ -1,0 +1,7 @@
+build/
+bin/rxenum.js
+bin/rxenum.wasm
+web/librxe.js
+web/librxe.wasm
+node_modules/
+*~

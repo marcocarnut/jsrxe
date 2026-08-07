@@ -1,0 +1,77 @@
+README
+======
+
+jsrxe builds librxe for the browser, and a single-page application on top of
+it that exposes what the library can do.
+
+The engine is not reimplemented. librxe is compiled to WebAssembly with
+Emscripten and used as it stands, because the thing this library sells is that
+an index maps to an exact member and keeps doing so -- a key reproduces a run,
+the enumeration order is part of the interface -- and a second implementation
+that differed anywhere would be worse than no port at all. Only the user
+interface is written in JavaScript.
+
+
+WHAT GETS BUILT
+===============
+
+bin/rxenum.js       The demo program compiled whole, run under node.
+                    bin/rxenum-wasm wraps it so that librxe's own test suite
+                    can be pointed at this build unchanged:
+
+                        cd ../rxe && RXENUM=../jsrxe/bin/rxenum-wasm make test
+
+                    That is the real check on the port. It runs the 353 pinned
+                    cases, the 66-pattern oracle and the shortlex brute-force
+                    against the WebAssembly build, so the port is verified
+                    rather than assumed. Nothing here reimplements the option
+                    parsing or the output formatting, on purpose: this is
+                    rxenum.c itself, so it cannot drift from it.
+
+web/librxe.js       The library alone, with the binding in src/binding.c, for
+                    the interface to drive. No option parsing, no formatting.
+                    Indices cross the boundary as decimal strings, since they
+                    routinely exceed what a double holds exactly, and a
+                    decimal string round-trips through BigInt losslessly.
+
+
+REQUIREMENTS
+============
+
+Emscripten, from the official SDK. The Debian and Ubuntu package is version
+3.1.6, released in early 2022, and does not work with Node 18 or later: its
+generated loader calls fetch() on a filesystem path, and a main() taking argc
+and argv is not run at all. Install the SDK instead, which needs no root:
+
+    git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+    cd ~/emsdk && ./emsdk install latest && ./emsdk activate latest
+    . ~/emsdk/emsdk_env.sh
+
+GMP is librxe's only dependency and there is no packaged build of it for
+WebAssembly, so the Makefile fetches the source and builds it:
+
+    make gmp
+
+That needs curl, tar, xz and m4, and takes a few minutes. It is done once.
+
+
+BUILDING
+========
+
+    make            builds both artefacts
+    make test       runs librxe's suite against the WebAssembly build
+    make serve      serves web/ on http://localhost:8000/web/
+
+
+LICENSE
+=======
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+http://www.gnu.org/licenses/gpl-2.0.html for details.
