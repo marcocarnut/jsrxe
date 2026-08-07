@@ -16,20 +16,19 @@ body {
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-header { padding: 1.1rem 1.4rem .4rem; position: relative; }
+header { padding: 1.1rem 1.4rem .5rem; position: relative; }
 header h1 { margin: 0; font-size: 1.5rem; letter-spacing: -.01em; }
 header .sub { margin: .15rem 0 0; color: var(--dim); font-size: .92rem; }
 #lang {
-  position: absolute; top: 1rem; left: 1.4rem;
+  position: absolute; top: 1rem; right: 1.4rem;
   background: var(--panel); color: var(--fg);
   border: 1px solid var(--line); border-radius: 6px; padding: .2rem .4rem;
   font-size: .85rem;
 }
-header h1, header .sub { margin-left: 8.5rem; }
 
 main {
   display: grid; grid-template-columns: 20rem 1fr; gap: 1rem;
-  padding: .6rem 1.4rem 3rem; align-items: start;
+  padding: .9rem 1.4rem 3rem; align-items: start;
 }
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 
@@ -47,10 +46,8 @@ main {
 
 /* ---------------------------------------------------------------- library */
 
-#library { position: sticky; top: .6rem; background: var(--panel);
-           border: 1px solid var(--line); border-radius: 9px; padding: .85rem; }
-#library h2 { margin: 0 0 .5rem; font-size: .78rem; text-transform: uppercase;
-              letter-spacing: .07em; color: var(--dim); }
+#left { position: sticky; top: .6rem; background: var(--panel);
+        border: 1px solid var(--line); border-radius: 9px; padding: .85rem; }
 #libsearch, #pattern, .ctl input, #savename, #savenote {
   width: 100%; background: var(--bg); color: var(--fg);
   border: 1px solid var(--line); border-radius: 6px; padding: .4rem .55rem;
@@ -61,12 +58,13 @@ main {
         border: 1px solid var(--line); border-radius: 6px; padding: .5rem .55rem;
         font-family: var(--mono); font-size: .86rem; resize: vertical;
         margin-top: .3rem; }
-#sidetabs { display: flex; gap: .3rem; margin-bottom: .6rem; }
-.stab { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent;
-        padding: .3rem .2rem; color: var(--dim); font: inherit;
-        font-size: .82rem; font-weight: 600; text-transform: uppercase;
-        letter-spacing: .06em; cursor: pointer; }
-.stab.on { color: var(--accent); border-bottom-color: var(--accent); }
+#tabs { display: flex; gap: .4rem; padding: 0 1.4rem;
+        border-bottom: 1px solid var(--line); }
+#tabs .tab { background: none; border: 0; border-bottom: 2px solid transparent;
+        margin-bottom: -1px; padding: .55rem .9rem; color: var(--dim);
+        font: inherit; font-size: .85rem; font-weight: 600;
+        text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
+#tabs .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
 
 #helperlist { margin: 0; }
 #helperlist dt { margin-top: .6rem; }
@@ -74,11 +72,29 @@ main {
                       color: var(--accent); }
 #helperlist dd { margin: .1rem 0 0; font-size: .85rem; color: var(--dim); }
 
+#dictlist { list-style: none; margin: 0 0 .6rem; padding: 0;
+            max-height: 30rem; overflow-y: auto; }
+#dictlist li { border: 1px solid var(--line); border-radius: 7px;
+               padding: .5rem .6rem; margin-bottom: .5rem; }
+.dhead { display: flex; align-items: center; gap: .4rem; }
+.dhead code { font-family: var(--mono); font-size: .82rem; color: var(--accent); }
+.dhead .tag { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
+              color: var(--dim); border: 1px solid var(--line);
+              border-radius: 999px; padding: 0 .4rem; }
+.dhead .del { margin-left: auto; background: none; border: 0; color: var(--dim);
+              cursor: pointer; font-size: 1.1rem; }
+.dhead .del:hover { color: var(--err); }
+.dname { font-size: .9rem; margin: .15rem 0; cursor: help; }
+.dmeta { font-size: .78rem; color: var(--dim); }
+.duse { margin-top: .35rem; background: var(--accent-bg); color: var(--accent);
+        border: 1px solid var(--line); border-radius: 6px; padding: .2rem .6rem;
+        font: inherit; font-size: .8rem; cursor: pointer; }
+
 #libtabs { display: flex; gap: .25rem; margin: .5rem 0; }
-.tab { flex: 1; background: none; border: 1px solid var(--line);
+.subtab { flex: 1; background: none; border: 1px solid var(--line);
        border-radius: 6px; padding: .22rem; color: var(--dim);
-       font-size: .8rem; cursor: pointer; }
-.tab.on { background: var(--accent-bg); color: var(--accent);
+       font: inherit; font-size: .8rem; cursor: pointer; }
+.subtab.on { background: var(--accent-bg); color: var(--accent);
           border-color: var(--accent); }
 #liblist { list-style: none; margin: 0; padding: 0;
            max-height: 26rem; overflow-y: auto; overflow-x: hidden; }
@@ -110,8 +126,12 @@ main {
 
 /* -------------------------------------------------------------- workbench */
 
-.note { border-left: 3px solid var(--accent); font-size: .93rem;
-        color: var(--fg); background: var(--accent-bg); }
+#tooltip { position: absolute; z-index: 50; max-width: 32rem;
+           background: var(--fg); color: var(--bg); font-size: .85rem;
+           line-height: 1.45; padding: .5rem .7rem; border-radius: 7px;
+           box-shadow: 0 4px 16px rgba(0,0,0,.28); pointer-events: none; }
+.tip-host { cursor: help; }
+#order.tip-host { border-bottom: 1px dotted var(--dim); display: inline-block; }
 .err { color: var(--err); font-size: .9rem; margin-top: .4rem;
        font-family: var(--mono); }
 

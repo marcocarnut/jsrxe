@@ -45,7 +45,9 @@ export function makeEngine(Module, {
     current:      c("rxe_js_current",             "number", ["number","number"]),
     permNew:      c("rxe_js_permutation_new",     "number", ["string","string"]),
     permRelease:  c("rxe_js_permutation_release", null,     ["number"]),
-    permMap:      c("rxe_js_permutation_map",     "number", ["number","string"])
+    permMap:      c("rxe_js_permutation_map",     "number", ["number","string"]),
+    registerDict: c("rxe_js_register_dict",       null,     ["string","string"]),
+    freeDicts:    c("rxe_js_free_dicts",           null,     [])
   };
 
   let rxe = 0;        // the parsed expression
@@ -185,6 +187,17 @@ export function makeEngine(Module, {
       for (let L = 0; L <= max; L++) counts.push(takeString(api.countAt(rxe, L)));
       return { counts };
     },
+
+    // Make [:name:] draw from these words. The words cross the boundary as one
+    // newline-joined string, which the binding splits.
+    registerDict({ name, words }) {
+      api.registerDict(name, words.join("\n"));
+      return { ok: true };
+    },
+
+    // Forget every registered dictionary, so the caller can re-register the
+    // set that remains after one is removed.
+    freeDicts() { api.freeDicts(); return { ok: true }; },
 
     // The index of the first member of each length, which is the running sum
     // of the counts before it. An infinite set has no proportion to slide

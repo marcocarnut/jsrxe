@@ -9,39 +9,51 @@
 <body>
 
 <header>
-  <select id="lang" aria-label="Language"></select>
   <h1 data-t="title">rxenum</h1>
   <p class="sub" data-t="subtitle"></p>
+  <select id="lang" aria-label="Language"></select>
 </header>
+
+<!-- global navigation: the left pane's content follows the active tab -->
+<nav id="tabs">
+  <button class="tab on" data-side="examples" data-t="library"></button>
+  <button class="tab" data-side="helpers" data-t="helpers"></button>
+  <button class="tab" data-side="dicts" data-t="dictionaries"></button>
+</nav>
 
 <main>
 
-  <!-- ------------------------------------------ examples and the helper docs -->
-  <aside id="library">
-    <div id="sidetabs">
-      <button class="stab on" data-side="examples" data-t="library"></button>
-      <button class="stab" data-side="helpers" data-t="helpers"></button>
-    </div>
+  <aside id="left">
 
+    <!-- the regex example library -->
     <div id="examples-view">
       <input id="libsearch" type="search" data-tplace="libSearch">
       <div id="libtabs">
-        <button class="tab on" data-filter="all">&#9679;</button>
-        <button class="tab" data-filter="finite" data-t="libFinite"></button>
-        <button class="tab" data-filter="infinite" data-t="libInfinite"></button>
-        <button class="tab" data-filter="mine" data-t="libMine"></button>
+        <button class="subtab on" data-filter="all">&#9679;</button>
+        <button class="subtab" data-filter="finite" data-t="libFinite"></button>
+        <button class="subtab" data-filter="infinite" data-t="libInfinite"></button>
+        <button class="subtab" data-filter="mine" data-t="libMine"></button>
       </div>
       <ul id="liblist"></ul>
       <button id="addown" class="wide" data-t="addOwn"></button>
     </div>
 
+    <!-- the helper-function reference for the code section -->
     <div id="helpers-view" hidden>
       <p class="dim" data-t="helpersHint"></p>
       <dl id="helperlist"></dl>
     </div>
+
+    <!-- the word dictionaries, built-in and the user's own -->
+    <div id="dicts-view" hidden>
+      <p class="dim" data-t="dictsHint"></p>
+      <ul id="dictlist"></ul>
+      <button id="adddict" class="wide" data-t="addDict"></button>
+    </div>
+
   </aside>
 
-  <!-- ------------------------------------------------------- the workbench -->
+  <!-- the workbench, always present -->
   <section id="work">
 
     <div class="panel">
@@ -51,13 +63,11 @@
       <div id="err" class="err" hidden></div>
     </div>
 
-    <div id="note" class="panel note" hidden></div>
-
     <details id="codepanel" class="panel">
       <summary><span data-t="codeTitle"></span></summary>
       <p class="dim" data-t="codeHint"></p>
       <textarea id="code" rows="3" spellcheck="false" autocapitalize="off"
-                autocomplete="off" data-tplace="codePlace"></textarea>
+                autocomplete="off"></textarea>
       <div id="codeerr" class="err" hidden></div>
     </details>
 
@@ -69,8 +79,7 @@
       </div>
       <div class="panel grow">
         <h2 data-t="order"></h2>
-        <div id="order" class="big"></div>
-        <div id="orderhint" class="dim"></div>
+        <div id="order" class="big tip-host"></div>
       </div>
     </div>
 
@@ -87,7 +96,6 @@
         <label class="ctl grow"><span data-t="key"></span>
           <input id="key" type="text" data-tplace="keyPlace"></label>
       </div>
-      <p class="dim" data-t="keyHint"></p>
 
       <div class="nav">
         <button id="first" data-t="first"></button>
@@ -100,8 +108,7 @@
       <div id="bookmarks"></div>
 
       <div id="coarse">
-        <input id="slider" type="range" min="0" max="10000" value="0">
-        <div class="dim" id="sliderhint"></div>
+        <input id="slider" class="tip-host" type="range" min="0" max="10000" value="0">
       </div>
 
       <table id="results">
@@ -129,6 +136,9 @@
   </section>
 </main>
 
+<!-- floating tooltip, positioned in JavaScript over whatever carries a note -->
+<div id="tooltip" hidden></div>
+
 <!-- --------------------------------------------------- save-an-example form -->
 <dialog id="savebox">
   <form method="dialog">
@@ -140,6 +150,23 @@
     <menu>
       <button value="cancel" data-t="addCancel"></button>
       <button id="savego" value="save" data-t="addSave"></button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- ------------------------------------------------------ add-a-dictionary form -->
+<dialog id="dictbox">
+  <form method="dialog">
+    <label><span data-t="dictName"></span>
+      <input id="dictname" type="text" required pattern="[A-Za-z0-9_]+"></label>
+    <p class="dim" data-t="dictNameHint"></p>
+    <label><span data-t="dictWords"></span>
+      <textarea id="dictwords" rows="8" spellcheck="false"></textarea></label>
+    <p><input id="dictfile" type="file" accept=".txt,.dict,text/plain"></p>
+    <p class="dim" data-t="savedHere"></p>
+    <menu>
+      <button value="cancel" data-t="addCancel"></button>
+      <button value="save" data-t="addSave"></button>
     </menu>
   </form>
 </dialog>

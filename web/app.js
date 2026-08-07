@@ -2,6 +2,7 @@ import { LANGS, makeT, translateError } from "./i18n.js";
 import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
 import { HELPER_DOCS } from "./sandbox.js";
+import { BUILTIN_DICTS } from "./dicts.js";
 
 /* --------------------------------------------------------------- transport */
 
@@ -24,6 +25,7 @@ const $ = (id) => document.getElementById(id);
 const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
+const STORE_DICTS = "jsrxe.dicts";
 
 let lang = localStorage.getItem(STORE_LANG) ||
            (navigator.language || "en").toLowerCase().startsWith("pt") ? "pt" : "en";
@@ -33,7 +35,8 @@ let t = makeT(lang);
 let state = {
   ok: false, infinite: false, shortlex: false, count: null,
   from: 0n, per: 50, zeroBased: true, keyActive: false, filter: "all",
-  selected: null, slider: "none", codeActive: false
+  selected: null, slider: "none", codeActive: false,
+  note: "", orderTip: "", sliderTip: ""
 };
 
 let mine = [];
@@ -44,6 +47,11 @@ try { mine = JSON.parse(localStorage.getItem(STORE_MINE) || "[]"); } catch { min
 // be removed.
 let marks = {};
 try { marks = JSON.parse(localStorage.getItem(STORE_MARKS) || "{}"); } catch { marks = {}; }
+
+// The user's own dictionaries, kept in this browser. Built-in ones live in
+// dicts.js; both are registered with the library the same way.
+let myDicts = [];
+try { myDicts = JSON.parse(localStorage.getItem(STORE_DICTS) || "[]"); } catch { myDicts = []; }
 
 /* --------------------------------------------------------------- utilities */
 
@@ -79,6 +87,31 @@ function isExactPower(s, base) {
 
 function show(el, on) { el.hidden = !on; }
 
+// One floating tooltip, positioned over whichever element the pointer is on.
+// The text comes from a getter so it tracks the current example and language
+// rather than being fixed when the handler was attached; an empty string
+// means there is nothing to say and nothing is shown.
+function attachTip(el, getter) {
+  const tip = $("tooltip");
+  const place = () => {
+    const text = getter();
+    if (!text) { tip.hidden = true; return; }
+    tip.textContent = text;
+    tip.hidden = false;
+    const r = el.getBoundingClientRect();
+    const top = r.bottom + window.scrollY + 6;
+    tip.style.top = top + "px";
+    // Keep it on screen: clamp the left edge to the viewport.
+    const w = Math.min(tip.offsetWidth, window.innerWidth - 16);
+    let left = r.left + window.scrollX;
+    if (left + w > window.scrollX + window.innerWidth - 8)
+      left = window.scrollX + window.innerWidth - 8 - w;
+    tip.style.left = Math.max(8, left) + "px";
+  };
+  el.addEventListener("mouseenter", place);
+  el.addEventListener("mouseleave", () => { tip.hidden = true; });
+}
+
 // Members can hold any byte, including control characters. Render those
 // visibly rather than letting them disappear into the markup.
 function renderValue(s) {
@@ -105,8 +138,10 @@ function applyLanguage() {
     el.textContent = t(el.dataset.t);
   for (const el of document.querySelectorAll("[data-tplace]"))
     el.placeholder = t(el.dataset.tplace);
+  $("code").placeholder = t("codePlace");
   renderLibrary();
   renderHelpers();
+  renderDicts();
   renderBookmarks();
   renderNote();
   renderCount();
@@ -203,6 +238,68 @@ function renderLibrary() {
   }
 }
 
+/* -------------------------------------------------------- dictionaries */
+
+function allDicts() {
+  return BUILTIN_DICTS.map((d) => ({ ...d, builtin: true }))
+    .concat(myDicts.map((d) => ({ ...d, builtin: false })));
+}
+
+function dictName(d) {
+  if (!d.name) return d.id;
+  return typeof d.name === "string" ? d.name : (d.name[lang] || d.name.en);
+}
+
+function dictNote(d) {
+  if (!d.note) return "";
+  return typeof d.note === "string" ? d.note : (d.note[lang] || d.note.en);
+}
+
+// Register every dictionary with the library, so [:name:] resolves. Called at
+// startup and whenever the user's set changes; freeDicts first, so a removed
+// one stops resolving. The words leave here as an array; the engine joins
+// them for the boundary.
+async function registerAllDicts() {
+  await call("freeDicts");
+  for (const d of allDicts())
+    await call("registerDict", { name: d.id, words: d.words });
+}
+
+function renderDicts() {
+  const list = $("dictlist");
+  list.innerHTML = "";
+  for (const d of allDicts()) {
+    const li = document.createElement("li");
+    const tag = d.builtin ? `<span class="tag">${t("dictBuiltin")}</span>` : "";
+    li.innerHTML =
+      `<div class="dhead"><code>[:${d.id}:]</code>${tag}` +
+      (d.builtin ? "" : `<button class="del" title="${t("deleteOne")}">&times;</button>`) +
+      `</div><div class="dname"></div>` +
+      `<div class="dmeta">${d.words.length} ${t("dictWordsCount")}</div>` +
+      `<button class="duse">${t("dictUse")}</button>`;
+    li.querySelector(".dname").textContent = dictName(d);
+    const note = dictNote(d);
+    if (note) li.querySelector(".dname").title = note;
+    li.querySelector(".duse").onclick = () => {
+      // Drop [:id:] into the pattern at the cursor, or append it.
+      const p = $("pattern");
+      const ins = `[:${d.id}:]`;
+      const at = p.selectionStart ?? p.value.length;
+      p.value = p.value.slice(0, at) + ins + p.value.slice(p.selectionEnd ?? at);
+      state.selected = null; renderNote(); renderLibrary(); scheduleReparse();
+    };
+    if (!d.builtin) li.querySelector(".del").onclick = async () => {
+      if (!confirm(t("deleteConfirm"))) return;
+      myDicts = myDicts.filter((m) => m.id !== d.id);
+      localStorage.setItem(STORE_DICTS, JSON.stringify(myDicts));
+      await registerAllDicts();
+      renderDicts();
+      reparse();
+    };
+    list.appendChild(li);
+  }
+}
+
 // The helper reference, filled from the docs kept beside the helpers.
 function renderHelpers() {
   const dl = $("helperlist");
@@ -227,11 +324,11 @@ function selectExample(ex) {
   reparse();
 }
 
+// The note is a tooltip over the regex field now, so this only records the
+// text; attachTip reads it on hover.
 function renderNote() {
   const ex = allExamples().find((e) => e.id === state.selected);
-  const note = ex ? exampleNote(ex) : "";
-  $("note").textContent = note;
-  show($("note"), !!note);
+  state.note = ex ? exampleNote(ex) : "";
 }
 
 /* ---------------------------------------------------------------- parsing */
@@ -310,14 +407,14 @@ function renderAll() {
   if (finite) {
     state.slider = "proportion";
     $("slider").max = "10000";
-    $("sliderhint").textContent = t("sliderHintFinite");
+    state.sliderTip = t("sliderHintFinite");
     show($("coarse"), true);
     syncSlider();
   } else if (state.ok && state.infinite) {
     state.slider = "length";
     $("slider").max = String(Math.max(1, lengthStarts.length - 1));
     $("slider").value = "0";
-    $("sliderhint").textContent = t("sliderHintLength");
+    state.sliderTip = t("sliderHintLength");
     show($("coarse"), lengthStarts.length > 1);
   } else {
     show($("coarse"), false);
@@ -353,11 +450,11 @@ function renderCount() {
 }
 
 function renderOrder() {
-  const el = $("order"), h = $("orderhint");
-  if (!state.ok) { el.textContent = ""; h.textContent = ""; return; }
-  if (state.shortlex) { el.textContent = t("orderShortlex"); h.textContent = t("orderShortlexHint"); }
-  else if (state.infinite) { el.textContent = t("orderDiagonal"); h.textContent = t("orderDiagonalHint"); }
-  else { el.textContent = t("orderPlace"); h.textContent = t("orderPlaceHint"); }
+  const el = $("order");
+  if (!state.ok) { el.textContent = ""; state.orderTip = ""; return; }
+  if (state.shortlex) { el.textContent = t("orderShortlex"); state.orderTip = t("orderShortlexHint"); }
+  else if (state.infinite) { el.textContent = t("orderDiagonal"); state.orderTip = t("orderDiagonalHint"); }
+  else { el.textContent = t("orderPlace"); state.orderTip = t("orderPlaceHint"); }
 }
 
 let lastRows = [];
@@ -518,7 +615,7 @@ function wire() {
     if (state.slider === "length") {
       const L = Number($("slider").value);
       if (!lengthStarts[L]) { setFrom(0n); return; }
-      $("sliderhint").textContent =
+      state.sliderTip =
         `${t("sliderAt")} ${L} — ${t("indexCol")} ${group(lengthStarts[L])}`;
       setFrom(BigInt(lengthStarts[L]));
       return;
@@ -539,23 +636,43 @@ function wire() {
   };
 
   $("libsearch").oninput = renderLibrary;
-  for (const b of document.querySelectorAll("#libtabs .tab")) b.onclick = () => {
+  for (const b of document.querySelectorAll("#libtabs .subtab")) b.onclick = () => {
     state.filter = b.dataset.filter;
-    for (const o of document.querySelectorAll("#libtabs .tab")) o.classList.toggle("on", o === b);
+    for (const o of document.querySelectorAll("#libtabs .subtab")) o.classList.toggle("on", o === b);
     renderLibrary();
   };
 
   $("addown").onclick = () => openSaveBox(null);
   $("savebox").addEventListener("close", saveFromBox);
 
-  // The two side views: the examples, and the helper reference for the code.
-  for (const b of document.querySelectorAll("#sidetabs .stab")) b.onclick = () => {
+  // The global tabs switch the left pane between the examples, the helper
+  // reference and the dictionaries.
+  for (const b of document.querySelectorAll("#tabs .tab")) b.onclick = () => {
     const side = b.dataset.side;
-    for (const o of document.querySelectorAll("#sidetabs .stab"))
+    for (const o of document.querySelectorAll("#tabs .tab"))
       o.classList.toggle("on", o === b);
     show($("examples-view"), side === "examples");
     show($("helpers-view"), side === "helpers");
+    show($("dicts-view"), side === "dicts");
   };
+
+  $("adddict").onclick = () => {
+    $("dictname").value = "";
+    $("dictwords").value = "";
+    $("dictfile").value = "";
+    $("dictbox").showModal();
+  };
+  // Loading a file just fills the textarea; the words are read from there.
+  $("dictfile").onchange = () => {
+    const f = $("dictfile").files[0];
+    if (!f) return;
+    if (!$("dictname").value) $("dictname").value =
+      f.name.replace(/\.(txt|dict)$/i, "").replace(/[^A-Za-z0-9_]/g, "");
+    const reader = new FileReader();
+    reader.onload = () => { $("dictwords").value = reader.result; };
+    reader.readAsText(f);
+  };
+  $("dictbox").addEventListener("close", saveDictFromBox);
 
   $("bmbox").addEventListener("close", () => {
     if ($("bmbox").returnValue !== "save") return;
@@ -610,7 +727,7 @@ function saveFromBox() {
   state.selected = entry.id;
   editing = null;
   state.filter = "mine";
-  for (const o of document.querySelectorAll("#libtabs .tab"))
+  for (const o of document.querySelectorAll("#libtabs .subtab"))
     o.classList.toggle("on", o.dataset.filter === "mine");
   renderLibrary();
   renderNote();
@@ -623,7 +740,27 @@ async function onReady() {
   else selectExample(BUILTIN[0]);
 }
 
-transport.ready(() => { ready = true; onReady(); });
+function saveDictFromBox() {
+  if ($("dictbox").returnValue !== "save") return;
+  const name = $("dictname").value.trim().replace(/[^A-Za-z0-9_]/g, "");
+  const words = $("dictwords").value.split(/\r?\n/)
+    .map((w) => w.trim()).filter(Boolean);
+  if (!name || !words.length) return;
+  const at = myDicts.findIndex((d) => d.id === name);
+  const entry = { id: name, name, words };
+  if (at >= 0) myDicts[at] = entry; else myDicts.push(entry);
+  localStorage.setItem(STORE_DICTS, JSON.stringify(myDicts));
+  registerAllDicts().then(() => { renderDicts(); reparse(); });
+}
+
+transport.ready(async () => {
+  await registerAllDicts();
+  ready = true;
+  onReady();
+});
 
 wire();
+attachTip($("pattern"), () => state.note);
+attachTip($("order"), () => state.orderTip);
+attachTip($("slider"), () => state.sliderTip);
 applyLanguage();

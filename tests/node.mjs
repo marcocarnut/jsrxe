@@ -165,6 +165,23 @@ check("code cannot see the module's own names", "undefined",
       e.rows({ from: "0", n: 1 }).rows[0].output);
 e.code({ source: "" });
 
+// --- registered dictionaries: the path the Dictionaries tab uses
+e.registerDict({ name: "animals", words: ["cat", "dog", "ferret"] });
+r = e.parse({ pattern: "[:animals:]{2}", flags: "" });
+check("a registered dictionary parses", true, r.ok);
+check("  and is a product of its words", "9", r.count);
+check("  seek picks the right phrase", "dogferret",
+      e.rows({ from: "5", n: 1 }).rows[0].value);
+// POSIX classes need no registration
+r = e.parse({ pattern: "[:digit:]{2}", flags: "" });
+check("a POSIX class needs no dictionary", "100", r.count);
+// freeDicts makes a word dictionary stop resolving; POSIX classes remain
+e.freeDicts();
+r = e.parse({ pattern: "[:animals:]", flags: "" });
+check("freeDicts drops the word dictionary", "unknown dictionary", r.error);
+r = e.parse({ pattern: "[:digit:]", flags: "" });
+check("but POSIX classes still resolve", "10", r.count);
+
 // --- random members really are members
 e.parse({ pattern: "[a-c][x-z]", flags: "" });
 r = e.random({ count: "9", n: 40 });

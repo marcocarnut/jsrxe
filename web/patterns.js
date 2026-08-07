@@ -346,6 +346,41 @@ export const BUILTIN = [
     }
   },
   {
+    id: "bip39-12",
+    family: { en: "Passphrases", pt: "Frases-senha" },
+    pattern: "[:bip39en:]( [:bip39en:]){11}",
+    flags: "",
+    name: { en: "BIP-39 seed, 12 words", pt: "Semente BIP-39, 12 palavras" },
+    note: {
+      en: "Twelve words from the 2048-word Bitcoin list, which is 2048^12 -- " +
+          "about 5.4 times 10^39, or 2^132. This is the shape the dictionary " +
+          "feature was built for: a keyspace made of real words rather than " +
+          "characters. Every seed has an exact index, so -f jumps to one and " +
+          "-k walks them in a scattered order. See the Dictionaries tab.",
+      pt: "Doze palavras da lista de 2048 do Bitcoin, o que dá 2048^12 -- " +
+          "cerca de 5,4 vezes 10^39, ou 2^132. É a forma para a qual o " +
+          "recurso de dicionários foi feito: um espaço de chaves feito de " +
+          "palavras reais, não de caracteres. Cada semente tem um índice " +
+          "exato, então -f salta para uma e -k as percorre numa ordem " +
+          "espalhada. Veja a aba Dicionários."
+    }
+  },
+  {
+    id: "diceware-6",
+    family: { en: "Passphrases", pt: "Frases-senha" },
+    pattern: "[:diceware4en:]( [:diceware4en:]){5}",
+    flags: "",
+    name: { en: "Diceware, 6 words", pt: "Diceware, 6 palavras" },
+    note: {
+      en: "Six words from the 1296-word Diceware list, 1296^6, about 4.7 " +
+          "times 10^18 or 2^62. Switch the pattern to [:diceware4ptbr:] for " +
+          "the Brazilian Portuguese list of the same size.",
+      pt: "Seis palavras da lista Diceware de 1296, 1296^6, cerca de 4,7 " +
+          "vezes 10^18 ou 2^62. Troque o padrão por [:diceware4ptbr:] para a " +
+          "lista em português brasileiro do mesmo tamanho."
+    }
+  },
+  {
     id: "months",
     pattern: "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) " +
              "(0[1-9]|[12]\\d|3[01])",

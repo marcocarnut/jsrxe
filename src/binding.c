@@ -155,6 +155,46 @@ char *rxe_js_current(struct rxe *rxe, int *len_out)
     return buf;
 }
 
+/* ---------------------------- Dictionaries ------------------------------ */
+
+// Register a word dictionary from JavaScript. The words arrive as one string
+// with newline separators, since an array of strings does not cross the wasm
+// boundary as cleanly; they are split here into the array rxe_register_dict
+// wants, which copies them, so the split is torn down immediately after.
+// [:name:] in a pattern then draws from them. The browser registers its
+// built-ins and whatever the user has added this way, there being no
+// filesystem for the library to read a name.dict from.
+
+EMSCRIPTEN_KEEPALIVE
+void rxe_js_register_dict(const char *name, const char *joined)
+{
+    size_t len, cap = 16, n = 0;
+    char *buf, *tok, *save;
+    const char **words;
+    if (!name || !joined) return;
+    len = strlen(joined);
+    buf = malloc(len + 1);
+    memcpy(buf, joined, len + 1);
+    words = malloc(cap * sizeof(char *));
+    // strtok folds runs of newlines together, so blank lines and a trailing
+    // one drop out rather than becoming empty words.
+    for (tok = strtok_r(buf, "\n", &save); tok; tok = strtok_r(NULL, "\n", &save)) {
+        if (n == cap) { cap *= 2; words = realloc(words, cap * sizeof(char *)); }
+        words[n++] = tok;
+    }
+    rxe_register_dict(name, words, (int)n);
+    free(words);
+    free(buf);
+}
+
+// Drop every registered dictionary. Used before re-registering the whole set
+// when one is removed, so a deleted dictionary stops resolving.
+EMSCRIPTEN_KEEPALIVE
+void rxe_js_free_dicts(void)
+{
+    rxe_free_dicts();
+}
+
 /* ------------------------- Keyed permutation ---------------------------- */
 
 EMSCRIPTEN_KEEPALIVE
