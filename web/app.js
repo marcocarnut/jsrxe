@@ -1,32 +1,20 @@
 import { LANGS, makeT, translateError } from "./i18n.js";
 import { BUILTIN } from "./patterns.js";
+import { makeWorkerTransport } from "./transport.js";
 
-/* ----------------------------------------------------------- worker plumbing */
+/* --------------------------------------------------------------- transport */
 
-const worker = new Worker("worker.js", { type: "module" });
-let ready = false, seq = 0;
-const pending = new Map();
-
-worker.onmessage = (ev) => {
-  if (ev.data.fatal) { showFatal(ev.data.fatal); return; }
-  if (ev.data.ready) { ready = true; onReady(); return; }
-  const { id, ...rest } = ev.data;
-  const resolve = pending.get(id);
-  if (resolve) { pending.delete(id); resolve(rest); }
-};
+// The single-file build sets this to a transport that calls the library on
+// this thread, having no worker to talk to. Everything below is the same
+// either way.
+const transport = (globalThis.__rxeTransport || makeWorkerTransport)();
+const call = transport.call;
+transport.fatal((msg) => showFatal(msg));
 
 function showFatal(msg) {
   const el = $("err");
   el.textContent = msg;
   el.hidden = false;
-}
-
-function call(type, args = {}) {
-  return new Promise((resolve) => {
-    const id = ++seq;
-    pending.set(id, resolve);
-    worker.postMessage({ id, type, ...args });
-  });
 }
 
 /* ------------------------------------------------------------------- state */
@@ -43,7 +31,7 @@ let t = makeT(lang);
 let state = {
   ok: false, infinite: false, shortlex: false, count: null,
   from: 0n, per: 50, zeroBased: true, keyActive: false, filter: "all",
-  selected: null
+  selected: null, slider: "none"
 };
 
 let mine = [];
@@ -131,13 +119,25 @@ function exampleNote(ex) {
   return typeof ex.note === "string" ? ex.note : (ex.note[lang] || ex.note.en);
 }
 
-// Which bucket an example goes in. The library is the authority on whether an
-// expression is infinite, so this asks it rather than guessing from the text;
-// until it has answered, a starred quantifier is a good enough guess for
-// sorting a list.
+// Which bucket an example goes in. The library is asked rather than the text
+// inspected, because the text lies: '\\+55 \\d{2} 9\\d{4}-\\d{4}' is a Brazilian
+// mobile number and perfectly finite, but the escaped plus in it looks exactly
+// like a quantifier and had it filed under the infinite ones.
+const classified = new Map();
+
 function looksInfinite(ex) {
+  if (classified.has(ex.id)) return classified.get(ex.id);
   if ("infinite" in ex) return ex.infinite;
-  return /[*+]|\{\s*\d+\s*,\s*\}/.test(ex.pattern);
+  return false;
+}
+
+async function classifyExamples() {
+  const list = allExamples().filter((e) => !classified.has(e.id));
+  if (!list.length) return;
+  const r = await call("classify",
+                       { patterns: list.map((e) => ({ id: e.id, pattern: e.pattern })) });
+  for (const c of r.classified || []) classified.set(c.id, c.infinite);
+  renderLibrary();
 }
 
 function renderLibrary() {
@@ -156,10 +156,14 @@ function renderLibrary() {
     if (state.selected === ex.id) li.className = "on";
     li.innerHTML =
       `<button class="pick"><span class="nm"></span><code></code></button>` +
-      (ex.own ? `<button class="del" title="${t("deleteOne")}">&times;</button>` : "");
+      (ex.own
+        ? `<button class="edt" title="${t("editOne")}">&#9998;</button>` +
+          `<button class="del" title="${t("deleteOne")}">&times;</button>`
+        : "");
     li.querySelector(".nm").textContent = name;
     li.querySelector("code").textContent = ex.pattern;
     li.querySelector(".pick").onclick = () => selectExample(ex);
+    if (ex.own) li.querySelector(".edt").onclick = () => openSaveBox(ex);
     if (ex.own) li.querySelector(".del").onclick = () => {
       if (!confirm(t("deleteConfirm"))) return;
       mine = mine.filter((m) => m.id !== ex.id);
@@ -204,6 +208,8 @@ function scheduleReparse() {
   reparseTimer = setTimeout(reparse, 250);
 }
 
+let ready = false;
+
 async function reparse() {
   if (!ready) return;
   const pattern = $("pattern").value;
@@ -223,7 +229,7 @@ async function reparse() {
   state.count = r.count;
   await applyKey();
   renderAll();
-  loadLengths();
+  await loadLengthStarts();
   loadRows();
 }
 
@@ -246,9 +252,40 @@ function renderAll() {
   renderCount();
   renderOrder();
   const finite = state.ok && !state.infinite && state.count && state.count !== "0";
-  show($("slider"), finite);
   $("last").disabled = !finite;
   $("random").disabled = !finite;
+  // A finite set has a proportion to slide along. An infinite one does not,
+  // but it does have lengths, and stepping by those is both the coarse
+  // movement that is otherwise missing and a fair picture of how the set is
+  // actually arranged -- far better than laying an arbitrary exponential
+  // scale over an index with no end.
+  if (finite) {
+    state.slider = "proportion";
+    $("slider").max = "10000";
+    $("sliderhint").textContent = t("sliderHintFinite");
+    show($("coarse"), true);
+    syncSlider();
+  } else if (state.ok && state.infinite) {
+    state.slider = "length";
+    $("slider").max = String(Math.max(1, lengthStarts.length - 1));
+    $("slider").value = "0";
+    $("sliderhint").textContent = t("sliderHintLength");
+    show($("coarse"), lengthStarts.length > 1);
+  } else {
+    show($("coarse"), false);
+  }
+}
+
+// The index at which each length begins, for the length slider. Empty until
+// the expression is known to be infinite.
+let lengthStarts = [];
+
+async function loadLengthStarts() {
+  lengthStarts = [];
+  if (!state.ok || !state.infinite) return;
+  const r = await call("lengthStarts", { max: 96 });
+  lengthStarts = r.starts || [];
+  renderAll();
 }
 
 function renderCount() {
@@ -275,24 +312,6 @@ function renderOrder() {
   else { el.textContent = t("orderPlace"); h.textContent = t("orderPlaceHint"); }
 }
 
-async function loadLengths() {
-  const box = $("lengths");
-  if (!state.ok) { box.innerHTML = ""; return; }
-  const r = await call("lengths", { max: 24 });
-  const counts = r.counts || [];
-  const nums = counts.map((c) => { const { log10 } = logs(c === "0" ? "1" : c); return c === "0" ? 0 : log10; });
-  const peak = Math.max(1, ...nums);
-  let html = "";
-  for (let L = 0; L < counts.length; L++) {
-    if (counts[L] === "0" && L > 0 && counts.slice(L).every((c) => c === "0")) break;
-    const w = counts[L] === "0" ? 0 : Math.max(1, (nums[L] / peak) * 100);
-    html += `<div class="lrow"><span class="ll">${L}</span>` +
-            `<span class="lbar" style="width:${w.toFixed(1)}%"></span>` +
-            `<span class="lc">${group(counts[L])}</span></div>`;
-  }
-  box.innerHTML = html;
-}
-
 let lastRows = [];
 
 function renderRows(rows) {
@@ -313,7 +332,7 @@ async function loadRows() {
 }
 
 function syncSlider() {
-  if (state.infinite || !state.count || state.count === "0") return;
+  if (state.slider !== "proportion" || !state.count || state.count === "0") return;
   const total = BigInt(state.count);
   const pos = total <= 1n ? 0 :
     Number((state.from * 10000n) / (total > 1n ? total - 1n : 1n));
@@ -372,6 +391,14 @@ function wire() {
   };
 
   $("slider").oninput = () => {
+    if (state.slider === "length") {
+      const L = Number($("slider").value);
+      if (!lengthStarts[L]) { setFrom(0n); return; }
+      $("sliderhint").textContent =
+        `${t("sliderAt")} ${L} — ${t("indexCol")} ${group(lengthStarts[L])}`;
+      setFrom(BigInt(lengthStarts[L]));
+      return;
+    }
     if (!state.count) return;
     const total = BigInt(state.count);
     const frac = BigInt($("slider").value);
@@ -394,35 +421,63 @@ function wire() {
     renderLibrary();
   };
 
-  $("addown").onclick = () => {
-    const ex = allExamples().find((e) => e.id === state.selected);
-    $("savename").value = ex ? exampleName(ex) : "";
-    $("savenote").value = "";
-    $("savebox").showModal();
-  };
-  $("savebox").addEventListener("close", () => {
-    if ($("savebox").returnValue !== "save") return;
-    const name = $("savename").value.trim();
-    if (!name) return;
-    mine.push({
-      id: "own-" + Date.now(),
-      pattern: $("pattern").value,
-      flags: currentFlags(),
-      name, note: $("savenote").value.trim(),
-      infinite: state.infinite
-    });
-    localStorage.setItem(STORE_MINE, JSON.stringify(mine));
-    state.filter = "mine";
-    for (const o of document.querySelectorAll("#libtabs .tab"))
-      o.classList.toggle("on", o.dataset.filter === "mine");
-    renderLibrary();
-  });
+  $("addown").onclick = () => openSaveBox(null);
+  $("savebox").addEventListener("close", saveFromBox);
 }
 
-function onReady() {
+// Opens the form for a new example, or for one of your own to be edited. An
+// edit keeps the entry's identity so that saving replaces it rather than
+// making a second copy of it.
+let editing = null;
+
+function openSaveBox(ex) {
+  editing = ex && ex.own ? ex : null;
+  $("savename").value = editing ? exampleName(editing)
+                               : (allExamples().find((e) => e.id === state.selected)
+                                    ? exampleName(allExamples().find((e) => e.id === state.selected))
+                                    : "");
+  $("savenote").value = editing ? exampleNote(editing) : "";
+  if (editing) {
+    $("pattern").value = editing.pattern;
+    $("fi").checked = (editing.flags || "").includes("i");
+    $("fs").checked = (editing.flags || "").includes("s");
+    $("fL").checked = (editing.flags || "").includes("L");
+  }
+  $("savebox").showModal();
+}
+
+function saveFromBox() {
+  if ($("savebox").returnValue !== "save") { editing = null; return; }
+  const name = $("savename").value.trim();
+  if (!name) { editing = null; return; }
+  const entry = {
+    id: editing ? editing.id : "own-" + Date.now(),
+    pattern: $("pattern").value,
+    flags: currentFlags(),
+    name,
+    note: $("savenote").value.trim(),
+    infinite: state.infinite
+  };
+  const at = editing ? mine.findIndex((m) => m.id === editing.id) : -1;
+  if (at >= 0) mine[at] = entry; else mine.push(entry);
+  classified.set(entry.id, state.infinite);
+  localStorage.setItem(STORE_MINE, JSON.stringify(mine));
+  state.selected = entry.id;
+  editing = null;
+  state.filter = "mine";
+  for (const o of document.querySelectorAll("#libtabs .tab"))
+    o.classList.toggle("on", o.dataset.filter === "mine");
+  renderLibrary();
+  renderNote();
+}
+
+async function onReady() {
+  await classifyExamples();
   if ($("pattern").value) reparse();
   else selectExample(BUILTIN[0]);
 }
+
+transport.ready(() => { ready = true; onReady(); });
 
 wire();
 applyLanguage();

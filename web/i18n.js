@@ -19,6 +19,8 @@ export const STRINGS = {
     flagLHint:        "-L — the first position varies fastest instead of the last",
 
     library:          "Examples",
+    editOne:          "Edit",
+    addEdit:          "Edit example",
     libSearch:        "Filter…",
     libFinite:        "Finite",
     libInfinite:      "Infinite",
@@ -45,11 +47,6 @@ export const STRINGS = {
     orderPlaceHint:   "A finite set is a numeral: the last position varies fastest, so the index reads as a number in another base.",
     orderShortlexHint:"Members come out shortest first. There is no count, but every member still has an exact index.",
     orderDiagonalHint:"A backreference ties two positions' lengths together, so the lengths cannot be counted separately. Every member is still reached, but not shortest first.",
-
-    lengths:          "Members by length",
-    lengthsHint:      "How many members have exactly this many characters.",
-    lengthCol:        "length",
-    countCol:         "members",
 
     elements:         "Elements",
     fromIndex:        "From index",
@@ -79,8 +76,15 @@ export const STRINGS = {
     pastEnd:          "That index is past the end of the set",
     truncated:        "shown truncated",
 
+    sliderHintFinite: "The slider moves in large jumps through the whole set; the mouse wheel over the list moves a few elements at a time.",
+    sliderHintLength: "There is no proportion to slide along, so the slider steps by length instead: each notch jumps to the first element of the next length. The mouse wheel moves a few elements at a time.",
+    sliderLength:     "length",
+    sliderAt:         "first element of length",
+
     copy:             "Copy",
     copied:           "Copied",
+    repoLib:          "the C library and command-line tool",
+    repoApp:          "this page",
     aboutTitle:       "About",
     about:            "This is librxe compiled to WebAssembly — the same C the command-line tool uses, not a reimplementation, so what you see here is exactly what rxenum prints."
   },
@@ -101,6 +105,8 @@ export const STRINGS = {
     flagLHint:        "-L — a primeira posição varia mais rápido, em vez da última",
 
     library:          "Exemplos",
+    editOne:          "Editar",
+    addEdit:          "Editar exemplo",
     libSearch:        "Filtrar…",
     libFinite:        "Finitos",
     libInfinite:      "Infinitos",
@@ -127,11 +133,6 @@ export const STRINGS = {
     orderPlaceHint:   "Um conjunto finito é um numeral: a última posição varia mais rápido, então o índice se lê como um número em outra base.",
     orderShortlexHint:"Os membros saem do mais curto para o mais longo. Não há contagem, mas todo membro ainda tem um índice exato.",
     orderDiagonalHint:"Uma retrorreferência amarra o comprimento de duas posições, então os comprimentos não podem ser contados separadamente. Todo membro ainda é alcançado, mas não do mais curto para o mais longo.",
-
-    lengths:          "Membros por comprimento",
-    lengthsHint:      "Quantos membros têm exatamente esta quantidade de caracteres.",
-    lengthCol:        "compr.",
-    countCol:         "membros",
 
     elements:         "Elementos",
     fromIndex:        "A partir do índice",
@@ -161,8 +162,15 @@ export const STRINGS = {
     pastEnd:          "Esse índice está além do fim do conjunto",
     truncated:        "mostrado truncado",
 
+    sliderHintFinite: "O cursor deslizante se move em grandes saltos por todo o conjunto; a roda do mouse sobre a lista move poucos elementos por vez.",
+    sliderHintLength: "Não há proporção para deslizar, então o cursor avança por comprimento: cada passo salta para o primeiro elemento do comprimento seguinte. A roda do mouse move poucos elementos por vez.",
+    sliderLength:     "comprimento",
+    sliderAt:         "primeiro elemento de comprimento",
+
     copy:             "Copiar",
     copied:           "Copiado",
+    repoLib:          "a biblioteca em C e a ferramenta de linha de comando",
+    repoApp:          "esta página",
     aboutTitle:       "Sobre",
     about:            "Isto é a librxe compilada para WebAssembly — o mesmo C que a ferramenta de linha de comando usa, e não uma reimplementação, de modo que o que se vê aqui é exatamente o que o rxenum imprime."
   }

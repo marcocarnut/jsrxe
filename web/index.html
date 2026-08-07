@@ -64,12 +64,6 @@
       </div>
     </div>
 
-    <details id="lenpanel" class="panel">
-      <summary><span data-t="lengths"></span></summary>
-      <p class="dim" data-t="lengthsHint"></p>
-      <div id="lengths"></div>
-    </details>
-
     <div class="panel">
       <h2 data-t="elements"></h2>
 
@@ -93,7 +87,10 @@
         <button id="random" data-t="random"></button>
       </div>
 
-      <input id="slider" type="range" min="0" max="10000" value="0" hidden>
+      <div id="coarse">
+        <input id="slider" type="range" min="0" max="10000" value="0">
+        <div class="dim" id="sliderhint"></div>
+      </div>
 
       <table id="results">
         <thead><tr><th class="ix" data-t="indexCol"></th>
@@ -106,6 +103,14 @@
     <details class="panel">
       <summary data-t="aboutTitle"></summary>
       <p class="dim" data-t="about"></p>
+      <p class="dim">
+        <a href="https://github.com/marcocarnut/rxe" target="_blank"
+           rel="noopener">github.com/marcocarnut/rxe</a> &mdash;
+        <span data-t="repoLib"></span><br>
+        <a href="https://github.com/marcocarnut/jsrxe" target="_blank"
+           rel="noopener">github.com/marcocarnut/jsrxe</a> &mdash;
+        <span data-t="repoApp"></span>
+      </p>
     </details>
 
   </section>

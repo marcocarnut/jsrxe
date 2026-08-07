@@ -77,9 +77,10 @@ main {
 #liblist code { display: block; font-family: var(--mono); font-size: .76rem;
                 color: var(--dim); overflow: hidden; text-overflow: ellipsis;
                 white-space: nowrap; }
-#liblist .del { background: none; border: 0; color: var(--dim);
-                cursor: pointer; font-size: 1.1rem; padding: 0 .35rem; }
+#liblist .del, #liblist .edt { background: none; border: 0; color: var(--dim);
+                cursor: pointer; font-size: 1rem; padding: 0 .3rem; }
 #liblist .del:hover { color: var(--err); }
+#liblist .edt:hover { color: var(--accent); }
 .wide { width: 100%; margin-top: .6rem; padding: .4rem;
         background: var(--accent-bg); color: var(--accent);
         border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
@@ -120,7 +121,9 @@ main {
 .nav button:hover:not(:disabled) { border-color: var(--accent);
                                    color: var(--accent); }
 .nav button:disabled { opacity: .4; cursor: default; }
-#slider { width: 100%; margin: .2rem 0 .6rem; }
+#coarse { margin: .2rem 0 .7rem; }
+#slider { width: 100%; margin: 0; }
+#sliderhint { margin-top: .15rem; }
 
 #results { width: 100%; border-collapse: collapse; font-family: var(--mono);
            font-size: .92rem; }
@@ -135,14 +138,7 @@ main {
 .ctrl { color: var(--err); font-size: .8em; opacity: .8; }
 .sp { background: var(--line); border-radius: 2px; }
 
-/* --------------------------------------------------------- length panel */
-
-.lrow { display: flex; align-items: center; gap: .5rem; font-size: .82rem;
-        font-family: var(--mono); }
-.ll { width: 2rem; text-align: right; color: var(--dim); }
-.lbar { height: .62rem; background: var(--accent); border-radius: 2px;
-        min-width: 0; opacity: .75; }
-.lc { color: var(--dim); }
+a { color: var(--accent); }
 
 details summary { cursor: pointer; font-size: .78rem; text-transform: uppercase;
                   letter-spacing: .07em; color: var(--dim); font-weight: 600; }

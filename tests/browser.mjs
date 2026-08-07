@@ -16,6 +16,7 @@
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -138,7 +139,38 @@ try {
     }
   }
 
+  // And the single-file build, from a file:// URL, which is the whole reason
+  // it exists: no server, no worker, no fetch of a .wasm.
+  let bundle = null;
+  const dist = fileURLToPath(new URL("../dist/rxenum.html", import.meta.url));
+  if (app && existsSync(dist)) {
+    await cdp.send("Page.navigate", { url: "file://" + dist });
+    for (let i = 0; i < 200; i++) {
+      await sleep(100);
+      const r = await cdp.send("Runtime.evaluate", {
+        expression: `JSON.stringify({
+          count: document.getElementById("count")?.textContent || "",
+          rows: document.querySelectorAll("#results tbody tr").length,
+          first: document.querySelector("#results tbody td.val")?.textContent || "",
+          err: document.getElementById("err")?.hidden === false
+                 ? document.getElementById("err").textContent : ""
+        })`,
+        returnByValue: true
+      });
+      const v = JSON.parse(r.result?.result?.value || "null");
+      if (v && (v.rows > 0 || v.err)) { bundle = v; break; }
+    }
+  }
+
   cdp.close();
+
+  if (bundle) {
+    const ok = !bundle.err && bundle.count === "218,340,105,584,896" &&
+               bundle.rows > 0 && bundle.first === "00000000";
+    console.log(ok ? "bundle: dist/rxenum.html works from a file:// URL"
+                   : "bundle: FAILED " + JSON.stringify(bundle));
+    if (!ok) code = 1;
+  }
 
   if (app) {
     const want = "218,340,105,584,896";

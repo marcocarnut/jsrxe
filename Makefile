@@ -29,6 +29,12 @@ RXE_SRC  := $(RXE)/rxe.c $(RXE)/rxe_alt.c $(RXE)/rxe_node.c $(RXE)/parse.c \
             $(RXE)/lens.c
 
 EMCC     ?= emcc
+# Always the full path, never bare 'node': sourcing emsdk_env.sh puts $(EMSDK)
+# on PATH, and there is a directory called 'node' there that shadows the
+# binary, so a bare 'node' fails with "Permission denied". Version 22 or later
+# is wanted anyway, for the global WebSocket the DevTools protocol needs, and
+# Emscripten ships one.
+NODE     ?= $(firstword $(wildcard $(EMSDK)/node/*/bin/node) /usr/bin/node node)
 CFLAGS   := -O2 -I$(RXE) -I$(GMP)
 
 # Asyncify and threads are deliberately absent: every entry point returns
@@ -87,17 +93,28 @@ build/librxe-node.mjs: $(RXE_SRC) src/binding.c $(GMP_LIB)
 	$(EMCC) $(CFLAGS) $(COMMON) $(LIBFLAGS) -sENVIRONMENT=node \
 	    $(RXE_SRC) src/binding.c $(GMP_LIB) -lm -o $@
 
+# And once more with the WebAssembly inlined as base64 and no ES module, for
+# the single-file build: a page opened from file:// may not fetch a .wasm nor
+# import a module, so both have to be gone.
+build/librxe-single.js: $(RXE_SRC) src/binding.c $(GMP_LIB)
+	$(EMCC) $(CFLAGS) -O2 -I$(RXE) -Ibuild/gmp -sALLOW_MEMORY_GROWTH=1 \
+	    -sSTACK_SIZE=8MB -sSINGLE_FILE=1 -sMODULARIZE=1 \
+	    -sEXPORT_NAME=createLibrxe -sEXPORTED_FUNCTIONS=_malloc,_free \
+	    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,HEAPU8,HEAP32 \
+	    -sENVIRONMENT=web \
+	    $(RXE_SRC) src/binding.c $(GMP_LIB) -lm -o $@
+
+# One file, no server. See tools/bundle.mjs for why that costs the worker.
+bundle: build/librxe-single.js
+	$(NODE) tools/bundle.mjs
+
 # ---- checks ---------------------------------------------------------------
 # The real test of the port: librxe's suite, unchanged, against this build.
 
-# NODE22 needs a global WebSocket for the DevTools protocol, which arrived in
-# node 22. Emscripten ships one, so there is always a suitable one to hand.
-NODE22 ?= $(firstword $(wildcard $(EMSDK)/node/*/bin/node) node)
-
-test: bin/rxenum.js build/librxe-node.mjs web/librxe.js
+test: bin/rxenum.js build/librxe-node.mjs web/librxe.js bundle
 	cd $(RXE) && RXENUM=$(CURDIR)/bin/rxenum-wasm $(MAKE) test
-	node tests/node.mjs
-	$(NODE22) tests/browser.mjs
+	$(NODE) tests/node.mjs
+	$(NODE) tests/browser.mjs
 
 serve: web/librxe.js
 	@echo "http://localhost:8000/web/"
@@ -105,9 +122,10 @@ serve: web/librxe.js
 
 clean:
 	rm -f bin/rxenum.js bin/rxenum.wasm web/librxe.js web/librxe.wasm \
-	      build/librxe-node.mjs build/librxe-node.wasm
+	      build/librxe-node.mjs build/librxe-node.wasm \
+	      build/librxe-single.js dist/rxenum.html
 
 distclean: clean
 	rm -rf $(BUILD)
 
-.PHONY: all gmp test serve clean distclean
+.PHONY: all gmp bundle test serve clean distclean

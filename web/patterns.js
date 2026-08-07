@@ -36,7 +36,7 @@ export const BUILTIN = [
     id: "hex",
     pattern: "([0-9A-F]{4} ){2}",
     flags: "",
-    name: { en: "Radix conversion", pt: "Conversão de base" },
+    name: { en: "Eight hex digits", pt: "Oito dígitos hexadecimais" },
     note: {
       en: "The enumeration runs right to left, so the last position varies " +
           "fastest, exactly as the last digit of an ordinary numeral does. " +
@@ -261,6 +261,28 @@ export const BUILTIN = [
           "rejeitada — um grupo quantificado depois de outra coisa " +
           "quantificada — até que montar esta biblioteca de exemplos revelou " +
           "o defeito."
+    }
+  },
+  {
+    id: "months",
+    pattern: "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) " +
+             "(0[1-9]|[12]\\d|3[01])",
+    flags: "",
+    name: { en: "Abbreviated month and day",
+            pt: "Mês abreviado e dia" },
+    note: {
+      en: "An alternation of twelve names against a two-digit day: 372 " +
+          "combinations, because a regular expression has no idea that " +
+          "February is short. Swap the names for Jan|Fev|Mar|Abr|Mai|Jun|" +
+          "Jul|Ago|Set|Out|Nov|Dez and the count does not move -- the " +
+          "expression is the specification, and twelve alternatives are " +
+          "twelve alternatives whatever language they are in.",
+      pt: "Uma alternação de doze nomes contra um dia de dois algarismos: " +
+          "372 combinações, porque uma expressão regular não faz ideia de " +
+          "que fevereiro é curto. Troque os nomes por Jan|Fev|Mar|Abr|Mai|" +
+          "Jun|Jul|Ago|Set|Out|Nov|Dez e a contagem não muda — a expressão " +
+          "é a especificação, e doze alternativas são doze alternativas em " +
+          "qualquer idioma."
     }
   },
   {

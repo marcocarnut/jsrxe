@@ -96,8 +96,32 @@ BUILDING
 ========
 
     make            builds both artefacts
-    make test       runs librxe's suite against the WebAssembly build
+    make bundle     builds dist/rxenum.html, one file that needs no server
+    make test       runs everything: librxe's suite through the WebAssembly
+                    build, the binding layer under node, and the page, the
+                    single-file build and both in a real browser
     make serve      serves web/ on http://localhost:8000/web/
+
+
+WHY IT NEEDS A SERVER
+=====================
+
+web/ has to be served over http, and will not work opened as a file. That is
+not a shortcoming of the browser: a page opened from a file:// URL has the
+opaque origin "null", and three separate things this uses are refused across
+it -- ES modules will not load, workers will not start, and fetching the
+.wasm is a cross-origin request. The same-origin policy is doing its job,
+since a local file could otherwise read its neighbours.
+
+Any static host is enough, GitHub Pages included: it serves .wasm with the
+right content type and nothing here needs a back end.
+
+For handing round at a talk there is 'make bundle', which produces
+dist/rxenum.html: about 265KB, the WebAssembly inlined as base64, the modules
+concatenated into one classic script, and the library on the page's own
+thread instead of in a worker. It opens from a file, a memory stick or an
+e-mail attachment. The only thing given up is that a long seek blocks the
+page while it runs, which for anything a person would type is imperceptible.
 
 
 LICENSE

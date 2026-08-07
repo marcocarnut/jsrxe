@@ -153,6 +153,46 @@ export function makeEngine(Module, {
       const counts = [];
       for (let L = 0; L <= max; L++) counts.push(takeString(api.countAt(rxe, L)));
       return { counts };
+    },
+
+    // The index of the first member of each length, which is the running sum
+    // of the counts before it. An infinite set has no proportion to slide
+    // along, but it does have this: jumping to a length is the coarse
+    // movement that a scrollbar would otherwise provide, and it is the
+    // structure the enumeration actually has rather than an arbitrary
+    // exponential scale laid over it.
+    lengthStarts({ max }) {
+      if (!rxe) return { starts: [] };
+      const starts = [];
+      let running = 0n;
+      for (let L = 0; L <= max; L++) {
+        starts.push(running.toString());
+        const c = takeString(api.countAt(rxe, L));
+        running += BigInt(c || "0");
+        // Past this there is nothing useful to offer: the index would be too
+        // long to type, let alone reach by scrolling.
+        if (running > 10n ** 40n) break;
+      }
+      return { starts };
+    },
+
+    // Whether each of several expressions is infinite. The page uses this to
+    // sort its examples rather than guessing from the text of the pattern,
+    // which got '\\+55 \\d{2} 9\\d{4}-\\d{4}' wrong: the escaped plus in a
+    // Brazilian mobile number looks exactly like a quantifier.
+    classify({ patterns }) {
+      const out = [];
+      for (const p of patterns) {
+        clearRxe();
+        rxe = api.parse(p.pattern, 0);
+        out.push({
+          id: p.id,
+          ok: !!rxe && !api.error(rxe),
+          infinite: !!rxe && !api.error(rxe) && !!api.isInfinite(rxe)
+        });
+      }
+      clearRxe();
+      return { classified: out };
     }
   };
 }
