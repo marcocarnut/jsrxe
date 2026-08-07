@@ -26,7 +26,7 @@ GMP_LIB  := $(GMP)/.libs/libgmp.a
 # The library's sources, minus its demo program, plus ours.
 RXE_SRC  := $(RXE)/rxe.c $(RXE)/rxe_alt.c $(RXE)/rxe_node.c $(RXE)/parse.c \
             $(RXE)/bkreftbl.c $(RXE)/permute.c $(RXE)/repeat.c $(RXE)/pair.c \
-            $(RXE)/lens.c
+            $(RXE)/lens.c $(RXE)/dict.c
 
 EMCC     ?= emcc
 # Always the full path, never bare 'node': sourcing emsdk_env.sh puts $(EMSDK)
@@ -68,9 +68,14 @@ gmp: $(GMP_LIB)
 
 # ---- the demo program, for running librxe's own test suite ----------------
 
+# NODERAWFS gives the program the real filesystem rather than Emscripten's
+# in-memory one, so 'rxenum -D dir [:name:]' can read a name.dict file exactly
+# as the native build does -- without it the dictionary tests would fail
+# against this build for want of the files, not for any fault in the library.
 bin/rxenum.js: $(RXE_SRC) $(RXE)/rxenum.c $(GMP_LIB)
 	$(EMCC) $(CFLAGS) -O2 -I$(RXE) -Ibuild/gmp -sALLOW_MEMORY_GROWTH=1 \
 	    -sSTACK_SIZE=8MB -sINVOKE_RUN=1 -sEXIT_RUNTIME=1 -sENVIRONMENT=node \
+	    -sNODERAWFS=1 \
 	    $(RXE_SRC) $(RXE)/rxenum.c $(GMP_LIB) -lm -o $@
 
 # ---- the library, for the UI ---------------------------------------------
