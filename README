@@ -53,7 +53,8 @@ web/librxe.js       The library alone, with the binding in src/binding.c, for
 
                     Word dictionaries, written [:name:] in a pattern, are
                     registered with the library the same way: the built-in
-                    ones (BIP-39, two Diceware lists) are embedded in
+                    ones (BIP-39, the three EFF lists, the original Diceware
+                    list and two four-dice Diceware lists) are embedded in
                     dicts.js, generated from dicts/ by tools/gen-dicts.mjs,
                     and the user's own are kept in local storage. The library
                     has no filesystem, so both are handed to it as words

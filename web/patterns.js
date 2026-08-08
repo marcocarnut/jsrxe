@@ -800,6 +800,21 @@ export const BUILTIN = [
     }
   },
   {
+    id: "eff-6",
+    family: { en: "Passphrases", pt: "Frases-senha" },
+    pattern: "[:efflarge:]( [:efflarge:]){5}",
+    flags: "",
+    name: { en: "EFF, 6 words", pt: "EFF, 6 palavras" },
+    note: {
+      en: "The EFF's own recommendation: six words from its 7776-word list, " +
+          "7776^6, about 2^77. Open the time reveal on the size box to see " +
+          "how long guessing them all would take.",
+      pt: "A recomendação da própria EFF: seis palavras de sua lista de 7776, " +
+          "7776^6, cerca de 2^77. Abra a revelação de tempo na caixa do " +
+          "tamanho para ver quanto levaria adivinhar todas."
+    }
+  },
+  {
     id: "months",
     pattern: "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) " +
              "(0[1-9]|[12]\\d|3[01])",
