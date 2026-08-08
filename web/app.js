@@ -26,6 +26,7 @@ const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
+const STORE_ORIENT = "jsrxe.orient";
 
 // Language, in priority order: a ".pt-br." (or ".en.") tag in the page's file
 // name, so a translated copy can be shared by its URL and open in the right
@@ -940,6 +941,14 @@ function wire() {
     const fast = e.ctrlKey || (e.buttons & 4);
     const step = BigInt(fast ? 10 : 1);
     setFrom(e.deltaY > 0 ? state.from + step : state.from - step);
+  };
+
+  // The landscape advisory: dismissed for good once the reader has seen it.
+  if (localStorage.getItem(STORE_ORIENT) === "off")
+    $("orient").classList.add("dismissed");
+  $("orientx").onclick = () => {
+    $("orient").classList.add("dismissed");
+    localStorage.setItem(STORE_ORIENT, "off");
   };
 
   $("libsearch").oninput = renderLibrary;

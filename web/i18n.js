@@ -7,6 +7,8 @@ export const STRINGS = {
     title:            "rxenum",
     subtitle:         "regular expressions as sets you can walk",
     repoTag:          "repo",
+    orientWarn:       "This page is at its best on a wide screen — turn your device sideways (landscape).",
+    orientDismiss:    "Dismiss",
 
     workbench:        "Workbench",
     badgeInfinite:    "infinite set",
@@ -151,6 +153,8 @@ export const STRINGS = {
     title:            "rxenum",
     subtitle:         "expressões regulares como conjuntos que se pode percorrer",
     repoTag:          "repo",
+    orientWarn:       "Esta página fica muito melhor numa tela larga — vire o aparelho de lado (modo paisagem).",
+    orientDismiss:    "Dispensar",
 
     workbench:        "Bancada",
     badgeInfinite:    "conjunto infinito",

@@ -23,6 +23,19 @@ body {
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* An advisory shown only on small screens held upright, where the two-column
+   workbench is cramped. Rotating to landscape drops it; the x dismisses it. */
+#orient { display: none; align-items: center; gap: .6rem;
+          background: var(--accent-bg); color: var(--accent);
+          border-bottom: 1px solid var(--accent);
+          padding: .5rem .9rem; font-size: .85rem; line-height: 1.35; }
+#orient span { flex: 1; }
+#orientx { background: none; border: 0; color: var(--accent); cursor: pointer;
+           font-size: 1.3rem; line-height: 1; padding: 0 .2rem; }
+@media (orientation: portrait) and (max-width: 900px) {
+  #orient:not(.dismissed) { display: flex; }
+}
+
 header { display: flex; align-items: baseline; flex-wrap: wrap;
          gap: .1rem .55rem; padding: .9rem 1.4rem .7rem; }
 header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; }
@@ -284,6 +297,12 @@ dialog menu button { background: var(--bg); color: var(--fg);
 </style>
 </head>
 <body>
+
+<!-- shown only on small portrait screens: the two-column workbench wants width -->
+<div id="orient">
+  <span data-t="orientWarn"></span>
+  <button id="orientx" data-ttip="orientDismiss" aria-label="dismiss">&times;</button>
+</div>
 
 <header>
   <h1 data-t="title">rxenum</h1>
@@ -709,6 +728,8 @@ const STRINGS = {
     title:            "rxenum",
     subtitle:         "regular expressions as sets you can walk",
     repoTag:          "repo",
+    orientWarn:       "This page is at its best on a wide screen — turn your device sideways (landscape).",
+    orientDismiss:    "Dismiss",
 
     workbench:        "Workbench",
     badgeInfinite:    "infinite set",
@@ -853,6 +874,8 @@ const STRINGS = {
     title:            "rxenum",
     subtitle:         "expressões regulares como conjuntos que se pode percorrer",
     repoTag:          "repo",
+    orientWarn:       "Esta página fica muito melhor numa tela larga — vire o aparelho de lado (modo paisagem).",
+    orientDismiss:    "Dispensar",
 
     workbench:        "Bancada",
     badgeInfinite:    "conjunto infinito",
@@ -2309,6 +2332,7 @@ const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
+const STORE_ORIENT = "jsrxe.orient";
 
 // Language, in priority order: a ".pt-br." (or ".en.") tag in the page's file
 // name, so a translated copy can be shared by its URL and open in the right
@@ -3223,6 +3247,14 @@ function wire() {
     const fast = e.ctrlKey || (e.buttons & 4);
     const step = BigInt(fast ? 10 : 1);
     setFrom(e.deltaY > 0 ? state.from + step : state.from - step);
+  };
+
+  // The landscape advisory: dismissed for good once the reader has seen it.
+  if (localStorage.getItem(STORE_ORIENT) === "off")
+    $("orient").classList.add("dismissed");
+  $("orientx").onclick = () => {
+    $("orient").classList.add("dismissed");
+    localStorage.setItem(STORE_ORIENT, "off");
   };
 
   $("libsearch").oninput = renderLibrary;
