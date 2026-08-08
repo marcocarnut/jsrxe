@@ -8,12 +8,6 @@
 </head>
 <body>
 
-<!-- shown only on small portrait screens: the two-column workbench wants width -->
-<div id="orient">
-  <span data-t="orientWarn"></span>
-  <button id="orientx" data-ttip="orientDismiss" aria-label="dismiss">&times;</button>
-</div>
-
 <header>
   <h1 data-t="title">rxenum</h1>
   <span class="sep">::</span>
@@ -33,6 +27,10 @@
 <main>
 
   <aside id="left">
+
+    <!-- on small screens this folds the pane away; the on-ramp below stays -->
+    <button id="libtoggle" type="button" aria-controls="left" aria-expanded="true"
+            data-t="libraryTitle"></button>
 
     <!-- the regex example library -->
     <div id="examples-view">

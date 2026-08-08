@@ -26,7 +26,6 @@ const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
-const STORE_ORIENT = "jsrxe.orient";
 
 // Language, in priority order: a ".pt-br." (or ".en.") tag in the page's file
 // name, so a translated copy can be shared by its URL and open in the right
@@ -426,6 +425,16 @@ function matchesFilter(ex) {
   }
 }
 
+// On a small screen, picking an example folds the library away and brings the
+// workbench into view, so the result is what you are looking at. A no-op on
+// wide screens, where both panes are on screen at once.
+function collapseOnMobile() {
+  if (!window.matchMedia("(max-width: 900px)").matches) return;
+  $("left").classList.add("lib-collapsed");
+  $("libtoggle").setAttribute("aria-expanded", "false");
+  $("work").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // Make a category the active filter, moving the highlight to its icon.
 function setFilter(f) {
   state.filter = f;
@@ -488,7 +497,7 @@ function renderLibrary() {
     if (ex.code && ex.code.trim())
       badges.insertAdjacentHTML("beforeend",
         `<span class="badge" title="${t("badgeCode")}">&lt;/&gt;</span>`);
-    li.querySelector(".pick").onclick = () => selectExample(ex);
+    li.querySelector(".pick").onclick = () => { selectExample(ex); collapseOnMobile(); };
     if (ex.own) li.querySelector(".edt").onclick = () => openSaveBox(ex);
     if (ex.own) li.querySelector(".del").onclick = () => {
       if (!confirm(t("deleteConfirm"))) return;
@@ -943,12 +952,11 @@ function wire() {
     setFrom(e.deltaY > 0 ? state.from + step : state.from - step);
   };
 
-  // The landscape advisory: dismissed for good once the reader has seen it.
-  if (localStorage.getItem(STORE_ORIENT) === "off")
-    $("orient").classList.add("dismissed");
-  $("orientx").onclick = () => {
-    $("orient").classList.add("dismissed");
-    localStorage.setItem(STORE_ORIENT, "off");
+  // The library folds away on small screens. The toggle is its header; a tab
+  // switch reopens it so the new pane is not hidden.
+  $("libtoggle").onclick = () => {
+    const collapsed = $("left").classList.toggle("lib-collapsed");
+    $("libtoggle").setAttribute("aria-expanded", String(!collapsed));
   };
 
   $("libsearch").oninput = renderLibrary;
@@ -982,6 +990,9 @@ function wire() {
     show($("examples-view"), side === "examples");
     show($("helpers-view"), side === "helpers");
     show($("dicts-view"), side === "dicts");
+    // Reopen the pane so the tab you just chose is not hidden behind a collapse.
+    $("left").classList.remove("lib-collapsed");
+    $("libtoggle").setAttribute("aria-expanded", "true");
   };
 
   $("adddict").onclick = () => {

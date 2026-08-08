@@ -23,19 +23,6 @@ body {
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-/* An advisory shown only on small screens held upright, where the two-column
-   workbench is cramped. Rotating to landscape drops it; the x dismisses it. */
-#orient { display: none; align-items: center; gap: .6rem;
-          background: var(--accent-bg); color: var(--accent);
-          border-bottom: 1px solid var(--accent);
-          padding: .5rem .9rem; font-size: .85rem; line-height: 1.35; }
-#orient span { flex: 1; }
-#orientx { background: none; border: 0; color: var(--accent); cursor: pointer;
-           font-size: 1.3rem; line-height: 1; padding: 0 .2rem; }
-@media (orientation: portrait) and (max-width: 900px) {
-  #orient:not(.dismissed) { display: flex; }
-}
-
 header { display: flex; align-items: baseline; flex-wrap: wrap;
          gap: .1rem .55rem; padding: .9rem 1.4rem .7rem; }
 header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; }
@@ -61,6 +48,15 @@ main {
   main { grid-template-columns: 1fr; }
   #work { order: -1; }
   #left { position: static; }
+  #left #libtoggle { display: flex; }   /* beats the base rule below, any order */
+  #left .panetitle { display: none; }   /* the toggle is the header here */
+  /* Collapsed: fold away the browse controls, keep the on-ramp visible. */
+  #left.lib-collapsed #libsearch,
+  #left.lib-collapsed #libtabs,
+  #left.lib-collapsed #liblist,
+  #left.lib-collapsed #addown,
+  #left.lib-collapsed #helpers-view,
+  #left.lib-collapsed #dicts-view { display: none; }
 }
 
 .panel {
@@ -135,6 +131,15 @@ main {
 
 .panetitle { margin: 0 0 .4rem; font-size: .9rem; font-weight: 600;
              letter-spacing: .01em; }
+/* The library header/toggle, shown only on small screens: it folds the browse
+   controls away while the on-ramp below it stays put. */
+#libtoggle { display: none; align-items: center; justify-content: space-between;
+             width: 100%; margin: 0 0 .5rem; background: var(--accent-bg);
+             color: var(--accent); border: 1px solid var(--line);
+             border-radius: 8px; padding: .45rem .7rem; font: inherit;
+             font-weight: 600; cursor: pointer; }
+#libtoggle::after { content: "▴"; font-size: .8em; }
+#left.lib-collapsed #libtoggle::after { content: "▾"; }
 #onboard { margin: 0 0 .55rem; font-size: .82rem; line-height: 1.4; }
 #onboard a { color: var(--accent); text-decoration: none; cursor: pointer; }
 #onboard a:hover { text-decoration: underline; }
@@ -306,12 +311,6 @@ dialog menu button { background: var(--bg); color: var(--fg);
 </head>
 <body>
 
-<!-- shown only on small portrait screens: the two-column workbench wants width -->
-<div id="orient">
-  <span data-t="orientWarn"></span>
-  <button id="orientx" data-ttip="orientDismiss" aria-label="dismiss">&times;</button>
-</div>
-
 <header>
   <h1 data-t="title">rxenum</h1>
   <span class="sep">::</span>
@@ -331,6 +330,10 @@ dialog menu button { background: var(--bg); color: var(--fg);
 <main>
 
   <aside id="left">
+
+    <!-- on small screens this folds the pane away; the on-ramp below stays -->
+    <button id="libtoggle" type="button" aria-controls="left" aria-expanded="true"
+            data-t="libraryTitle"></button>
 
     <!-- the regex example library -->
     <div id="examples-view">
@@ -736,8 +739,6 @@ const STRINGS = {
     title:            "rxenum",
     subtitle:         "regular expressions as sets you can walk",
     repoTag:          "repo",
-    orientWarn:       "This page is at its best on a wide screen — turn your device sideways (landscape).",
-    orientDismiss:    "Dismiss",
 
     workbench:        "Workbench",
     badgeInfinite:    "infinite set",
@@ -882,8 +883,6 @@ const STRINGS = {
     title:            "rxenum",
     subtitle:         "expressões regulares como conjuntos que se pode percorrer",
     repoTag:          "repo",
-    orientWarn:       "Esta página fica muito melhor numa tela larga — vire o aparelho de lado (modo paisagem).",
-    orientDismiss:    "Dispensar",
 
     workbench:        "Bancada",
     badgeInfinite:    "conjunto infinito",
@@ -2340,7 +2339,6 @@ const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
-const STORE_ORIENT = "jsrxe.orient";
 
 // Language, in priority order: a ".pt-br." (or ".en.") tag in the page's file
 // name, so a translated copy can be shared by its URL and open in the right
@@ -2740,6 +2738,16 @@ function matchesFilter(ex) {
   }
 }
 
+// On a small screen, picking an example folds the library away and brings the
+// workbench into view, so the result is what you are looking at. A no-op on
+// wide screens, where both panes are on screen at once.
+function collapseOnMobile() {
+  if (!window.matchMedia("(max-width: 900px)").matches) return;
+  $("left").classList.add("lib-collapsed");
+  $("libtoggle").setAttribute("aria-expanded", "false");
+  $("work").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // Make a category the active filter, moving the highlight to its icon.
 function setFilter(f) {
   state.filter = f;
@@ -2802,7 +2810,7 @@ function renderLibrary() {
     if (ex.code && ex.code.trim())
       badges.insertAdjacentHTML("beforeend",
         `<span class="badge" title="${t("badgeCode")}">&lt;/&gt;</span>`);
-    li.querySelector(".pick").onclick = () => selectExample(ex);
+    li.querySelector(".pick").onclick = () => { selectExample(ex); collapseOnMobile(); };
     if (ex.own) li.querySelector(".edt").onclick = () => openSaveBox(ex);
     if (ex.own) li.querySelector(".del").onclick = () => {
       if (!confirm(t("deleteConfirm"))) return;
@@ -3257,12 +3265,11 @@ function wire() {
     setFrom(e.deltaY > 0 ? state.from + step : state.from - step);
   };
 
-  // The landscape advisory: dismissed for good once the reader has seen it.
-  if (localStorage.getItem(STORE_ORIENT) === "off")
-    $("orient").classList.add("dismissed");
-  $("orientx").onclick = () => {
-    $("orient").classList.add("dismissed");
-    localStorage.setItem(STORE_ORIENT, "off");
+  // The library folds away on small screens. The toggle is its header; a tab
+  // switch reopens it so the new pane is not hidden.
+  $("libtoggle").onclick = () => {
+    const collapsed = $("left").classList.toggle("lib-collapsed");
+    $("libtoggle").setAttribute("aria-expanded", String(!collapsed));
   };
 
   $("libsearch").oninput = renderLibrary;
@@ -3296,6 +3303,9 @@ function wire() {
     show($("examples-view"), side === "examples");
     show($("helpers-view"), side === "helpers");
     show($("dicts-view"), side === "dicts");
+    // Reopen the pane so the tab you just chose is not hidden behind a collapse.
+    $("left").classList.remove("lib-collapsed");
+    $("libtoggle").setAttribute("aria-expanded", "true");
   };
 
   $("adddict").onclick = () => {

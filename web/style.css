@@ -16,19 +16,6 @@ body {
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-/* An advisory shown only on small screens held upright, where the two-column
-   workbench is cramped. Rotating to landscape drops it; the x dismisses it. */
-#orient { display: none; align-items: center; gap: .6rem;
-          background: var(--accent-bg); color: var(--accent);
-          border-bottom: 1px solid var(--accent);
-          padding: .5rem .9rem; font-size: .85rem; line-height: 1.35; }
-#orient span { flex: 1; }
-#orientx { background: none; border: 0; color: var(--accent); cursor: pointer;
-           font-size: 1.3rem; line-height: 1; padding: 0 .2rem; }
-@media (orientation: portrait) and (max-width: 900px) {
-  #orient:not(.dismissed) { display: flex; }
-}
-
 header { display: flex; align-items: baseline; flex-wrap: wrap;
          gap: .1rem .55rem; padding: .9rem 1.4rem .7rem; }
 header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; }
@@ -54,6 +41,15 @@ main {
   main { grid-template-columns: 1fr; }
   #work { order: -1; }
   #left { position: static; }
+  #left #libtoggle { display: flex; }   /* beats the base rule below, any order */
+  #left .panetitle { display: none; }   /* the toggle is the header here */
+  /* Collapsed: fold away the browse controls, keep the on-ramp visible. */
+  #left.lib-collapsed #libsearch,
+  #left.lib-collapsed #libtabs,
+  #left.lib-collapsed #liblist,
+  #left.lib-collapsed #addown,
+  #left.lib-collapsed #helpers-view,
+  #left.lib-collapsed #dicts-view { display: none; }
 }
 
 .panel {
@@ -128,6 +124,15 @@ main {
 
 .panetitle { margin: 0 0 .4rem; font-size: .9rem; font-weight: 600;
              letter-spacing: .01em; }
+/* The library header/toggle, shown only on small screens: it folds the browse
+   controls away while the on-ramp below it stays put. */
+#libtoggle { display: none; align-items: center; justify-content: space-between;
+             width: 100%; margin: 0 0 .5rem; background: var(--accent-bg);
+             color: var(--accent); border: 1px solid var(--line);
+             border-radius: 8px; padding: .45rem .7rem; font: inherit;
+             font-weight: 600; cursor: pointer; }
+#libtoggle::after { content: "▴"; font-size: .8em; }
+#left.lib-collapsed #libtoggle::after { content: "▾"; }
 #onboard { margin: 0 0 .55rem; font-size: .82rem; line-height: 1.4; }
 #onboard a { color: var(--accent); text-decoration: none; cursor: pointer; }
 #onboard a:hover { text-decoration: underline; }
