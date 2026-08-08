@@ -31,12 +31,36 @@
     <!-- the regex example library -->
     <div id="examples-view">
       <h2 class="panetitle" data-t="libraryTitle"></h2>
+      <!-- a quiet on-ramp: newcomers to the tutorial, veterans to the best -->
+      <p id="onboard">
+        <a href="#" id="ob-new" data-t="obNew"></a>
+        <span class="sep">·</span>
+        <a href="#" id="ob-best" data-t="obBest"></a>
+      </p>
       <input id="libsearch" type="search" data-tplace="libSearch">
+      <!-- category filters, one icon each; the tooltip names the category -->
       <div id="libtabs">
-        <button class="subtab on" data-filter="all">&#9679;</button>
-        <button class="subtab" data-filter="finite" data-t="libFinite"></button>
-        <button class="subtab" data-filter="infinite" data-t="libInfinite"></button>
-        <button class="subtab" data-filter="mine" data-t="libMine"></button>
+        <button class="subtab on" data-filter="all" data-ttip="filterAll" aria-label="all">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="1"/><rect x="13" y="13" width="7.5" height="7.5" rx="1"/></svg>
+        </button>
+        <button class="subtab" data-filter="tutorial" data-ttip="filterTutorial" aria-label="tutorial">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 23 8.2 12 13.4 1 8.2Z"/><path d="M5 10.6v4c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M23 8.2v6.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+        <button class="subtab" data-filter="highlights" data-ttip="filterHighlights" aria-label="highlights">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.7-4.9 4.5 1.3 6.5-5.9-3.3-5.9 3.3 1.3-6.5L2.5 9.2l6.6-.7z"/></svg>
+        </button>
+        <button class="subtab" data-filter="code" data-ttip="filterCode" aria-label="has code">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l-5 5 5 5"/><path d="M16 7l5 5-5 5"/><path d="M13.5 5l-3 14"/></svg>
+        </button>
+        <button class="subtab" data-filter="finite" data-ttip="filterFinite" aria-label="finite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9.5 4 7.5 20"/><path d="M16.5 4 14.5 20"/><path d="M4.5 9.5H20"/><path d="M4 14.5H19.5"/></svg>
+        </button>
+        <button class="subtab" data-filter="infinite" data-ttip="filterInfinite" aria-label="infinite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8.3" cy="12" r="3.6"/><circle cx="15.7" cy="12" r="3.6"/></svg>
+        </button>
+        <button class="subtab" data-filter="mine" data-ttip="filterMine" aria-label="mine">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg>
+        </button>
       </div>
       <ul id="liblist"></ul>
       <button id="addown" class="wide" data-t="addOwn"></button>

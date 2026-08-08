@@ -112,14 +112,22 @@ main {
         border: 1px solid var(--line); border-radius: 6px; padding: .2rem .6rem;
         font: inherit; font-size: .8rem; cursor: pointer; }
 
-.panetitle { margin: 0 0 .5rem; font-size: .9rem; font-weight: 600;
+.panetitle { margin: 0 0 .4rem; font-size: .9rem; font-weight: 600;
              letter-spacing: .01em; }
-#libtabs { display: flex; gap: .25rem; margin: .5rem 0; }
-.subtab { flex: 1; background: none; border: 1px solid var(--line);
-       border-radius: 6px; padding: .22rem; color: var(--dim);
-       font: inherit; font-size: .8rem; cursor: pointer; }
+#onboard { margin: 0 0 .55rem; font-size: .82rem; line-height: 1.4; }
+#onboard a { color: var(--accent); text-decoration: none; cursor: pointer; }
+#onboard a:hover { text-decoration: underline; }
+#onboard .sep { color: var(--dim); margin: 0 .25rem; }
+/* Category filters: one icon each, wrapping if the pane is narrow. */
+#libtabs { display: flex; flex-wrap: wrap; gap: .25rem; margin: .5rem 0; }
+.subtab { flex: 1 1 0; min-width: 2rem; display: flex; align-items: center;
+          justify-content: center; background: none;
+          border: 1px solid var(--line); border-radius: 6px; padding: .28rem;
+          color: var(--dim); cursor: pointer; }
+.subtab svg { width: 18px; height: 18px; display: block; }
+.subtab:hover { color: var(--accent); border-color: var(--accent); }
 .subtab.on { background: var(--accent-bg); color: var(--accent);
-          border-color: var(--accent); }
+             border-color: var(--accent); }
 #liblist { list-style: none; margin: 0; padding: 0;
            max-height: 26rem; overflow-y: auto; overflow-x: hidden; }
 #liblist li { display: flex; align-items: stretch; gap: .2rem;
@@ -284,12 +292,36 @@ dialog menu button { background: var(--bg); color: var(--fg);
     <!-- the regex example library -->
     <div id="examples-view">
       <h2 class="panetitle" data-t="libraryTitle"></h2>
+      <!-- a quiet on-ramp: newcomers to the tutorial, veterans to the best -->
+      <p id="onboard">
+        <a href="#" id="ob-new" data-t="obNew"></a>
+        <span class="sep">·</span>
+        <a href="#" id="ob-best" data-t="obBest"></a>
+      </p>
       <input id="libsearch" type="search" data-tplace="libSearch">
+      <!-- category filters, one icon each; the tooltip names the category -->
       <div id="libtabs">
-        <button class="subtab on" data-filter="all">&#9679;</button>
-        <button class="subtab" data-filter="finite" data-t="libFinite"></button>
-        <button class="subtab" data-filter="infinite" data-t="libInfinite"></button>
-        <button class="subtab" data-filter="mine" data-t="libMine"></button>
+        <button class="subtab on" data-filter="all" data-ttip="filterAll" aria-label="all">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="1"/><rect x="13" y="13" width="7.5" height="7.5" rx="1"/></svg>
+        </button>
+        <button class="subtab" data-filter="tutorial" data-ttip="filterTutorial" aria-label="tutorial">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 23 8.2 12 13.4 1 8.2Z"/><path d="M5 10.6v4c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M23 8.2v6.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+        <button class="subtab" data-filter="highlights" data-ttip="filterHighlights" aria-label="highlights">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.7-4.9 4.5 1.3 6.5-5.9-3.3-5.9 3.3 1.3-6.5L2.5 9.2l6.6-.7z"/></svg>
+        </button>
+        <button class="subtab" data-filter="code" data-ttip="filterCode" aria-label="has code">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l-5 5 5 5"/><path d="M16 7l5 5-5 5"/><path d="M13.5 5l-3 14"/></svg>
+        </button>
+        <button class="subtab" data-filter="finite" data-ttip="filterFinite" aria-label="finite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9.5 4 7.5 20"/><path d="M16.5 4 14.5 20"/><path d="M4.5 9.5H20"/><path d="M4 14.5H19.5"/></svg>
+        </button>
+        <button class="subtab" data-filter="infinite" data-ttip="filterInfinite" aria-label="infinite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8.3" cy="12" r="3.6"/><circle cx="15.7" cy="12" r="3.6"/></svg>
+        </button>
+        <button class="subtab" data-filter="mine" data-ttip="filterMine" aria-label="mine">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg>
+        </button>
       </div>
       <ul id="liblist"></ul>
       <button id="addown" class="wide" data-t="addOwn"></button>
@@ -685,6 +717,15 @@ const STRINGS = {
     libFinite:        "Finite",
     libInfinite:      "Infinite",
     libMine:          "Mine",
+    filterAll:        "All examples",
+    filterTutorial:   "Tutorial — start here",
+    filterHighlights: "Highlights — the best examples",
+    filterCode:       "Has a code column",
+    filterFinite:     "Finite — an exact size",
+    filterInfinite:   "Infinite — no largest member",
+    filterMine:       "Mine — your saved examples",
+    obNew:            "New to regexes? Start here.",
+    obBest:           "Veteran? Best examples.",
     addOwn:           "Save current as example",
     addName:          "Name",
     addNote:          "Notes",
@@ -695,7 +736,7 @@ const STRINGS = {
     savedHere:        "Saved in this browser only.",
 
     size:             "Size of the set",
-    sizeInfinite:     "Infinite",
+    sizeInfinite:     "Infinite ℵ₀",
     sizeEmpty:        "Empty — nothing matches",
     approx:           "approximately",
     exact:            "exactly",
@@ -794,6 +835,15 @@ const STRINGS = {
     libFinite:        "Finitos",
     libInfinite:      "Infinitos",
     libMine:          "Meus",
+    filterAll:        "Todos os exemplos",
+    filterTutorial:   "Tutorial — comece aqui",
+    filterHighlights: "Destaques — os melhores exemplos",
+    filterCode:       "Tem coluna de código",
+    filterFinite:     "Finito — tamanho exato",
+    filterInfinite:   "Infinito — sem maior elemento",
+    filterMine:       "Meus — exemplos que você salvou",
+    obNew:            "Novo em regex? Comece aqui.",
+    obBest:           "Veterano? Melhores exemplos.",
     addOwn:           "Salvar o atual como exemplo",
     addName:          "Nome",
     addNote:          "Observações",
@@ -804,7 +854,7 @@ const STRINGS = {
     savedHere:        "Guardado apenas neste navegador.",
 
     size:             "Tamanho do conjunto",
-    sizeInfinite:     "Infinito",
+    sizeInfinite:     "Infinito ℵ₀",
     sizeEmpty:        "Vazio — nada casa",
     approx:           "aproximadamente",
     exact:            "exatamente",
@@ -946,6 +996,7 @@ const BUILTIN = [
 
   {
     id: "passwords",
+    highlight: true,
     pattern: "[0-9A-Za-z]{8}",
     flags: "",
     name: { en: "Eight-character passwords",
@@ -964,22 +1015,191 @@ const BUILTIN = [
           "busca."
     }
   },
+  // -------------------------------------------------------------- tutorial
+  // A gentle progression for someone new to regular expressions, built up one
+  // idea at a time -- character, string, choice, class, product, repetition,
+  // option -- with a couple of genuinely useful sets slipped in so it never
+  // feels like a toy.
+  {
+    id: "one-char",
+    tutorial: true,
+    pattern: "a",
+    flags: "",
+    name: { en: "A single character", pt: "Um único caractere" },
+    note: {
+      en: "The smallest set there is: one member, the letter a. A regular " +
+          "expression is really a set specification, and this is the set {a}. " +
+          "Everything else here is a way of describing a bigger set.",
+      pt: "O menor conjunto que existe: um membro, a letra a. Uma expressão " +
+          "regular é, no fundo, a especificação de um conjunto, e este é o " +
+          "conjunto {a}. Todo o resto aqui é um modo de descrever um conjunto " +
+          "maior."
+    }
+  },
+  {
+    id: "one-word",
+    tutorial: true,
+    pattern: "hello",
+    flags: "",
+    name: { en: "A single word", pt: "Uma única palavra" },
+    note: {
+      en: "Ordinary characters stand for themselves and sit side by side, so " +
+          "this whole set is still just one string: hello. Length is not the " +
+          "same as size -- five characters, one member.",
+      pt: "Caracteres comuns representam a si mesmos e ficam lado a lado, " +
+          "então este conjunto ainda é uma só cadeia: hello. Comprimento não " +
+          "é o mesmo que tamanho -- cinco caracteres, um membro."
+    }
+  },
+  {
+    id: "choice",
+    tutorial: true,
+    pattern: "cat|dog|fish",
+    flags: "",
+    name: { en: "A choice", pt: "Uma escolha" },
+    note: {
+      en: "The bar | means 'or'. Three alternatives, three members. Step the " +
+          "index through 0, 1, 2 and watch each one come up.",
+      pt: "A barra | significa 'ou'. Três alternativas, três membros. Avance " +
+          "o índice por 0, 1, 2 e veja cada um aparecer."
+    }
+  },
+  {
+    id: "vowels",
+    tutorial: true,
+    pattern: "[aeiou]",
+    flags: "",
+    name: { en: "One of several characters", pt: "Um entre vários caracteres" },
+    note: {
+      en: "Square brackets choose a single character from a set -- the five " +
+          "vowels here. A class is just a choice written compactly: [aeiou] " +
+          "says the same as (a|e|i|o|u).",
+      pt: "Colchetes escolhem um único caractere de um conjunto -- as cinco " +
+          "vogais aqui. Uma classe é apenas uma escolha escrita de forma " +
+          "compacta: [aeiou] diz o mesmo que (a|e|i|o|u)."
+    }
+  },
+  {
+    id: "chess",
+    tutorial: true,
+    highlight: true,
+    pattern: "[a-h][1-8]",
+    flags: "",
+    name: { en: "Chessboard squares", pt: "Casas do tabuleiro de xadrez" },
+    note: {
+      en: "Two classes side by side multiply: eight files times eight ranks, " +
+          "sixty-four squares. The whole set fits on screen, so you can watch " +
+          "the index line up with the board -- the first real glimpse of a " +
+          "product.",
+      pt: "Duas classes lado a lado se multiplicam: oito colunas vezes oito " +
+          "linhas, sessenta e quatro casas. O conjunto inteiro cabe na tela, " +
+          "então dá para ver o índice acompanhar o tabuleiro -- o primeiro " +
+          "vislumbre de um produto."
+    }
+  },
+  {
+    id: "pin",
+    tutorial: true,
+    pattern: "\\d{4}",
+    flags: "",
+    name: { en: "Every PIN", pt: "Todo PIN" },
+    note: {
+      en: "A brace repeats what comes before it, so \\d four times is every " +
+          "four-digit PIN: all 10,000 of them, 0000 to 9999. The index is the " +
+          "PIN -- element 1,234 is 1234.",
+      pt: "A chave repete o que vem antes, então \\d quatro vezes é todo PIN " +
+          "de quatro dígitos: os 10.000, de 0000 a 9999. O índice é o próprio " +
+          "PIN -- o elemento 1.234 é 1234."
+    }
+  },
+  {
+    id: "optional",
+    tutorial: true,
+    pattern: "colou?r",
+    flags: "",
+    name: { en: "An optional letter", pt: "Uma letra opcional" },
+    note: {
+      en: "The ? makes the letter before it optional -- zero or one u. So the " +
+          "set is exactly {color, colour}, the American and British spellings, " +
+          "and nothing else.",
+      pt: "O ? torna opcional a letra anterior -- zero ou um u. Então o " +
+          "conjunto é exatamente {color, colour}, as grafias americana e " +
+          "britânica, e nada mais."
+    }
+  },
+  {
+    id: "coin",
+    tutorial: true,
+    pattern: "[HT]{10}",
+    flags: "",
+    name: { en: "Ten coin flips", pt: "Dez lançamentos de moeda" },
+    note: {
+      en: "Heads or tails, ten times over: 2^10 = 1,024 sequences. Every " +
+          "extra flip doubles the set -- the very same doubling that makes the " +
+          "eight-character password set enormous. You have arrived at real " +
+          "keyspaces.",
+      pt: "Cara ou coroa, dez vezes seguidas: 2^10 = 1.024 sequências. Cada " +
+          "lançamento a mais dobra o conjunto -- a mesmíssima duplicação que " +
+          "torna enorme o conjunto de senhas de oito caracteres. Você chegou " +
+          "aos espaços de chaves de verdade."
+    }
+  },
+
+  // ------------------------------------------------------ place value and bases
+  {
+    id: "hex-plain",
+    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
+    pattern: "[0-9A-F]{8}",
+    flags: "",
+    name: { en: "eight hex digits", pt: "oito dígitos hex" },
+    note: {
+      en: "Every eight-digit hexadecimal number: 16^8 = 4,294,967,296, one " +
+          "for each 32-bit value. The index is the number itself, so seeking " +
+          "to 3,735,928,559 lands on DEADBEEF.",
+      pt: "Todo número hexadecimal de oito dígitos: 16^8 = 4.294.967.296, um " +
+          "para cada valor de 32 bits. O índice é o próprio número, então ir " +
+          "para 3.735.928.559 cai em DEADBEEF."
+    },
+    bookmarks: [
+      { name: { en: "DEADBEEF", pt: "DEADBEEF" }, index: "3735928559" }
+    ]
+  },
   {
     id: "hex",
-    pattern: "([0-9A-F]{4} ){2}",
+    highlight: true,
+    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
+    pattern: "[0-9A-F]{4} [0-9A-F]{4}",
     flags: "",
-    name: { en: "Eight hex digits", pt: "Oito dígitos hexadecimais" },
+    name: { en: "grouped by a space", pt: "agrupado por um espaço" },
     note: {
-      en: "The enumeration runs right to left, so the last position varies " +
-          "fastest, exactly as the last digit of an ordinary numeral does. " +
-          "That makes the index a number written in another base: ask for " +
-          "element 3,735,928,559 and you get DEAD BEEF. Turn on (?L) and the " +
-          "order reverses to FEEB DAED.",
-      pt: "A enumeração corre da direita para a esquerda, então a última " +
-          "posição varia mais rápido, exatamente como o último algarismo de " +
-          "um numeral comum. Isso faz do índice um número escrito em outra " +
-          "base: peça o elemento 3.735.928.559 e você recebe DEAD BEEF. " +
-          "Ligue (?L) e a ordem inverte para FEEB DAED."
+      en: "The same 4,294,967,296 numbers, now with a space down the middle. " +
+          "The space is a single fixed character, so it multiplies the count " +
+          "by one: grouping changes how the number reads, not how many there " +
+          "are. Element 3,735,928,559 is DEAD BEEF; turn on (?L) and the order " +
+          "reverses to FEEB DAED.",
+      pt: "Os mesmos 4.294.967.296 números, agora com um espaço no meio. O " +
+          "espaço é um único caractere fixo, então multiplica a contagem por " +
+          "um: agrupar muda como o número se lê, não quantos são. O elemento " +
+          "3.735.928.559 é DEAD BEEF; ligue (?L) e a ordem inverte para FEEB " +
+          "DAED."
+    },
+    bookmarks: [
+      { name: { en: "DEAD BEEF", pt: "DEAD BEEF" }, index: "3735928559" }
+    ]
+  },
+  {
+    id: "octal",
+    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
+    pattern: "[0-7]{8}",
+    flags: "",
+    name: { en: "eight octal digits", pt: "oito dígitos octais" },
+    note: {
+      en: "Change the base and the count changes with it: eight octal digits " +
+          "are 8^8 = 16,777,216, far fewer than the hexadecimal 16^8. Same " +
+          "width, smaller alphabet, smaller set.",
+      pt: "Mude a base e a contagem muda junto: oito dígitos octais são 8^8 = " +
+          "16.777.216, bem menos que os 16^8 do hexadecimal. Mesma largura, " +
+          "alfabeto menor, conjunto menor."
     }
   },
   {
@@ -1054,11 +1274,55 @@ const BUILTIN = [
     }
   },
   {
+    id: "cnpj-num-all",
+    family: { en: "CNPJ, numeric (pre-2026)", pt: "CNPJ numérico (pré-2026)" },
+    pattern: "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}",
+    flags: "",
+    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
+    note: {
+      en: "The Brazilian company number as it stood before 2026: fourteen " +
+          "digits, punctuation and all, 10^14 of them. The last two range " +
+          "freely over 00 to 99, so only a hundredth carry the mod-11 checksum " +
+          "a regular expression cannot express. Switch to the valid variant to " +
+          "have the code compute it instead.",
+      pt: "O CNPJ como era antes de 2026: catorze algarismos, pontuação e " +
+          "tudo, 10^14 deles. Os dois últimos variam livremente de 00 a 99, " +
+          "então só um centésimo carrega o verificador mod 11 que uma " +
+          "expressão regular não expressa. Troque para a variante válida para " +
+          "que o código o calcule."
+    }
+  },
+  {
+    id: "cnpj-num-valid",
+    family: { en: "CNPJ, numeric (pre-2026)", pt: "CNPJ numérico (pré-2026)" },
+    pattern: "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}",
+    flags: "",
+    name: { en: "valid digits only", pt: "somente válidos" },
+    note: {
+      en: "The regex stops before the checksum and the code appends it, so " +
+          "every row is a genuinely valid CNPJ rather than one in a hundred " +
+          "-- 10^12 of them. It is the same mod-11 over each digit that the " +
+          "2026 alphanumeric form carries on unchanged, a digit worth itself.",
+      pt: "A expressão para antes do verificador e o código o acrescenta, " +
+          "então cada linha é um CNPJ de fato válido, e não um em cem -- 10^12 " +
+          "deles. É o mesmo mod 11 sobre cada algarismo que a forma " +
+          "alfanumérica de 2026 mantém sem mudança, um algarismo valendo ele " +
+          "mesmo."
+    },
+    code:
+      "// Strip the punctuation to the twelve-digit base, then append the two\n" +
+      "// check digits computed as Receita Federal specifies.\n" +
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + \"-\" + lib.checkDigits(base,\n" +
+      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
+      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);"
+  },
+  {
     id: "cnpj-all",
     family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}-\\d{2}",
     flags: "",
-    name: { en: "every check digit", pt: "todo verificador" },
+    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
     note: {
       en: "From 2026 the Brazilian company number admits letters. This is " +
           "the set of well-formed ones, punctuation and all: the two final " +
@@ -1082,7 +1346,7 @@ const BUILTIN = [
     family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}",
     flags: "",
-    name: { en: "valid check digit", pt: "verificador válido" },
+    name: { en: "valid digits only", pt: "somente válidos" },
     note: {
       en: "Now the regex stops before the checksum and the code computes it, " +
           "so every row is a genuinely valid CNPJ rather than one in a " +
@@ -1118,7 +1382,7 @@ const BUILTIN = [
     family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
     flags: "",
-    name: { en: "every check digit", pt: "todo verificador" },
+    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
     note: {
       en: "All 10^11 well-formed CPFs. The last two digits range over 00 to " +
           "99, so only a hundredth carry the mod-11 checksum a regular " +
@@ -1135,7 +1399,7 @@ const BUILTIN = [
     family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}",
     flags: "",
-    name: { en: "valid check digit", pt: "verificador válido" },
+    name: { en: "valid digits only", pt: "somente válidos" },
     note: {
       en: "The regex stops before the checksum and the code appends it, so " +
           "every row is a valid CPF rather than one in a hundred. This is " +
@@ -1211,18 +1475,6 @@ const BUILTIN = [
     }
   },
   {
-    id: "chess",
-    pattern: "[a-h][1-8]",
-    flags: "",
-    name: { en: "Chessboard squares", pt: "Casas do tabuleiro de xadrez" },
-    note: {
-      en: "Sixty-four. A good one to start with, because the whole set fits " +
-          "on the screen and you can watch the index line up with the board.",
-      pt: "Sessenta e quatro. Um bom ponto de partida, porque o conjunto " +
-          "inteiro cabe na tela e dá para ver o índice acompanhar o tabuleiro."
-    }
-  },
-  {
     id: "dna8",
     pattern: "[ACGT]{8}",
     flags: "",
@@ -1285,6 +1537,7 @@ const BUILTIN = [
   },
   {
     id: "bip39-12",
+    highlight: true,
     family: { en: "Passphrases", pt: "Frases-senha" },
     pattern: "[:bip39en:]( [:bip39en:]){11}",
     flags: "",
@@ -1458,6 +1711,7 @@ const BUILTIN = [
   },
   {
     id: "crack",
+    highlight: true,
     pattern: "[a-z]{1,6}",
     flags: "",
     name: { en: "Brute-force a hash", pt: "Quebra de hash por força bruta" },
@@ -1947,6 +2201,8 @@ function applyLanguage() {
     el.textContent = t(el.dataset.t);
   for (const el of document.querySelectorAll("[data-tplace]"))
     el.placeholder = t(el.dataset.tplace);
+  for (const el of document.querySelectorAll("[data-ttip]"))
+    el.title = t(el.dataset.ttip);
   $("code").placeholder = t("codePlace");
   $("codetoggle").title = t("codeToggle");
   renderLibrary();
@@ -1991,6 +2247,29 @@ function looksInfinite(ex) {
   return false;
 }
 
+// Which examples a category filter shows. Single-select, so the categories can
+// overlap freely -- a highlight may also be finite and carry code; each filter
+// is just an independent view of the one library.
+function matchesFilter(ex) {
+  switch (state.filter) {
+    case "tutorial":   return !!ex.tutorial;
+    case "highlights": return !!ex.highlight;
+    case "code":       return !!(ex.code && ex.code.trim());
+    case "finite":     return !looksInfinite(ex);
+    case "infinite":   return looksInfinite(ex);
+    case "mine":       return !!ex.own;
+    default:           return true;              // "all"
+  }
+}
+
+// Make a category the active filter, moving the highlight to its icon.
+function setFilter(f) {
+  state.filter = f;
+  for (const b of document.querySelectorAll("#libtabs .subtab"))
+    b.classList.toggle("on", b.dataset.filter === f);
+  renderLibrary();
+}
+
 async function classifyExamples() {
   const list = allExamples().filter((e) => !classified.has(e.id));
   if (!list.length) return;
@@ -2006,9 +2285,7 @@ function renderLibrary() {
   list.innerHTML = "";
   let lastFamily = null;
   for (const ex of allExamples()) {
-    if (state.filter === "mine" && !ex.own) continue;
-    if (state.filter === "finite" && looksInfinite(ex)) continue;
-    if (state.filter === "infinite" && !looksInfinite(ex)) continue;
+    if (!matchesFilter(ex)) continue;
     const name = exampleName(ex);
     const family = exampleFamily(ex);
     if (q && !name.toLowerCase().includes(q) &&
@@ -2473,10 +2750,22 @@ function wire() {
   };
 
   $("libsearch").oninput = renderLibrary;
-  for (const b of document.querySelectorAll("#libtabs .subtab")) b.onclick = () => {
-    state.filter = b.dataset.filter;
-    for (const o of document.querySelectorAll("#libtabs .subtab")) o.classList.toggle("on", o === b);
-    renderLibrary();
+  for (const b of document.querySelectorAll("#libtabs .subtab"))
+    b.onclick = () => setFilter(b.dataset.filter);
+
+  // The on-ramp: newcomers land on the first tutorial step, veterans on the
+  // first highlight -- each also switching the filter so the neighbours show.
+  $("ob-new").onclick = (e) => {
+    e.preventDefault();
+    setFilter("tutorial");
+    const ex = allExamples().find((x) => x.tutorial);
+    if (ex) selectExample(ex);
+  };
+  $("ob-best").onclick = (e) => {
+    e.preventDefault();
+    setFilter("highlights");
+    const ex = allExamples().find((x) => x.highlight);
+    if (ex) selectExample(ex);
   };
 
   $("addown").onclick = () => openSaveBox(null);
@@ -2564,10 +2853,7 @@ function saveFromBox() {
   localStorage.setItem(STORE_MINE, JSON.stringify(mine));
   state.selected = entry.id;
   editing = null;
-  state.filter = "mine";
-  for (const o of document.querySelectorAll("#libtabs .subtab"))
-    o.classList.toggle("on", o.dataset.filter === "mine");
-  renderLibrary();
+  setFilter("mine");
   renderNote();
 }
 

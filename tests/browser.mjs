@@ -139,6 +139,28 @@ try {
     }
   }
 
+  // The tutorial on-ramp: "start here" jumps to the first tutorial step and
+  // switches the filter to it.
+  let onboard = null;
+  if (app && !app.err) {
+    await cdp.send("Runtime.evaluate", {
+      expression: `document.getElementById("ob-new").click()`
+    });
+    for (let i = 0; i < 60; i++) {
+      await sleep(100);
+      const r = await cdp.send("Runtime.evaluate", {
+        expression: `JSON.stringify({
+          pattern: document.getElementById("pattern")?.value || "",
+          count: document.getElementById("count")?.textContent || "",
+          active: document.querySelector("#libtabs .subtab.on")?.dataset.filter || ""
+        })`,
+        returnByValue: true
+      });
+      const v = JSON.parse(r.result?.result?.value || "null");
+      if (v && v.pattern === "a") { onboard = v; break; }
+    }
+  }
+
   // And the single-file build, from a file:// URL, which is the whole reason
   // it exists: no server, no worker, no fetch of a .wasm.
   let bundle = null;
@@ -196,6 +218,17 @@ try {
     if (!ok) code = 1;
   } else if (bundle && !bundle.err) {
     console.log("shorthand: [\\d] never resolved in the bundle");
+    code = 1;
+  }
+
+  if (onboard) {
+    const ok = onboard.pattern === "a" && onboard.count === "1" &&
+               onboard.active === "tutorial";
+    console.log(ok ? "onboard: 'start here' opens the tutorial's first step"
+                   : "onboard: FAILED " + JSON.stringify(onboard));
+    if (!ok) code = 1;
+  } else if (app && !app.err) {
+    console.log("onboard: 'start here' never opened the tutorial");
     code = 1;
   }
 

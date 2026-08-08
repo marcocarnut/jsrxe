@@ -14,6 +14,7 @@ export const BUILTIN = [
 
   {
     id: "passwords",
+    highlight: true,
     pattern: "[0-9A-Za-z]{8}",
     flags: "",
     name: { en: "Eight-character passwords",
@@ -32,22 +33,191 @@ export const BUILTIN = [
           "busca."
     }
   },
+  // -------------------------------------------------------------- tutorial
+  // A gentle progression for someone new to regular expressions, built up one
+  // idea at a time -- character, string, choice, class, product, repetition,
+  // option -- with a couple of genuinely useful sets slipped in so it never
+  // feels like a toy.
+  {
+    id: "one-char",
+    tutorial: true,
+    pattern: "a",
+    flags: "",
+    name: { en: "A single character", pt: "Um único caractere" },
+    note: {
+      en: "The smallest set there is: one member, the letter a. A regular " +
+          "expression is really a set specification, and this is the set {a}. " +
+          "Everything else here is a way of describing a bigger set.",
+      pt: "O menor conjunto que existe: um membro, a letra a. Uma expressão " +
+          "regular é, no fundo, a especificação de um conjunto, e este é o " +
+          "conjunto {a}. Todo o resto aqui é um modo de descrever um conjunto " +
+          "maior."
+    }
+  },
+  {
+    id: "one-word",
+    tutorial: true,
+    pattern: "hello",
+    flags: "",
+    name: { en: "A single word", pt: "Uma única palavra" },
+    note: {
+      en: "Ordinary characters stand for themselves and sit side by side, so " +
+          "this whole set is still just one string: hello. Length is not the " +
+          "same as size -- five characters, one member.",
+      pt: "Caracteres comuns representam a si mesmos e ficam lado a lado, " +
+          "então este conjunto ainda é uma só cadeia: hello. Comprimento não " +
+          "é o mesmo que tamanho -- cinco caracteres, um membro."
+    }
+  },
+  {
+    id: "choice",
+    tutorial: true,
+    pattern: "cat|dog|fish",
+    flags: "",
+    name: { en: "A choice", pt: "Uma escolha" },
+    note: {
+      en: "The bar | means 'or'. Three alternatives, three members. Step the " +
+          "index through 0, 1, 2 and watch each one come up.",
+      pt: "A barra | significa 'ou'. Três alternativas, três membros. Avance " +
+          "o índice por 0, 1, 2 e veja cada um aparecer."
+    }
+  },
+  {
+    id: "vowels",
+    tutorial: true,
+    pattern: "[aeiou]",
+    flags: "",
+    name: { en: "One of several characters", pt: "Um entre vários caracteres" },
+    note: {
+      en: "Square brackets choose a single character from a set -- the five " +
+          "vowels here. A class is just a choice written compactly: [aeiou] " +
+          "says the same as (a|e|i|o|u).",
+      pt: "Colchetes escolhem um único caractere de um conjunto -- as cinco " +
+          "vogais aqui. Uma classe é apenas uma escolha escrita de forma " +
+          "compacta: [aeiou] diz o mesmo que (a|e|i|o|u)."
+    }
+  },
+  {
+    id: "chess",
+    tutorial: true,
+    highlight: true,
+    pattern: "[a-h][1-8]",
+    flags: "",
+    name: { en: "Chessboard squares", pt: "Casas do tabuleiro de xadrez" },
+    note: {
+      en: "Two classes side by side multiply: eight files times eight ranks, " +
+          "sixty-four squares. The whole set fits on screen, so you can watch " +
+          "the index line up with the board -- the first real glimpse of a " +
+          "product.",
+      pt: "Duas classes lado a lado se multiplicam: oito colunas vezes oito " +
+          "linhas, sessenta e quatro casas. O conjunto inteiro cabe na tela, " +
+          "então dá para ver o índice acompanhar o tabuleiro -- o primeiro " +
+          "vislumbre de um produto."
+    }
+  },
+  {
+    id: "pin",
+    tutorial: true,
+    pattern: "\\d{4}",
+    flags: "",
+    name: { en: "Every PIN", pt: "Todo PIN" },
+    note: {
+      en: "A brace repeats what comes before it, so \\d four times is every " +
+          "four-digit PIN: all 10,000 of them, 0000 to 9999. The index is the " +
+          "PIN -- element 1,234 is 1234.",
+      pt: "A chave repete o que vem antes, então \\d quatro vezes é todo PIN " +
+          "de quatro dígitos: os 10.000, de 0000 a 9999. O índice é o próprio " +
+          "PIN -- o elemento 1.234 é 1234."
+    }
+  },
+  {
+    id: "optional",
+    tutorial: true,
+    pattern: "colou?r",
+    flags: "",
+    name: { en: "An optional letter", pt: "Uma letra opcional" },
+    note: {
+      en: "The ? makes the letter before it optional -- zero or one u. So the " +
+          "set is exactly {color, colour}, the American and British spellings, " +
+          "and nothing else.",
+      pt: "O ? torna opcional a letra anterior -- zero ou um u. Então o " +
+          "conjunto é exatamente {color, colour}, as grafias americana e " +
+          "britânica, e nada mais."
+    }
+  },
+  {
+    id: "coin",
+    tutorial: true,
+    pattern: "[HT]{10}",
+    flags: "",
+    name: { en: "Ten coin flips", pt: "Dez lançamentos de moeda" },
+    note: {
+      en: "Heads or tails, ten times over: 2^10 = 1,024 sequences. Every " +
+          "extra flip doubles the set -- the very same doubling that makes the " +
+          "eight-character password set enormous. You have arrived at real " +
+          "keyspaces.",
+      pt: "Cara ou coroa, dez vezes seguidas: 2^10 = 1.024 sequências. Cada " +
+          "lançamento a mais dobra o conjunto -- a mesmíssima duplicação que " +
+          "torna enorme o conjunto de senhas de oito caracteres. Você chegou " +
+          "aos espaços de chaves de verdade."
+    }
+  },
+
+  // ------------------------------------------------------ place value and bases
+  {
+    id: "hex-plain",
+    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
+    pattern: "[0-9A-F]{8}",
+    flags: "",
+    name: { en: "eight hex digits", pt: "oito dígitos hex" },
+    note: {
+      en: "Every eight-digit hexadecimal number: 16^8 = 4,294,967,296, one " +
+          "for each 32-bit value. The index is the number itself, so seeking " +
+          "to 3,735,928,559 lands on DEADBEEF.",
+      pt: "Todo número hexadecimal de oito dígitos: 16^8 = 4.294.967.296, um " +
+          "para cada valor de 32 bits. O índice é o próprio número, então ir " +
+          "para 3.735.928.559 cai em DEADBEEF."
+    },
+    bookmarks: [
+      { name: { en: "DEADBEEF", pt: "DEADBEEF" }, index: "3735928559" }
+    ]
+  },
   {
     id: "hex",
-    pattern: "([0-9A-F]{4} ){2}",
+    highlight: true,
+    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
+    pattern: "[0-9A-F]{4} [0-9A-F]{4}",
     flags: "",
-    name: { en: "Eight hex digits", pt: "Oito dígitos hexadecimais" },
+    name: { en: "grouped by a space", pt: "agrupado por um espaço" },
     note: {
-      en: "The enumeration runs right to left, so the last position varies " +
-          "fastest, exactly as the last digit of an ordinary numeral does. " +
-          "That makes the index a number written in another base: ask for " +
-          "element 3,735,928,559 and you get DEAD BEEF. Turn on (?L) and the " +
-          "order reverses to FEEB DAED.",
-      pt: "A enumeração corre da direita para a esquerda, então a última " +
-          "posição varia mais rápido, exatamente como o último algarismo de " +
-          "um numeral comum. Isso faz do índice um número escrito em outra " +
-          "base: peça o elemento 3.735.928.559 e você recebe DEAD BEEF. " +
-          "Ligue (?L) e a ordem inverte para FEEB DAED."
+      en: "The same 4,294,967,296 numbers, now with a space down the middle. " +
+          "The space is a single fixed character, so it multiplies the count " +
+          "by one: grouping changes how the number reads, not how many there " +
+          "are. Element 3,735,928,559 is DEAD BEEF; turn on (?L) and the order " +
+          "reverses to FEEB DAED.",
+      pt: "Os mesmos 4.294.967.296 números, agora com um espaço no meio. O " +
+          "espaço é um único caractere fixo, então multiplica a contagem por " +
+          "um: agrupar muda como o número se lê, não quantos são. O elemento " +
+          "3.735.928.559 é DEAD BEEF; ligue (?L) e a ordem inverte para FEEB " +
+          "DAED."
+    },
+    bookmarks: [
+      { name: { en: "DEAD BEEF", pt: "DEAD BEEF" }, index: "3735928559" }
+    ]
+  },
+  {
+    id: "octal",
+    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
+    pattern: "[0-7]{8}",
+    flags: "",
+    name: { en: "eight octal digits", pt: "oito dígitos octais" },
+    note: {
+      en: "Change the base and the count changes with it: eight octal digits " +
+          "are 8^8 = 16,777,216, far fewer than the hexadecimal 16^8. Same " +
+          "width, smaller alphabet, smaller set.",
+      pt: "Mude a base e a contagem muda junto: oito dígitos octais são 8^8 = " +
+          "16.777.216, bem menos que os 16^8 do hexadecimal. Mesma largura, " +
+          "alfabeto menor, conjunto menor."
     }
   },
   {
@@ -122,11 +292,55 @@ export const BUILTIN = [
     }
   },
   {
+    id: "cnpj-num-all",
+    family: { en: "CNPJ, numeric (pre-2026)", pt: "CNPJ numérico (pré-2026)" },
+    pattern: "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}",
+    flags: "",
+    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
+    note: {
+      en: "The Brazilian company number as it stood before 2026: fourteen " +
+          "digits, punctuation and all, 10^14 of them. The last two range " +
+          "freely over 00 to 99, so only a hundredth carry the mod-11 checksum " +
+          "a regular expression cannot express. Switch to the valid variant to " +
+          "have the code compute it instead.",
+      pt: "O CNPJ como era antes de 2026: catorze algarismos, pontuação e " +
+          "tudo, 10^14 deles. Os dois últimos variam livremente de 00 a 99, " +
+          "então só um centésimo carrega o verificador mod 11 que uma " +
+          "expressão regular não expressa. Troque para a variante válida para " +
+          "que o código o calcule."
+    }
+  },
+  {
+    id: "cnpj-num-valid",
+    family: { en: "CNPJ, numeric (pre-2026)", pt: "CNPJ numérico (pré-2026)" },
+    pattern: "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}",
+    flags: "",
+    name: { en: "valid digits only", pt: "somente válidos" },
+    note: {
+      en: "The regex stops before the checksum and the code appends it, so " +
+          "every row is a genuinely valid CNPJ rather than one in a hundred " +
+          "-- 10^12 of them. It is the same mod-11 over each digit that the " +
+          "2026 alphanumeric form carries on unchanged, a digit worth itself.",
+      pt: "A expressão para antes do verificador e o código o acrescenta, " +
+          "então cada linha é um CNPJ de fato válido, e não um em cem -- 10^12 " +
+          "deles. É o mesmo mod 11 sobre cada algarismo que a forma " +
+          "alfanumérica de 2026 mantém sem mudança, um algarismo valendo ele " +
+          "mesmo."
+    },
+    code:
+      "// Strip the punctuation to the twelve-digit base, then append the two\n" +
+      "// check digits computed as Receita Federal specifies.\n" +
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + \"-\" + lib.checkDigits(base,\n" +
+      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
+      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);"
+  },
+  {
     id: "cnpj-all",
     family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}-\\d{2}",
     flags: "",
-    name: { en: "every check digit", pt: "todo verificador" },
+    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
     note: {
       en: "From 2026 the Brazilian company number admits letters. This is " +
           "the set of well-formed ones, punctuation and all: the two final " +
@@ -150,7 +364,7 @@ export const BUILTIN = [
     family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}",
     flags: "",
-    name: { en: "valid check digit", pt: "verificador válido" },
+    name: { en: "valid digits only", pt: "somente válidos" },
     note: {
       en: "Now the regex stops before the checksum and the code computes it, " +
           "so every row is a genuinely valid CNPJ rather than one in a " +
@@ -186,7 +400,7 @@ export const BUILTIN = [
     family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
     flags: "",
-    name: { en: "every check digit", pt: "todo verificador" },
+    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
     note: {
       en: "All 10^11 well-formed CPFs. The last two digits range over 00 to " +
           "99, so only a hundredth carry the mod-11 checksum a regular " +
@@ -203,7 +417,7 @@ export const BUILTIN = [
     family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}",
     flags: "",
-    name: { en: "valid check digit", pt: "verificador válido" },
+    name: { en: "valid digits only", pt: "somente válidos" },
     note: {
       en: "The regex stops before the checksum and the code appends it, so " +
           "every row is a valid CPF rather than one in a hundred. This is " +
@@ -279,18 +493,6 @@ export const BUILTIN = [
     }
   },
   {
-    id: "chess",
-    pattern: "[a-h][1-8]",
-    flags: "",
-    name: { en: "Chessboard squares", pt: "Casas do tabuleiro de xadrez" },
-    note: {
-      en: "Sixty-four. A good one to start with, because the whole set fits " +
-          "on the screen and you can watch the index line up with the board.",
-      pt: "Sessenta e quatro. Um bom ponto de partida, porque o conjunto " +
-          "inteiro cabe na tela e dá para ver o índice acompanhar o tabuleiro."
-    }
-  },
-  {
     id: "dna8",
     pattern: "[ACGT]{8}",
     flags: "",
@@ -353,6 +555,7 @@ export const BUILTIN = [
   },
   {
     id: "bip39-12",
+    highlight: true,
     family: { en: "Passphrases", pt: "Frases-senha" },
     pattern: "[:bip39en:]( [:bip39en:]){11}",
     flags: "",
@@ -526,6 +729,7 @@ export const BUILTIN = [
   },
   {
     id: "crack",
+    highlight: true,
     pattern: "[a-z]{1,6}",
     flags: "",
     name: { en: "Brute-force a hash", pt: "Quebra de hash por força bruta" },

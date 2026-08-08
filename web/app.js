@@ -198,6 +198,8 @@ function applyLanguage() {
     el.textContent = t(el.dataset.t);
   for (const el of document.querySelectorAll("[data-tplace]"))
     el.placeholder = t(el.dataset.tplace);
+  for (const el of document.querySelectorAll("[data-ttip]"))
+    el.title = t(el.dataset.ttip);
   $("code").placeholder = t("codePlace");
   $("codetoggle").title = t("codeToggle");
   renderLibrary();
@@ -242,6 +244,29 @@ function looksInfinite(ex) {
   return false;
 }
 
+// Which examples a category filter shows. Single-select, so the categories can
+// overlap freely -- a highlight may also be finite and carry code; each filter
+// is just an independent view of the one library.
+function matchesFilter(ex) {
+  switch (state.filter) {
+    case "tutorial":   return !!ex.tutorial;
+    case "highlights": return !!ex.highlight;
+    case "code":       return !!(ex.code && ex.code.trim());
+    case "finite":     return !looksInfinite(ex);
+    case "infinite":   return looksInfinite(ex);
+    case "mine":       return !!ex.own;
+    default:           return true;              // "all"
+  }
+}
+
+// Make a category the active filter, moving the highlight to its icon.
+function setFilter(f) {
+  state.filter = f;
+  for (const b of document.querySelectorAll("#libtabs .subtab"))
+    b.classList.toggle("on", b.dataset.filter === f);
+  renderLibrary();
+}
+
 async function classifyExamples() {
   const list = allExamples().filter((e) => !classified.has(e.id));
   if (!list.length) return;
@@ -257,9 +282,7 @@ function renderLibrary() {
   list.innerHTML = "";
   let lastFamily = null;
   for (const ex of allExamples()) {
-    if (state.filter === "mine" && !ex.own) continue;
-    if (state.filter === "finite" && looksInfinite(ex)) continue;
-    if (state.filter === "infinite" && !looksInfinite(ex)) continue;
+    if (!matchesFilter(ex)) continue;
     const name = exampleName(ex);
     const family = exampleFamily(ex);
     if (q && !name.toLowerCase().includes(q) &&
@@ -724,10 +747,22 @@ function wire() {
   };
 
   $("libsearch").oninput = renderLibrary;
-  for (const b of document.querySelectorAll("#libtabs .subtab")) b.onclick = () => {
-    state.filter = b.dataset.filter;
-    for (const o of document.querySelectorAll("#libtabs .subtab")) o.classList.toggle("on", o === b);
-    renderLibrary();
+  for (const b of document.querySelectorAll("#libtabs .subtab"))
+    b.onclick = () => setFilter(b.dataset.filter);
+
+  // The on-ramp: newcomers land on the first tutorial step, veterans on the
+  // first highlight -- each also switching the filter so the neighbours show.
+  $("ob-new").onclick = (e) => {
+    e.preventDefault();
+    setFilter("tutorial");
+    const ex = allExamples().find((x) => x.tutorial);
+    if (ex) selectExample(ex);
+  };
+  $("ob-best").onclick = (e) => {
+    e.preventDefault();
+    setFilter("highlights");
+    const ex = allExamples().find((x) => x.highlight);
+    if (ex) selectExample(ex);
   };
 
   $("addown").onclick = () => openSaveBox(null);
@@ -815,10 +850,7 @@ function saveFromBox() {
   localStorage.setItem(STORE_MINE, JSON.stringify(mine));
   state.selected = entry.id;
   editing = null;
-  state.filter = "mine";
-  for (const o of document.querySelectorAll("#libtabs .subtab"))
-    o.classList.toggle("on", o.dataset.filter === "mine");
-  renderLibrary();
+  setFilter("mine");
   renderNote();
 }
 
