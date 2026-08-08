@@ -53,7 +53,15 @@ main {
   display: grid; grid-template-columns: 20rem 1fr; gap: 1rem;
   padding: .9rem 1.4rem 3rem; align-items: start;
 }
-@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+/* One column when narrow, and the workbench comes first: on a phone the tool
+   should be what you land on, not a screenful of the example list. The library
+   follows below, out of the way but a scroll away, and stops being sticky so it
+   does not trail the page. */
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; }
+  #work { order: -1; }
+  #left { position: static; }
+}
 
 .panel {
   background: var(--panel); border: 1px solid var(--line);
