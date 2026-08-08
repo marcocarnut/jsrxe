@@ -87,6 +87,18 @@ function isExactPower(s, base) {
 
 function show(el, on) { el.hidden = !on; }
 
+// The per-element code lives behind the </> button next to the regex. Showing
+// it is one thing; whether it holds anything is another, and the button is
+// highlighted for the latter so a folded-away code section still announces
+// itself.
+function setCodeVisible(on) {
+  show($("codewrap"), on);
+  $("codetoggle").classList.toggle("open", on);
+}
+function refreshCodeToggle() {
+  $("codetoggle").classList.toggle("filled", !!$("code").value.trim());
+}
+
 // One floating tooltip, positioned over whichever element the pointer is on.
 // The text comes from a getter so it tracks the current example and language
 // rather than being fixed when the handler was attached; an empty string
@@ -139,6 +151,7 @@ function applyLanguage() {
   for (const el of document.querySelectorAll("[data-tplace]"))
     el.placeholder = t(el.dataset.tplace);
   $("code").placeholder = t("codePlace");
+  $("codetoggle").title = t("codeToggle");
   renderLibrary();
   renderHelpers();
   renderDicts();
@@ -317,7 +330,8 @@ function selectExample(ex) {
   $("from").value = "0";
   $("key").value = "";
   $("code").value = ex.code || "";
-  $("codepanel").open = !!ex.code;
+  setCodeVisible(!!ex.code);
+  refreshCodeToggle();
   state.from = 0n;
   renderLibrary();
   renderNote();
@@ -450,11 +464,11 @@ function renderCount() {
 }
 
 function renderOrder() {
-  const el = $("order");
+  const el = $("orderlabel");
   if (!state.ok) { el.textContent = ""; state.orderTip = ""; return; }
-  if (state.shortlex) { el.textContent = t("orderShortlex"); state.orderTip = t("orderShortlexHint"); }
-  else if (state.infinite) { el.textContent = t("orderDiagonal"); state.orderTip = t("orderDiagonalHint"); }
-  else { el.textContent = t("orderPlace"); state.orderTip = t("orderPlaceHint"); }
+  if (state.shortlex) { el.textContent = "(" + t("orderShortlex") + ")"; state.orderTip = t("orderShortlexHint"); }
+  else if (state.infinite) { el.textContent = "(" + t("orderDiagonal") + ")"; state.orderTip = t("orderDiagonalHint"); }
+  else { el.textContent = "(" + t("orderPlace") + ")"; state.orderTip = t("orderPlaceHint"); }
 }
 
 let lastRows = [];
@@ -576,9 +590,16 @@ function wire() {
     scheduleReparse();
   };
   $("code").oninput = () => {
-    state.selected = null; renderNote(); renderLibrary();
+    state.selected = null; renderNote(); renderLibrary(); refreshCodeToggle();
     clearTimeout(reparseTimer);
     reparseTimer = setTimeout(async () => { await applyCode(); loadRows(); }, 300);
+  };
+  // The </> button folds the code section in and out; a fresh open lands the
+  // cursor in it so the reader can start typing at once.
+  $("codetoggle").onclick = () => {
+    const on = $("codewrap").hidden;
+    setCodeVisible(on);
+    if (on) $("code").focus();
   };
   $("key").oninput = () => { clearTimeout(reparseTimer); reparseTimer = setTimeout(async () => { await applyKey(); loadRows(); }, 250); };
 
@@ -628,10 +649,14 @@ function wire() {
 
   // The wheel moves the window rather than a scrollbar, because the index
   // range is routinely larger than any scrollable height a browser will make.
+  // Fine by default -- one element per notch, to pinpoint -- with a middle gear
+  // of ten when Ctrl or the middle button is held down while rolling. Coarse
+  // movement is the slider's job.
   $("results").onwheel = (e) => {
     if (!state.ok) return;
     e.preventDefault();
-    const step = BigInt(Math.max(1, Math.round(state.per / 5)));
+    const fast = e.ctrlKey || (e.buttons & 4);
+    const step = BigInt(fast ? 10 : 1);
     setFrom(e.deltaY > 0 ? state.from + step : state.from - step);
   };
 
@@ -702,7 +727,8 @@ function openSaveBox(ex) {
     $("pattern").value = (editing.flags ? "(?" + editing.flags + ")" : "") +
                          editing.pattern;
     $("code").value = editing.code || "";
-    $("codepanel").open = !!editing.code;
+    setCodeVisible(!!editing.code);
+    refreshCodeToggle();
   }
   $("savebox").showModal();
 }
@@ -761,6 +787,6 @@ transport.ready(async () => {
 
 wire();
 attachTip($("pattern"), () => state.note);
-attachTip($("order"), () => state.orderTip);
+attachTip($("orderlabel"), () => state.orderTip);
 attachTip($("slider"), () => state.sliderTip);
 applyLanguage();

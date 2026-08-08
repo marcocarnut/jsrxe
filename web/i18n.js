@@ -79,6 +79,7 @@ export const STRINGS = {
     emptyString:      "(empty string)",
 
     codeTitle:        "Code",
+    codeToggle:       "Show or hide the per-element code",
     codeHint:         "JavaScript run on each element. 'value' is the element, 'index' its index, 'lib' a helper with sha256, mod11, checkDigits, keep and toHex. Return what to show. Left empty, the output column is hidden.",
     codePlace:        "// e.g.  return value + \"!\";",
 
@@ -176,6 +177,7 @@ export const STRINGS = {
     emptyString:      "(cadeia vazia)",
 
     codeTitle:        "Código",
+    codeToggle:       "Mostrar ou ocultar o código por elemento",
     codeHint:         "JavaScript executado em cada elemento. 'value' é o elemento, 'index' o índice, 'lib' um auxiliar com sha256, mod11, checkDigits, keep e toHex. Retorne o que exibir. Vazio, a coluna de saída fica oculta.",
     codePlace:        "// e.g.  return value + \"!\";",
 

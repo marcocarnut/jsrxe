@@ -58,33 +58,31 @@
 
     <div class="panel">
       <label for="pattern" data-t="patternLabel"></label>
-      <input id="pattern" type="text" spellcheck="false" autocapitalize="off"
-             autocomplete="off" data-tplace="patternPlace">
-      <div id="err" class="err" hidden></div>
-    </div>
-
-    <details id="codepanel" class="panel">
-      <summary><span data-t="codeTitle"></span></summary>
-      <p class="dim" data-t="codeHint"></p>
-      <textarea id="code" rows="3" spellcheck="false" autocapitalize="off"
-                autocomplete="off"></textarea>
-      <div id="codeerr" class="err" hidden></div>
-    </details>
-
-    <div class="row">
-      <div class="panel grow">
-        <h2 data-t="size"></h2>
-        <div id="count" class="big"></div>
-        <div id="approx" class="dim"></div>
+      <div class="patrow">
+        <input id="pattern" type="text" spellcheck="false" autocapitalize="off"
+               autocomplete="off" data-tplace="patternPlace">
+        <button id="codetoggle" type="button" title="">&lt;/&gt;</button>
       </div>
-      <div class="panel grow">
-        <h2 data-t="order"></h2>
-        <div id="order" class="big tip-host"></div>
+      <div id="err" class="err" hidden></div>
+      <!-- the per-element code, folded in behind the </> button to save a line -->
+      <div id="codewrap" hidden>
+        <p class="dim" data-t="codeHint"></p>
+        <textarea id="code" rows="3" spellcheck="false" autocapitalize="off"
+                  autocomplete="off"></textarea>
+        <div id="codeerr" class="err" hidden></div>
       </div>
     </div>
 
     <div class="panel">
-      <h2 data-t="elements"></h2>
+      <h2 data-t="size"></h2>
+      <div id="count" class="big"></div>
+      <div id="approx" class="dim"></div>
+    </div>
+
+    <div class="panel">
+      <!-- the enumeration order rides in the header, with its own tooltip -->
+      <h2 class="ehead"><span data-t="elements"></span>
+          <span id="orderlabel" class="tip-host"></span></h2>
 
       <div class="controls">
         <label class="ctl"><span data-t="fromIndex"></span>
@@ -92,7 +90,7 @@
         <label class="ctl"><span data-t="perPage"></span>
           <input id="per" type="number" min="1" max="1000" value="50"></label>
         <label class="ctl chk"><input type="checkbox" id="zero" checked>
-          <span data-t="zeroBased"></span> <em data-t="zeroHint"></em></label>
+          <span data-t="zeroBased"></span></label>
         <label class="ctl grow"><span data-t="key"></span>
           <input id="key" type="text" data-tplace="keyPlace"></label>
       </div>

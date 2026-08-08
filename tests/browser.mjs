@@ -124,7 +124,7 @@ try {
       const r = await cdp.send("Runtime.evaluate", {
         expression: `JSON.stringify({
           count: document.getElementById("count")?.textContent || "",
-          order: document.getElementById("order")?.textContent || "",
+          order: document.getElementById("orderlabel")?.textContent || "",
           rows: document.querySelectorAll("#results tbody tr").length,
           first: document.querySelector("#results tbody td.val")?.textContent || "",
           examples: document.querySelectorAll("#liblist li").length,

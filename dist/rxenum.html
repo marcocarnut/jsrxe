@@ -61,6 +61,18 @@ main {
   font: inherit;
 }
 #pattern { font-family: var(--mono); font-size: 1.02rem; }
+.patrow { display: flex; gap: .4rem; align-items: stretch; }
+.patrow #pattern { flex: 1 1 auto; width: auto; min-width: 0; }
+#codetoggle { flex: 0 0 auto; background: var(--bg); color: var(--dim);
+              border: 1px solid var(--line); border-radius: 6px;
+              padding: 0 .6rem; font-family: var(--mono); font-size: .92rem;
+              cursor: pointer; }
+#codetoggle:hover, #codetoggle.open { border-color: var(--accent);
+              color: var(--accent); }
+/* A folded-away code section still says it holds something. */
+#codetoggle.filled { background: var(--accent-bg); color: var(--accent);
+              border-color: var(--accent); font-weight: bold; }
+#codewrap { margin-top: .5rem; }
 #code { width: 100%; background: var(--bg); color: var(--fg);
         border: 1px solid var(--line); border-radius: 6px; padding: .5rem .55rem;
         font-family: var(--mono); font-size: .86rem; resize: vertical;
@@ -138,7 +150,11 @@ main {
            line-height: 1.45; padding: .5rem .7rem; border-radius: 7px;
            box-shadow: 0 4px 16px rgba(0,0,0,.28); pointer-events: none; }
 .tip-host { cursor: help; }
-#order.tip-host { border-bottom: 1px dotted var(--dim); display: inline-block; }
+/* The order rides in the Elements header as a natural-case parenthetical, not
+   swept up into the header's small-caps treatment. */
+.ehead { display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; }
+#orderlabel { text-transform: none; letter-spacing: 0; font-weight: 400; }
+#orderlabel.tip-host { border-bottom: 1px dotted var(--dim); }
 .err { color: var(--err); font-size: .9rem; margin-top: .4rem;
        font-family: var(--mono); }
 
@@ -284,33 +300,31 @@ dialog menu button { background: var(--bg); color: var(--fg);
 
     <div class="panel">
       <label for="pattern" data-t="patternLabel"></label>
-      <input id="pattern" type="text" spellcheck="false" autocapitalize="off"
-             autocomplete="off" data-tplace="patternPlace">
-      <div id="err" class="err" hidden></div>
-    </div>
-
-    <details id="codepanel" class="panel">
-      <summary><span data-t="codeTitle"></span></summary>
-      <p class="dim" data-t="codeHint"></p>
-      <textarea id="code" rows="3" spellcheck="false" autocapitalize="off"
-                autocomplete="off"></textarea>
-      <div id="codeerr" class="err" hidden></div>
-    </details>
-
-    <div class="row">
-      <div class="panel grow">
-        <h2 data-t="size"></h2>
-        <div id="count" class="big"></div>
-        <div id="approx" class="dim"></div>
+      <div class="patrow">
+        <input id="pattern" type="text" spellcheck="false" autocapitalize="off"
+               autocomplete="off" data-tplace="patternPlace">
+        <button id="codetoggle" type="button" title="">&lt;/&gt;</button>
       </div>
-      <div class="panel grow">
-        <h2 data-t="order"></h2>
-        <div id="order" class="big tip-host"></div>
+      <div id="err" class="err" hidden></div>
+      <!-- the per-element code, folded in behind the </> button to save a line -->
+      <div id="codewrap" hidden>
+        <p class="dim" data-t="codeHint"></p>
+        <textarea id="code" rows="3" spellcheck="false" autocapitalize="off"
+                  autocomplete="off"></textarea>
+        <div id="codeerr" class="err" hidden></div>
       </div>
     </div>
 
     <div class="panel">
-      <h2 data-t="elements"></h2>
+      <h2 data-t="size"></h2>
+      <div id="count" class="big"></div>
+      <div id="approx" class="dim"></div>
+    </div>
+
+    <div class="panel">
+      <!-- the enumeration order rides in the header, with its own tooltip -->
+      <h2 class="ehead"><span data-t="elements"></span>
+          <span id="orderlabel" class="tip-host"></span></h2>
 
       <div class="controls">
         <label class="ctl"><span data-t="fromIndex"></span>
@@ -318,7 +332,7 @@ dialog menu button { background: var(--bg); color: var(--fg);
         <label class="ctl"><span data-t="perPage"></span>
           <input id="per" type="number" min="1" max="1000" value="50"></label>
         <label class="ctl chk"><input type="checkbox" id="zero" checked>
-          <span data-t="zeroBased"></span> <em data-t="zeroHint"></em></label>
+          <span data-t="zeroBased"></span></label>
         <label class="ctl grow"><span data-t="key"></span>
           <input id="key" type="text" data-tplace="keyPlace"></label>
       </div>
@@ -692,6 +706,7 @@ const STRINGS = {
     emptyString:      "(empty string)",
 
     codeTitle:        "Code",
+    codeToggle:       "Show or hide the per-element code",
     codeHint:         "JavaScript run on each element. 'value' is the element, 'index' its index, 'lib' a helper with sha256, mod11, checkDigits, keep and toHex. Return what to show. Left empty, the output column is hidden.",
     codePlace:        "// e.g.  return value + \"!\";",
 
@@ -789,6 +804,7 @@ const STRINGS = {
     emptyString:      "(cadeia vazia)",
 
     codeTitle:        "Código",
+    codeToggle:       "Mostrar ou ocultar o código por elemento",
     codeHint:         "JavaScript executado em cada elemento. 'value' é o elemento, 'index' o índice, 'lib' um auxiliar com sha256, mod11, checkDigits, keep e toHex. Retorne o que exibir. Vazio, a coluna de saída fica oculta.",
     codePlace:        "// e.g.  return value + \"!\";",
 
@@ -1750,6 +1766,18 @@ function isExactPower(s, base) {
 
 function show(el, on) { el.hidden = !on; }
 
+// The per-element code lives behind the </> button next to the regex. Showing
+// it is one thing; whether it holds anything is another, and the button is
+// highlighted for the latter so a folded-away code section still announces
+// itself.
+function setCodeVisible(on) {
+  show($("codewrap"), on);
+  $("codetoggle").classList.toggle("open", on);
+}
+function refreshCodeToggle() {
+  $("codetoggle").classList.toggle("filled", !!$("code").value.trim());
+}
+
 // One floating tooltip, positioned over whichever element the pointer is on.
 // The text comes from a getter so it tracks the current example and language
 // rather than being fixed when the handler was attached; an empty string
@@ -1802,6 +1830,7 @@ function applyLanguage() {
   for (const el of document.querySelectorAll("[data-tplace]"))
     el.placeholder = t(el.dataset.tplace);
   $("code").placeholder = t("codePlace");
+  $("codetoggle").title = t("codeToggle");
   renderLibrary();
   renderHelpers();
   renderDicts();
@@ -1980,7 +2009,8 @@ function selectExample(ex) {
   $("from").value = "0";
   $("key").value = "";
   $("code").value = ex.code || "";
-  $("codepanel").open = !!ex.code;
+  setCodeVisible(!!ex.code);
+  refreshCodeToggle();
   state.from = 0n;
   renderLibrary();
   renderNote();
@@ -2113,11 +2143,11 @@ function renderCount() {
 }
 
 function renderOrder() {
-  const el = $("order");
+  const el = $("orderlabel");
   if (!state.ok) { el.textContent = ""; state.orderTip = ""; return; }
-  if (state.shortlex) { el.textContent = t("orderShortlex"); state.orderTip = t("orderShortlexHint"); }
-  else if (state.infinite) { el.textContent = t("orderDiagonal"); state.orderTip = t("orderDiagonalHint"); }
-  else { el.textContent = t("orderPlace"); state.orderTip = t("orderPlaceHint"); }
+  if (state.shortlex) { el.textContent = "(" + t("orderShortlex") + ")"; state.orderTip = t("orderShortlexHint"); }
+  else if (state.infinite) { el.textContent = "(" + t("orderDiagonal") + ")"; state.orderTip = t("orderDiagonalHint"); }
+  else { el.textContent = "(" + t("orderPlace") + ")"; state.orderTip = t("orderPlaceHint"); }
 }
 
 let lastRows = [];
@@ -2239,9 +2269,16 @@ function wire() {
     scheduleReparse();
   };
   $("code").oninput = () => {
-    state.selected = null; renderNote(); renderLibrary();
+    state.selected = null; renderNote(); renderLibrary(); refreshCodeToggle();
     clearTimeout(reparseTimer);
     reparseTimer = setTimeout(async () => { await applyCode(); loadRows(); }, 300);
+  };
+  // The </> button folds the code section in and out; a fresh open lands the
+  // cursor in it so the reader can start typing at once.
+  $("codetoggle").onclick = () => {
+    const on = $("codewrap").hidden;
+    setCodeVisible(on);
+    if (on) $("code").focus();
   };
   $("key").oninput = () => { clearTimeout(reparseTimer); reparseTimer = setTimeout(async () => { await applyKey(); loadRows(); }, 250); };
 
@@ -2291,10 +2328,14 @@ function wire() {
 
   // The wheel moves the window rather than a scrollbar, because the index
   // range is routinely larger than any scrollable height a browser will make.
+  // Fine by default -- one element per notch, to pinpoint -- with a middle gear
+  // of ten when Ctrl or the middle button is held down while rolling. Coarse
+  // movement is the slider's job.
   $("results").onwheel = (e) => {
     if (!state.ok) return;
     e.preventDefault();
-    const step = BigInt(Math.max(1, Math.round(state.per / 5)));
+    const fast = e.ctrlKey || (e.buttons & 4);
+    const step = BigInt(fast ? 10 : 1);
     setFrom(e.deltaY > 0 ? state.from + step : state.from - step);
   };
 
@@ -2365,7 +2406,8 @@ function openSaveBox(ex) {
     $("pattern").value = (editing.flags ? "(?" + editing.flags + ")" : "") +
                          editing.pattern;
     $("code").value = editing.code || "";
-    $("codepanel").open = !!editing.code;
+    setCodeVisible(!!editing.code);
+    refreshCodeToggle();
   }
   $("savebox").showModal();
 }
@@ -2424,7 +2466,7 @@ transport.ready(async () => {
 
 wire();
 attachTip($("pattern"), () => state.note);
-attachTip($("order"), () => state.orderTip);
+attachTip($("orderlabel"), () => state.orderTip);
 attachTip($("slider"), () => state.sliderTip);
 applyLanguage();
 
