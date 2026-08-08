@@ -16,11 +16,14 @@ body {
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-header { padding: 1.1rem 1.4rem .5rem; position: relative; }
-header h1 { margin: 0; font-size: 1.5rem; letter-spacing: -.01em; }
-header .sub { margin: .15rem 0 0; color: var(--dim); font-size: .92rem; }
+header { display: flex; align-items: baseline; flex-wrap: wrap;
+         gap: .1rem .55rem; padding: .9rem 1.4rem .7rem; }
+header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; }
+header .sep { color: var(--dim); font-weight: 300; }
+header .sub { color: var(--dim); font-size: .95rem; }
+header .repo { font-size: .88rem; }
 #lang {
-  position: absolute; top: 1rem; right: 1.4rem;
+  margin-left: auto; align-self: center;
   background: var(--panel); color: var(--fg);
   border: 1px solid var(--line); border-radius: 6px; padding: .2rem .4rem;
   font-size: .85rem;
@@ -102,6 +105,8 @@ main {
         border: 1px solid var(--line); border-radius: 6px; padding: .2rem .6rem;
         font: inherit; font-size: .8rem; cursor: pointer; }
 
+.panetitle { margin: 0 0 .5rem; font-size: .9rem; font-weight: 600;
+             letter-spacing: .01em; }
 #libtabs { display: flex; gap: .25rem; margin: .5rem 0; }
 .subtab { flex: 1; background: none; border: 1px solid var(--line);
        border-radius: 6px; padding: .22rem; color: var(--dim);
@@ -123,7 +128,13 @@ main {
                  color: inherit; padding: .32rem .4rem; cursor: pointer;
                  border-radius: 6px; font: inherit; }
 #liblist .pick:hover { background: var(--accent-bg); }
-#liblist .nm { display: block; font-size: .9rem; }
+#liblist .nmrow { display: flex; align-items: center; gap: .35rem; min-width: 0; }
+#liblist .nm { font-size: .9rem; overflow: hidden; text-overflow: ellipsis;
+               white-space: nowrap; }
+.badges { display: inline-flex; gap: .25rem; flex: 0 0 auto; }
+.badge { font-family: var(--mono); font-size: .66rem; line-height: 1;
+         color: var(--dim); border: 1px solid var(--line); border-radius: 4px;
+         padding: .1rem .25rem; cursor: help; }
 #liblist code { display: block; font-family: var(--mono); font-size: .76rem;
                 color: var(--dim); overflow: hidden; text-overflow: ellipsis;
                 white-space: nowrap; }

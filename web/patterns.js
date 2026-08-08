@@ -65,7 +65,13 @@ export const BUILTIN = [
           "índice coincide com o valor: o elemento 3.999 é de fato " +
           "MMMCMXCIX, porque a expressão está escrita de modo que milhares, " +
           "centenas, dezenas e unidades sejam posições separadas nessa ordem."
-    }
+    },
+    // Since the index is the value, element 42 is XLII: the Answer to Life,
+    // the Universe, and Everything, in Roman.
+    bookmarks: [
+      { name: { en: "the Answer to Everything", pt: "a Resposta para Tudo" },
+        index: "42" }
+    ]
   },
   {
     id: "ipv4",

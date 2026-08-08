@@ -1,4 +1,4 @@
-import { LANGS, makeT, translateError } from "./i18n.js";
+import { LANGS, makeT, translateError, SCALES, DECSEP } from "./i18n.js";
 import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
 import { HELPER_DOCS } from "./sandbox.js";
@@ -36,7 +36,7 @@ let state = {
   ok: false, infinite: false, shortlex: false, count: null,
   from: 0n, per: 50, zeroBased: true, keyActive: false, filter: "all",
   selected: null, slider: "none", codeActive: false,
-  note: "", orderTip: "", sliderTip: ""
+  note: "", orderTip: "", sliderTip: "", countSpoken: ""
 };
 
 let mine = [];
@@ -74,6 +74,46 @@ function logs(s) {
   const lead = Number(s.slice(0, 17)) || 1;
   const log10 = Math.log10(lead) + (digits - Math.min(17, digits));
   return { log10, log2: log10 / Math.log10(2) };
+}
+
+// A fixed-point number with the language's decimal mark, for exponents and
+// mantissas -- Portuguese writes 10^2,4771, not 10^2.4771.
+function dec(x, digits) {
+  const s = x.toFixed(digits);
+  return DECSEP[lang] === "," ? s.replace(".", ",") : s;
+}
+
+// Read a set's size the way a person would say it: "about 30 quinvigintillion".
+// Works straight off the exact decimal string -- the number of digits gives the
+// magnitude, the leading digits give the mantissa -- so it stays honest for
+// sizes far past what a double could hold. Beyond the naming table it falls
+// back to a digit count.
+function spoken(s) {
+  const d = s.length;
+  const g = Math.floor((d - 1) / 3);        // how many three-digit groups
+  if (g < 1) return "";                     // under a thousand; it speaks for itself
+  const table = SCALES[lang] || SCALES.en;
+  if (g >= table.length)
+    return `${t("spokenDigitsPre")} ${group(String(d))} ${t("spokenDigitsPost")}`;
+
+  const intLen = d - 3 * g;                  // 1..3 digits before the scale
+  const head = s.slice(0, Math.min(d, intLen + 4));
+  const mant = Number(head) / Math.pow(10, head.length - intLen);
+
+  // Round the mantissa to something a person would actually say.
+  const nice = mant >= 100 ? Math.round(mant / 10) * 10
+             : mant >= 10  ? Math.round(mant)
+             :               Math.round(mant * 10) / 10;
+  // "more than" only when we rounded down and the truth genuinely exceeds it.
+  const lead = mant > nice * 1.005 ? t("spokenMoreThan") : t("spokenAbout");
+
+  let word = table[g];
+  // Portuguese pluralises the -ão scale words; "mil" and English do not.
+  if (lang === "pt" && nice !== 1 && word.endsWith("ão"))
+    word = word.slice(0, -2) + "ões";
+
+  const mantStr = Number.isInteger(nice) ? String(nice) : dec(nice, 1);
+  return `${lead} ${mantStr} ${word}`;
 }
 
 function isExactPower(s, base) {
@@ -232,13 +272,24 @@ function renderLibrary() {
     const li = document.createElement("li");
     li.className = (family ? "child " : "") + (state.selected === ex.id ? "on" : "");
     li.innerHTML =
-      `<button class="pick"><span class="nm"></span><code></code></button>` +
+      `<button class="pick"><span class="nmrow">` +
+      `<span class="nm"></span><span class="badges"></span></span>` +
+      `<code></code></button>` +
       (ex.own
         ? `<button class="edt" title="${t("editOne")}">&#9998;</button>` +
           `<button class="del" title="${t("deleteOne")}">&times;</button>`
         : "");
     li.querySelector(".nm").textContent = name;
     li.querySelector("code").textContent = ex.pattern;
+    // Marks to the right of the name, so the list says what the title would
+    // otherwise have to: infinite sets, and examples that carry code.
+    const badges = li.querySelector(".badges");
+    if (looksInfinite(ex))
+      badges.insertAdjacentHTML("beforeend",
+        `<span class="badge" title="${t("badgeInfinite")}">∞</span>`);
+    if (ex.code && ex.code.trim())
+      badges.insertAdjacentHTML("beforeend",
+        `<span class="badge" title="${t("badgeCode")}">&lt;/&gt;</span>`);
     li.querySelector(".pick").onclick = () => selectExample(ex);
     if (ex.own) li.querySelector(".edt").onclick = () => openSaveBox(ex);
     if (ex.own) li.querySelector(".del").onclick = () => {
@@ -449,18 +500,22 @@ async function loadLengthStarts() {
 
 function renderCount() {
   const el = $("count"), ap = $("approx");
-  if (!state.ok) { el.textContent = ""; ap.textContent = ""; return; }
+  if (!state.ok) { el.textContent = ""; ap.textContent = ""; state.countSpoken = ""; return; }
   if (state.infinite) {
     el.textContent = t("sizeInfinite");
     ap.textContent = "";
+    state.countSpoken = "";
     return;
   }
-  if (state.count === "0") { el.textContent = t("sizeEmpty"); ap.textContent = ""; return; }
+  if (state.count === "0") {
+    el.textContent = t("sizeEmpty"); ap.textContent = ""; state.countSpoken = ""; return;
+  }
   el.textContent = group(state.count);
   const { log10, log2 } = logs(state.count);
   const p10 = isExactPower(state.count, 10) ? "=" : "~";
   const p2 = isExactPower(state.count, 2) ? "=" : "~";
-  ap.textContent = `${p10} 10^${log10.toFixed(4)}   ${p2} 2^${log2.toFixed(4)}`;
+  ap.textContent = `${p10} 10^${dec(log10, 4)}   ${p2} 2^${dec(log2, 4)}`;
+  state.countSpoken = spoken(state.count);
 }
 
 function renderOrder() {
@@ -787,6 +842,7 @@ transport.ready(async () => {
 
 wire();
 attachTip($("pattern"), () => state.note);
+attachTip($("count"), () => state.countSpoken);
 attachTip($("orderlabel"), () => state.orderTip);
 attachTip($("slider"), () => state.sliderTip);
 applyLanguage();

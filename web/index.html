@@ -10,13 +10,16 @@
 
 <header>
   <h1 data-t="title">rxenum</h1>
-  <p class="sub" data-t="subtitle"></p>
+  <span class="sep">::</span>
+  <span class="sub" data-t="subtitle"></span>
+  <span class="repo">(<a id="repo" href="https://github.com/marcocarnut/rxe"
+     target="_blank" rel="noopener" data-t="repoTag"></a>)</span>
   <select id="lang" aria-label="Language"></select>
 </header>
 
 <!-- global navigation: the left pane's content follows the active tab -->
 <nav id="tabs">
-  <button class="tab on" data-side="examples" data-t="library"></button>
+  <button class="tab on" data-side="examples" data-t="workbench"></button>
   <button class="tab" data-side="helpers" data-t="helpers"></button>
   <button class="tab" data-side="dicts" data-t="dictionaries"></button>
 </nav>
@@ -27,6 +30,7 @@
 
     <!-- the regex example library -->
     <div id="examples-view">
+      <h2 class="panetitle" data-t="libraryTitle"></h2>
       <input id="libsearch" type="search" data-tplace="libSearch">
       <div id="libtabs">
         <button class="subtab on" data-filter="all">&#9679;</button>
@@ -75,7 +79,7 @@
 
     <div class="panel">
       <h2 data-t="size"></h2>
-      <div id="count" class="big"></div>
+      <div id="count" class="big tip-host"></div>
       <div id="approx" class="dim"></div>
     </div>
 

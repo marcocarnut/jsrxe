@@ -5,12 +5,22 @@ export const LANGS = { en: "English", pt: "Português" };
 export const STRINGS = {
   en: {
     title:            "rxenum",
-    subtitle:         "Regular expressions as sets you can count and walk",
+    subtitle:         "regular expressions as sets you can walk",
+    repoTag:          "repo",
+
+    workbench:        "Workbench",
+    badgeInfinite:    "infinite set",
+    badgeCode:        "has code",
+    spokenAbout:      "about",
+    spokenMoreThan:   "more than",
+    spokenDigitsPre:  "a number with",
+    spokenDigitsPost: "digits",
 
     patternLabel:     "Regular expression",
     patternPlace:     "[0-9A-Za-z]{8}   —   flags go inline: (?i) (?s) (?L)",
 
     library:          "Examples",
+    libraryTitle:     "Library",
     helpers:          "Helpers",
     helpersHint:      "Functions the code section can call, as lib.name. All are pure, so an example behaves the same wherever it runs.",
     dictionaries:     "Dictionaries",
@@ -103,12 +113,22 @@ export const STRINGS = {
 
   pt: {
     title:            "rxenum",
-    subtitle:         "Expressões regulares como conjuntos que se pode contar e percorrer",
+    subtitle:         "expressões regulares como conjuntos que se pode percorrer",
+    repoTag:          "repo",
+
+    workbench:        "Bancada",
+    badgeInfinite:    "conjunto infinito",
+    badgeCode:        "tem código",
+    spokenAbout:      "cerca de",
+    spokenMoreThan:   "mais de",
+    spokenDigitsPre:  "um número de",
+    spokenDigitsPost: "algarismos",
 
     patternLabel:     "Expressão regular",
     patternPlace:     "[0-9A-Za-z]{8}   —   opções inline: (?i) (?s) (?L)",
 
     library:          "Exemplos",
+    libraryTitle:     "Biblioteca",
     helpers:          "Auxiliares",
     helpersHint:      "Funções que a seção de código pode chamar, como lib.nome. Todas são puras, então um exemplo se comporta igual onde quer que rode.",
     dictionaries:     "Dicionários",
@@ -228,6 +248,33 @@ export const ERRORS = {
         "repetição ilimitada de uma expressão possivelmente vazia"
   }
 };
+
+// Short-scale magnitude names, indexed by the number of three-digit groups:
+// index 1 is 10^3, 2 is 10^6, and so on. Used to read a set's size aloud --
+// "about 30 quinvigintillion". Beyond the table, the reader falls back to a
+// digit count. Portuguese (Brazilian short scale) is pluralised in code by
+// turning a final -ão into -ões.
+export const SCALES = {
+  en: ["", "thousand", "million", "billion", "trillion", "quadrillion",
+       "quintillion", "sextillion", "septillion", "octillion", "nonillion",
+       "decillion", "undecillion", "duodecillion", "tredecillion",
+       "quattuordecillion", "quindecillion", "sexdecillion", "septendecillion",
+       "octodecillion", "novemdecillion", "vigintillion", "unvigintillion",
+       "duovigintillion", "trevigintillion", "quattuorvigintillion",
+       "quinvigintillion", "sexvigintillion", "septenvigintillion",
+       "octovigintillion", "novemvigintillion", "trigintillion"],
+  pt: ["", "mil", "milhão", "bilhão", "trilhão", "quatrilhão", "quintilhão",
+       "sextilhão", "setilhão", "octilhão", "nonilhão", "decilhão",
+       "undecilhão", "duodecilhão", "tredecilhão", "quatuordecilhão",
+       "quindecilhão", "sexdecilhão", "setendecilhão", "octodecilhão",
+       "novendecilhão", "vigintilhão", "unvigintilhão", "duovigintilhão",
+       "trevigintilhão", "quatuorvigintilhão", "quinvigintilhão",
+       "sexvigintilhão", "setenvigintilhão", "octovigintilhão",
+       "novenvigintilhão", "trigintilhão"]
+};
+
+// The decimal mark, so exponents and mantissas read naturally in each language.
+export const DECSEP = { en: ".", pt: "," };
 
 export function makeT(lang) {
   const table = STRINGS[lang] || STRINGS.en;
