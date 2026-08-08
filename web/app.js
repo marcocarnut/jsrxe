@@ -535,7 +535,7 @@ function renderCount() {
   if (state.infinite) {
     el.textContent = t("sizeInfinite");
     ap.textContent = "";
-    state.countSpoken = "";
+    state.countSpoken = t("infiniteTip");
     return;
   }
   if (state.count === "0") {

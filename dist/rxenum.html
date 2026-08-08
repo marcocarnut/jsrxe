@@ -186,14 +186,19 @@ main {
 .flags em { color: var(--dim); font-size: .78rem; font-style: normal;
             font-family: var(--mono); }
 
-.controls { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; }
+/* A wide column gap so each control reads as its own group; the checkbox and
+   its label, tight together below, then clearly bind to each other rather than
+   to the neighbouring field. */
+.controls { display: flex; flex-wrap: wrap; gap: .55rem 1.3rem; align-items: end; }
 .ctl { display: flex; flex-direction: column; gap: .18rem; font-size: .82rem;
        color: var(--dim); }
 .ctl input { min-width: 7rem; }
-/* The checkbox and its label belong on one line; without this the label
-   wraps around the box and the option hint drifts away from it. */
-.ctl.chk { flex-direction: row; align-items: center; gap: .35rem;
+/* The checkbox and its label belong on one line, snug against each other. */
+.ctl.chk { flex-direction: row; align-items: center; gap: .3rem;
            white-space: nowrap; padding-bottom: .42rem; }
+/* Not a text field: the checkbox must not inherit the 7rem min-width, which
+   was stranding its label a column away. */
+.ctl.chk input { min-width: 0; width: auto; margin: 0; }
 .ctl.grow { flex: 1 1 12rem; }
 .ctl em { font-family: var(--mono); font-style: normal; }
 
@@ -725,7 +730,7 @@ const STRINGS = {
     filterInfinite:   "Infinite — no largest member",
     filterMine:       "Mine — your saved examples",
     obNew:            "New to regexes? Start here.",
-    obBest:           "Veteran? Best examples.",
+    obBest:           "Veteran? Here!",
     addOwn:           "Save current as example",
     addName:          "Name",
     addNote:          "Notes",
@@ -736,7 +741,8 @@ const STRINGS = {
     savedHere:        "Saved in this browser only.",
 
     size:             "Size of the set",
-    sizeInfinite:     "Infinite ℵ₀",
+    sizeInfinite:     "Infinite (ℵ₀)",
+    infiniteTip:      "Aleph-zero means infinite but with a one-to-one correspondence with the natural numbers.",
     sizeEmpty:        "Empty — nothing matches",
     approx:           "approximately",
     exact:            "exactly",
@@ -842,8 +848,8 @@ const STRINGS = {
     filterFinite:     "Finito — tamanho exato",
     filterInfinite:   "Infinito — sem maior elemento",
     filterMine:       "Meus — exemplos que você salvou",
-    obNew:            "Novo em regex? Comece aqui.",
-    obBest:           "Veterano? Melhores exemplos.",
+    obNew:            "Novato com regexes? Comece aqui.",
+    obBest:           "Veterano? Aqui!",
     addOwn:           "Salvar o atual como exemplo",
     addName:          "Nome",
     addNote:          "Observações",
@@ -854,7 +860,8 @@ const STRINGS = {
     savedHere:        "Guardado apenas neste navegador.",
 
     size:             "Tamanho do conjunto",
-    sizeInfinite:     "Infinito ℵ₀",
+    sizeInfinite:     "Infinito (ℵ₀)",
+    infiniteTip:      "Alef-zero significa infinito, mas com uma correspondência um-a-um com os números naturais.",
     sizeEmpty:        "Vazio — nada casa",
     approx:           "aproximadamente",
     exact:            "exatamente",
@@ -1065,6 +1072,23 @@ const BUILTIN = [
     }
   },
   {
+    id: "weekdays",
+    tutorial: true,
+    pattern: "(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day",
+    flags: "",
+    name: { en: "A subexpression", pt: "Uma subexpressão" },
+    note: {
+      en: "Parentheses group a piece of the pattern so an operator applies to " +
+          "the whole of it. Here the choice of seven prefixes is grouped, and " +
+          "the shared 'day' is written once: seven weekdays, not seven copies " +
+          "of the word.",
+      pt: "Os parênteses agrupam um pedaço do padrão para que um operador se " +
+          "aplique a ele inteiro. Aqui a escolha de sete prefixos é agrupada " +
+          "e o 'day' comum é escrito uma vez só: sete dias da semana, não sete " +
+          "cópias da palavra."
+    }
+  },
+  {
     id: "vowels",
     tutorial: true,
     pattern: "[aeiou]",
@@ -1113,6 +1137,23 @@ const BUILTIN = [
     }
   },
   {
+    id: "ranged",
+    tutorial: true,
+    pattern: "[a-z]{1,3}",
+    flags: "",
+    name: { en: "A range of lengths", pt: "Um intervalo de comprimentos" },
+    note: {
+      en: "A brace can give a range: {1,3} means one to three letters, so the " +
+          "set is every short lowercase string, 26 + 26^2 + 26^3 = 18,278 of " +
+          "them. They come out shortest first, all the one-letter strings, " +
+          "then the two-letter ones, then the three.",
+      pt: "A chave pode dar um intervalo: {1,3} significa de uma a três " +
+          "letras, então o conjunto é toda cadeia minúscula curta, 26 + 26^2 " +
+          "+ 26^3 = 18.278 delas. Saem do mais curto ao mais longo: primeiro " +
+          "as de uma letra, depois as de duas, depois as de três."
+    }
+  },
+  {
     id: "optional",
     tutorial: true,
     pattern: "colou?r",
@@ -1142,6 +1183,79 @@ const BUILTIN = [
           "lançamento a mais dobra o conjunto -- a mesmíssima duplicação que " +
           "torna enorme o conjunto de senhas de oito caracteres. Você chegou " +
           "aos espaços de chaves de verdade."
+    }
+  },
+  {
+    id: "plus",
+    tutorial: true,
+    pattern: "\\d+",
+    flags: "",
+    name: { en: "One or more (+)", pt: "Um ou mais (+)" },
+    note: {
+      en: "The + means 'one or more', so it is shorthand for {1,}: every " +
+          "non-empty run of digits. There is no largest one, so the set is " +
+          "infinite -- yet every member still has an exact index, and they " +
+          "come out shortest first, the index reading as the number itself.",
+      pt: "O + significa 'um ou mais', então é abreviação de {1,}: toda " +
+          "sequência não vazia de algarismos. Não há maior elemento, então o " +
+          "conjunto é infinito -- mas todo membro ainda tem um índice exato, e " +
+          "eles saem do mais curto primeiro, o índice se lendo como o próprio " +
+          "número."
+    }
+  },
+  {
+    id: "star",
+    tutorial: true,
+    pattern: "[ab]*",
+    flags: "",
+    name: { en: "Zero or more (*)", pt: "Zero ou mais (*)" },
+    note: {
+      en: "The * means 'zero or more', shorthand for {0,}. The only difference " +
+          "from + is that zero is allowed, so the very first member is the " +
+          "empty string, before a, b, aa, ab and the rest. Still infinite, " +
+          "still fully walkable.",
+      pt: "O * significa 'zero ou mais', abreviação de {0,}. A única diferença " +
+          "para o + é que zero é permitido, então o primeiro membro é a cadeia " +
+          "vazia, antes de a, b, aa, ab e o resto. Ainda infinito, ainda " +
+          "totalmente percorrível."
+    }
+  },
+  {
+    id: "backref",
+    tutorial: true,
+    pattern: "([0-9]{2})/(\\1)",
+    flags: "",
+    name: { en: "A backreference (\\1)", pt: "Uma retrorreferência (\\1)" },
+    note: {
+      en: "A hundred, not ten thousand: \\1 does not choose again, it copies " +
+          "the exact text the group already chose, so the second pair always " +
+          "equals the first. Backreferences are the one thing here a plain " +
+          "product of independent positions cannot express. Compare the " +
+          "subroutine below, which reuses the rule rather than the text.",
+      pt: "Cem, e não dez mil: \\1 não escolhe de novo, copia o texto exato " +
+          "que o grupo já escolheu, então o segundo par é sempre igual ao " +
+          "primeiro. Retrorreferências são a única coisa aqui que um produto " +
+          "de posições independentes não expressa. Compare com a sub-rotina " +
+          "abaixo, que reaproveita a regra, não o texto."
+    }
+  },
+  {
+    id: "subroutine",
+    tutorial: true,
+    pattern: "([0-9]{2}):(?1):(?1)",
+    flags: "",
+    name: { en: "A subroutine call (?1)", pt: "Uma chamada de sub-rotina (?1)" },
+    note: {
+      en: "A million, not a hundred. (?1) looks like a backreference but is " +
+          "not: it re-runs group 1's rule -- 'two digits' -- from scratch, so " +
+          "each field varies on its own, where \\1 would have forced them " +
+          "equal. It is the subroutine call that lets the IPv4 example write " +
+          "one octet once and reuse it with (?2).",
+      pt: "Um milhão, e não cem. (?1) parece uma retrorreferência, mas não é: " +
+          "ele reexecuta a regra do grupo 1 -- 'dois algarismos' -- do zero, " +
+          "então cada campo varia por conta própria, onde \\1 os teria forçado " +
+          "iguais. É a chamada de sub-rotina que deixa o exemplo de IPv4 " +
+          "escrever um octeto uma vez e reaproveitá-lo com (?2)."
     }
   },
 
@@ -1204,6 +1318,7 @@ const BUILTIN = [
   },
   {
     id: "roman",
+    highlight: true,
     pattern: "M{0,3}(C{0,3}|CD|DC{0,3}|CM)(X{0,3}|XL|LX{0,3}|XC)" +
              "(I{0,3}|IV|VI{0,3}|IX)",
     flags: "",
@@ -1243,10 +1358,11 @@ const BUILTIN = [
   },
   {
     id: "placa-antiga",
+    highlight: true,
+    family: { en: "Brazilian licence plates", pt: "Placas brasileiras" },
     pattern: "[A-Z]{3}-\\d{4}",
     flags: "",
-    name: { en: "Brazilian licence plates (old)",
-            pt: "Placas brasileiras (padrão antigo)" },
+    name: { en: "old standard", pt: "padrão antigo" },
     note: {
       en: "The pre-2018 Brazilian format: three letters, a hyphen, four " +
           "digits. 175,760,000 plates. Compare the count with the Mercosul " +
@@ -1260,10 +1376,11 @@ const BUILTIN = [
   },
   {
     id: "placa-mercosul",
+    highlight: true,
+    family: { en: "Brazilian licence plates", pt: "Placas brasileiras" },
     pattern: "[A-Z]{3}\\d[A-Z]\\d{2}",
     flags: "",
-    name: { en: "Brazilian licence plates (Mercosul)",
-            pt: "Placas brasileiras (padrão Mercosul)" },
+    name: { en: "Mercosul", pt: "Mercosul" },
     note: {
       en: "Three letters, a digit, a letter, two digits: 456,976,000 plates, " +
           "against 175,760,000 for the old format. The fifth character being " +
@@ -1343,6 +1460,7 @@ const BUILTIN = [
   },
   {
     id: "cnpj-valid",
+    highlight: true,
     family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}",
     flags: "",
@@ -1443,6 +1561,7 @@ const BUILTIN = [
   },
   {
     id: "uuid4",
+    highlight: true,
     pattern: "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-" +
              "[0-9a-f]{12}",
     flags: "",
@@ -1502,6 +1621,81 @@ const BUILTIN = [
           "fevereiro é curto nem que existem anos bissextos. Vale ver: o " +
           "conjunto que um padrão descreve costuma ser um pouco mais largo " +
           "que o pretendido."
+    }
+  },
+  {
+    id: "webcolor",
+    pattern: "#[0-9a-f]{6}",
+    flags: "",
+    name: { en: "Web colours", pt: "Cores da web" },
+    note: {
+      en: "Every CSS hex colour, #000000 to #ffffff: 16^6 = 16,777,216 of " +
+          "them. The index is the colour's 24-bit value, so seeking to " +
+          "16,711,680 lands on #ff0000, pure red.",
+      pt: "Toda cor hexadecimal de CSS, de #000000 a #ffffff: 16^6 = " +
+          "16.777.216 delas. O índice é o valor de 24 bits da cor, então ir " +
+          "para 16.711.680 cai em #ff0000, o vermelho puro."
+    },
+    bookmarks: [
+      { name: { en: "#ff0000 (red)", pt: "#ff0000 (vermelho)" },
+        index: "16711680" }
+    ]
+  },
+  {
+    id: "clock",
+    pattern: "([01]\\d|2[0-3]):[0-5]\\d",
+    flags: "",
+    name: { en: "Every minute of the day", pt: "Todo minuto do dia" },
+    note: {
+      en: "1,440 of them: 24 hours times 60 minutes. The alternation in the " +
+          "hours earns its keep -- it admits 00 through 23 and nothing higher, " +
+          "which a bare \\d\\d could not.",
+      pt: "1.440 deles: 24 horas vezes 60 minutos. A alternação nas horas faz " +
+          "por merecer -- admite de 00 a 23 e nada acima, o que um simples " +
+          "\\d\\d não conseguiria."
+    }
+  },
+  {
+    id: "cards",
+    pattern: "[2-9TJQKA][SHDC]",
+    flags: "",
+    name: { en: "A deck of cards", pt: "Um baralho" },
+    note: {
+      en: "Fifty-two: thirteen ranks times four suits. T is ten; S, H, D, C " +
+          "are spades, hearts, diamonds and clubs. Small enough to see whole, " +
+          "like the chessboard.",
+      pt: "Cinquenta e duas: treze valores vezes quatro naipes. T é o dez; S, " +
+          "H, D, C são espadas, copas, ouros e paus. Pequeno o bastante para " +
+          "ver inteiro, como o tabuleiro de xadrez."
+    }
+  },
+  {
+    id: "tictactoe",
+    pattern: "[XO.]{9}",
+    flags: "",
+    name: { en: "Tic-tac-toe boards", pt: "Tabuleiros de jogo da velha" },
+    note: {
+      en: "Every board of nine cells, each empty, X or O: 3^9 = 19,683. Most " +
+          "are unreachable in a real game -- the set a pattern describes is " +
+          "the whole space of positions, not the ones the rules allow.",
+      pt: "Todo tabuleiro de nove casas, cada uma vazia, X ou O: 3^9 = " +
+          "19.683. A maioria é inatingível num jogo real -- o conjunto que um " +
+          "padrão descreve é todo o espaço de posições, não as que as regras " +
+          "permitem."
+    }
+  },
+  {
+    id: "codons",
+    pattern: "[ACGT]{3}",
+    flags: "",
+    name: { en: "Genetic codons", pt: "Códons genéticos" },
+    note: {
+      en: "The 64 codons of the genetic code: three bases from {A,C,G,T}. " +
+          "Exactly as many as the chessboard has squares, and for the same " +
+          "reason -- 4^3 and 8^2 are both 64.",
+      pt: "Os 64 códons do código genético: três bases de {A,C,G,T}. " +
+          "Exatamente tantos quantos o tabuleiro de xadrez tem casas, e pela " +
+          "mesma razão -- 4^3 e 8^2 são ambos 64."
     }
   },
   {
@@ -1593,22 +1787,6 @@ const BUILTIN = [
           "qualquer idioma."
     }
   },
-  {
-    id: "backref",
-    pattern: "([0-9]{2})/(\\1)",
-    flags: "",
-    name: { en: "Backreference: a repeated pair",
-            pt: "Retrorreferência: um par repetido" },
-    note: {
-      en: "A hundred, not ten thousand: \\1 does not choose again, it copies " +
-          "what the group already chose. Backreferences are the one thing " +
-          "here that a plain product of independent positions cannot express.",
-      pt: "Cem, e não dez mil: \\1 não escolhe de novo, copia o que o grupo " +
-          "já escolheu. Retrorreferências são a única coisa aqui que um " +
-          "produto de posições independentes não consegue expressar."
-    }
-  },
-
   // -------------------------------------------------------------- infinite
 
   {
@@ -2538,7 +2716,7 @@ function renderCount() {
   if (state.infinite) {
     el.textContent = t("sizeInfinite");
     ap.textContent = "";
-    state.countSpoken = "";
+    state.countSpoken = t("infiniteTip");
     return;
   }
   if (state.count === "0") {

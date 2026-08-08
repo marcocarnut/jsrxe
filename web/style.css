@@ -179,14 +179,19 @@ main {
 .flags em { color: var(--dim); font-size: .78rem; font-style: normal;
             font-family: var(--mono); }
 
-.controls { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; }
+/* A wide column gap so each control reads as its own group; the checkbox and
+   its label, tight together below, then clearly bind to each other rather than
+   to the neighbouring field. */
+.controls { display: flex; flex-wrap: wrap; gap: .55rem 1.3rem; align-items: end; }
 .ctl { display: flex; flex-direction: column; gap: .18rem; font-size: .82rem;
        color: var(--dim); }
 .ctl input { min-width: 7rem; }
-/* The checkbox and its label belong on one line; without this the label
-   wraps around the box and the option hint drifts away from it. */
-.ctl.chk { flex-direction: row; align-items: center; gap: .35rem;
+/* The checkbox and its label belong on one line, snug against each other. */
+.ctl.chk { flex-direction: row; align-items: center; gap: .3rem;
            white-space: nowrap; padding-bottom: .42rem; }
+/* Not a text field: the checkbox must not inherit the 7rem min-width, which
+   was stranding its label a column away. */
+.ctl.chk input { min-width: 0; width: auto; margin: 0; }
 .ctl.grow { flex: 1 1 12rem; }
 .ctl em { font-family: var(--mono); font-style: normal; }
 
