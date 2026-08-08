@@ -162,7 +162,42 @@ try {
     }
   }
 
+  // Type '[\d]' into the freshly loaded bundle and confirm the class shorthand
+  // reads as the ten digits, not the letter 'd' -- the whole worker/wasm path
+  // end to end, from a file:// URL.
+  let shorthand = null;
+  if (bundle && !bundle.err) {
+    await cdp.send("Runtime.evaluate", { expression: `(() => {
+      const p = document.getElementById("pattern");
+      p.value = "[\\\\d]";
+      p.dispatchEvent(new Event("input", { bubbles: true }));
+    })()` });
+    for (let i = 0; i < 100; i++) {
+      await sleep(100);
+      const r = await cdp.send("Runtime.evaluate", {
+        expression: `JSON.stringify({
+          count: document.getElementById("count")?.textContent || "",
+          vals: Array.from(document.querySelectorAll("#results tbody td.val"))
+                  .map((td) => td.textContent).join("")
+        })`,
+        returnByValue: true
+      });
+      const v = JSON.parse(r.result?.result?.value || "null");
+      if (v && v.count === "10") { shorthand = v; break; }
+    }
+  }
+
   cdp.close();
+
+  if (shorthand) {
+    const ok = shorthand.count === "10" && shorthand.vals === "0123456789";
+    console.log(ok ? "shorthand: [\\d] reads as the ten digits in the browser"
+                   : "shorthand: FAILED " + JSON.stringify(shorthand));
+    if (!ok) code = 1;
+  } else if (bundle && !bundle.err) {
+    console.log("shorthand: [\\d] never resolved in the bundle");
+    code = 1;
+  }
 
   if (bundle) {
     const ok = !bundle.err && bundle.count === "218,340,105,584,896" &&
