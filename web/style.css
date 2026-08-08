@@ -162,6 +162,17 @@ main {
            line-height: 1.45; padding: .5rem .7rem; border-radius: 7px;
            box-shadow: 0 4px 16px rgba(0,0,0,.28); pointer-events: none; }
 .tip-host { cursor: help; }
+/* The size box header carries the "how long to visit them all" button. */
+.panelhead { display: flex; align-items: baseline; justify-content: space-between;
+             gap: .5rem; }
+#timebtn { background: none; border: 1px solid var(--line); border-radius: 6px;
+           color: var(--dim); cursor: pointer; font-size: 1rem; line-height: 1;
+           padding: .2rem .45rem; }
+#timebtn:hover, #timebtn.on { border-color: var(--accent); color: var(--accent); }
+#timebox { margin-top: .75rem; border-top: 1px solid var(--line);
+           padding-top: .65rem; }
+#timebox #timebig { margin: .15rem 0 .1rem; }
+#timespeed { width: 100%; margin: .45rem 0 .25rem; }
 /* The order rides in the Elements header as a natural-case parenthetical, not
    swept up into the header's small-caps treatment. */
 .ehead { display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; }

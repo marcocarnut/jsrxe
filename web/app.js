@@ -36,7 +36,7 @@ let state = {
   ok: false, infinite: false, shortlex: false, count: null,
   from: 0n, per: 50, zeroBased: true, keyActive: false, filter: "all",
   selected: null, slider: "none", codeActive: false,
-  note: "", orderTip: "", sliderTip: "", countSpoken: ""
+  note: "", orderTip: "", sliderTip: "", countSpoken: "", timeTip: ""
 };
 
 let mine = [];
@@ -122,6 +122,89 @@ function spoken(s) {
 
   const mantStr = Number.isInteger(nice) ? String(nice) : dec(nice, 1);
   return `${lead} ${mantStr} ${word}`;
+}
+
+// A non-negative integer (as a decimal string) named the way a person says it:
+// "342", "13.8 billion", "5.4 duodecillion". Past the naming table it degrades
+// to a power of ten. Like spoken() but plain, for composing time phrases.
+function fmtScale(nStr) {
+  const d = nStr.length;
+  const g = Math.floor((d - 1) / 3);
+  if (g < 1) return group(nStr);                 // under a thousand: exact
+  const table = SCALES[lang] || SCALES.en;
+  if (g >= table.length) return "10^" + (d - 1);  // beyond names
+  const intLen = d - 3 * g;
+  const head = nStr.slice(0, Math.min(d, intLen + 3));
+  const mant = Number(head) / Math.pow(10, head.length - intLen);
+  const nice = mant >= 100 ? Math.round(mant)
+             : mant >= 10  ? Math.round(mant * 10) / 10
+             :               Math.round(mant * 100) / 100;
+  const mantStr = Number.isInteger(nice) ? String(nice) : dec(nice, nice >= 10 ? 1 : 2);
+  return `${mantStr} ${table[g]}`;
+}
+
+// A small count with one optional decimal, in the language's decimal mark.
+function num1(x) { return Number.isInteger(x) ? String(x) : dec(x, 1); }
+
+// How the speed slider reads: 10^e visits a second, said as "N per second",
+// with the clean powers annotated by the time between visits.
+function rateLabel(e) {
+  const per = { 3: "millisecond", 6: "microsecond", 9: "nanosecond",
+                12: "picosecond", 15: "femtosecond" };
+  let label = `${fmtScale((10n ** BigInt(e)).toString())} ${t("perSecond")}`;
+  if (per[e]) label += ` (${t("timeOnePer")} ${t("period_" + per[e])})`;
+  return label;
+}
+
+// A duration in seconds (a BigInt, since a set can want more seconds than the
+// universe has) named in the largest fitting unit -- seconds up through years,
+// then centuries, millennia, and years by the magnitude scale beyond that.
+function durationBig(seconds) {
+  const YEAR = 31557600n;                          // 365.25 days
+  const rungs = [
+    ["timeSeconds", 1n, 60n], ["timeMinutes", 60n, 3600n],
+    ["timeHours", 3600n, 86400n], ["timeDays", 86400n, 2629800n],
+    ["timeMonths", 2629800n, YEAR]
+  ];
+  for (const [key, unit, next] of rungs)
+    if (seconds < next) return `${num1(Number(seconds * 10n / unit) / 10)} ${t(key)}`;
+  const years = seconds / YEAR;
+  if (years < 100n)     return `${num1(Number(seconds * 10n / YEAR) / 10)} ${t("timeYears")}`;
+  if (years < 1000n)    return `${num1(Number(years * 10n / 100n) / 10)} ${t("timeCenturies")}`;
+  if (years < 1000000n) return `${num1(Number(years * 10n / 1000n) / 10)} ${t("timeMillennia")}`;
+  return `${fmtScale(years.toString())} ${t("timeYears")}`;
+}
+
+// The spoken simplification: how the span compares to spans a person has a feel
+// for. Empty in the middle range, where the big number already speaks.
+function durationTip(seconds) {
+  const YEAR = 31557600n;
+  const years = seconds / YEAR;
+  const UNIVERSE = 13790000000n, EARTH = 4543000000n, HISTORY = 5000n;
+  if (years >= UNIVERSE) return `≈ ${fmtScale((years / UNIVERSE).toString())} ${t("timeUniverse")}`;
+  if (years >= EARTH)    return `≈ ${fmtScale((years / EARTH).toString())} ${t("timeEarth")}`;
+  if (years >= HISTORY)  return `≈ ${fmtScale((years / HISTORY).toString())} ${t("timeHistory")}`;
+  return "";
+}
+
+// Fill the "time to visit them all" panel for the current set and speed.
+function renderTime() {
+  if ($("timebox").hidden) return;
+  const e = Number($("timespeed").value);
+  $("timerate").textContent = rateLabel(e);
+  const big = $("timebig");
+  if (!state.ok) { big.textContent = ""; state.timeTip = ""; return; }
+  if (state.infinite) {
+    big.textContent = t("timeForever"); state.timeTip = t("timeForeverTip"); return;
+  }
+  if (!state.count) { big.textContent = ""; state.timeTip = ""; return; }
+  const count = BigInt(state.count), rate = 10n ** BigInt(e);
+  if (count < rate) {
+    big.textContent = t("timeInstant"); state.timeTip = t("timeInstantTip"); return;
+  }
+  const seconds = count / rate;
+  big.textContent = durationBig(seconds);
+  state.timeTip = durationTip(seconds);
 }
 
 function isExactPower(s, base) {
@@ -570,6 +653,8 @@ async function loadLengthStarts() {
 
 function renderCount() {
   const el = $("count"), ap = $("approx");
+  show($("timebtn"), state.ok);
+  renderTime();
   if (!state.ok) { el.textContent = ""; ap.textContent = ""; state.countSpoken = ""; return; }
   if (state.infinite) {
     el.textContent = t("sizeInfinite");
@@ -746,6 +831,15 @@ function wire() {
     if (on) $("code").focus();
   };
   $("key").oninput = () => { clearTimeout(reparseTimer); reparseTimer = setTimeout(async () => { await applyKey(); loadRows(); }, 250); };
+
+  // The time-to-visit-them-all reveal, folded into the size box.
+  $("timebtn").onclick = () => {
+    const on = $("timebox").hidden;
+    show($("timebox"), on);
+    $("timebtn").classList.toggle("on", on);
+    if (on) renderTime();
+  };
+  $("timespeed").oninput = renderTime;
 
   $("per").onchange = () => {
     state.per = Math.max(1, Math.min(1000, Number($("per").value) || 50));
@@ -944,6 +1038,7 @@ transport.ready(async () => {
 wire();
 attachTip($("pattern"), () => state.note);
 attachTip($("count"), () => state.countSpoken);
+attachTip($("timebig"), () => state.timeTip);
 attachTip($("orderlabel"), () => state.orderTip);
 attachTip($("slider"), () => state.sliderTip);
 applyLanguage();

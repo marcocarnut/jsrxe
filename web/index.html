@@ -102,9 +102,19 @@
     </div>
 
     <div class="panel">
-      <h2 data-t="size"></h2>
+      <div class="panelhead">
+        <h2 data-t="size"></h2>
+        <button id="timebtn" type="button" data-ttip="timeBtn" aria-label="time">⏳</button>
+      </div>
       <div id="count" class="big tip-host"></div>
       <div id="approx" class="dim"></div>
+      <!-- how long to walk the whole set, at a speed you choose -->
+      <div id="timebox" hidden>
+        <p class="dim" data-t="visitAll"></p>
+        <div id="timebig" class="big tip-host"></div>
+        <input id="timespeed" type="range" min="0" max="15" value="0">
+        <div id="timerate" class="dim"></div>
+      </div>
     </div>
 
     <div class="panel">
