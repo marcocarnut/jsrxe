@@ -27,8 +27,20 @@ const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
 
-let lang = localStorage.getItem(STORE_LANG) ||
-           (navigator.language || "en").toLowerCase().startsWith("pt") ? "pt" : "en";
+// Language, in priority order: a ".pt-br." (or ".en.") tag in the page's file
+// name, so a translated copy can be shared by its URL and open in the right
+// language; then a choice saved from the selector; then the browser; then
+// English. The parentheses around the ternary matter -- without them it bound
+// to the whole || chain, so any stored value at all read as Portuguese.
+function urlLang() {
+  const p = (location.pathname || "").toLowerCase();
+  if (p.includes(".pt-br.") || p.includes(".pt.")) return "pt";
+  if (p.includes(".en.")) return "en";
+  return null;
+}
+let lang = urlLang() ||
+           localStorage.getItem(STORE_LANG) ||
+           ((navigator.language || "en").toLowerCase().startsWith("pt") ? "pt" : "en");
 if (!LANGS[lang]) lang = "en";
 let t = makeT(lang);
 
