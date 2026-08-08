@@ -23,6 +23,19 @@ body {
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* A nudge for small portrait screens, until the reader commits by tapping an
+   example -- at which point it is dismissed for good. */
+#orient { display: none; align-items: center; gap: .6rem;
+          background: var(--accent-bg); color: var(--accent);
+          border-bottom: 1px solid var(--accent);
+          padding: .5rem .9rem; font-size: .85rem; line-height: 1.35; }
+#orient span { flex: 1; }
+#orientx { background: none; border: 0; color: var(--accent); cursor: pointer;
+           font-size: 1.3rem; line-height: 1; padding: 0 .2rem; }
+@media (orientation: portrait) and (max-width: 900px) {
+  #orient:not(.dismissed) { display: flex; }
+}
+
 header { display: flex; align-items: baseline; flex-wrap: wrap;
          gap: .1rem .55rem; padding: .9rem 1.4rem .7rem; }
 header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; }
@@ -45,8 +58,11 @@ main {
    follows below, out of the way but a scroll away, and stops being sticky so it
    does not trail the page. */
 @media (max-width: 900px) {
-  main { grid-template-columns: 1fr; }
-  #work { order: -1; }
+  main { grid-template-columns: 1fr; padding: .8rem .8rem 3rem; }
+  /* Grid items must be allowed to shrink below their content's min width, or a
+     long example row stretches the single 1fr track past the viewport and the
+     whole page scrolls sideways. */
+  #left, #work { min-width: 0; }
   #left { position: static; }
   #left #libtoggle { display: flex; }   /* beats the base rule below, any order */
   #left .panetitle { display: none; }   /* the toggle is the header here */
@@ -310,6 +326,12 @@ dialog menu button { background: var(--bg); color: var(--fg);
 </style>
 </head>
 <body>
+
+<!-- a landscape nudge on small portrait screens; gone once an example is tapped -->
+<div id="orient">
+  <span data-t="orientWarn"></span>
+  <button id="orientx" data-ttip="orientDismiss" aria-label="dismiss">&times;</button>
+</div>
 
 <header>
   <h1 data-t="title">rxenum</h1>
@@ -763,6 +785,8 @@ const STRINGS = {
     title:            "rxenum",
     subtitle:         "regular expressions as sets you can walk",
     repoTag:          "repo",
+    orientWarn:       "This page is at its best on a wide screen — turn your device sideways (landscape).",
+    orientDismiss:    "Dismiss",
 
     workbench:        "Workbench",
     badgeInfinite:    "infinite set",
@@ -907,6 +931,8 @@ const STRINGS = {
     title:            "rxenum",
     subtitle:         "expressões regulares como conjuntos que se pode percorrer",
     repoTag:          "repo",
+    orientWarn:       "Esta página fica muito melhor numa tela larga — vire o aparelho de lado (modo paisagem).",
+    orientDismiss:    "Dispensar",
 
     workbench:        "Bancada",
     badgeInfinite:    "conjunto infinito",
@@ -2378,6 +2404,7 @@ const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
+const STORE_ORIENT = "jsrxe.orient";
 
 // Language, in priority order: a ".pt-br." (or ".en.") tag in the page's file
 // name, so a translated copy can be shared by its URL and open in the right
@@ -2777,11 +2804,19 @@ function matchesFilter(ex) {
   }
 }
 
+// Retire the landscape nudge for good: the reader has committed to using the
+// page as it is.
+function dismissOrient() {
+  $("orient").classList.add("dismissed");
+  localStorage.setItem(STORE_ORIENT, "off");
+}
+
 // On a small screen, picking an example folds the library away and brings the
 // workbench into view, so the result is what you are looking at. A no-op on
 // wide screens, where both panes are on screen at once.
 function collapseOnMobile() {
   if (!window.matchMedia("(max-width: 900px)").matches) return;
+  dismissOrient();                       // tapping an example counts as committing
   $("left").classList.add("lib-collapsed");
   $("libtoggle").setAttribute("aria-expanded", "false");
   $("work").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -3310,6 +3345,17 @@ function wire() {
     const collapsed = $("left").classList.toggle("lib-collapsed");
     $("libtoggle").setAttribute("aria-expanded", String(!collapsed));
   };
+  // On a small screen the library sits first but starts folded, so the page
+  // opens on a slim header and the workbench, not a wall of examples.
+  if (window.matchMedia("(max-width: 900px)").matches) {
+    $("left").classList.add("lib-collapsed");
+    $("libtoggle").setAttribute("aria-expanded", "false");
+  }
+  // The landscape nudge: shown until the reader taps an example, then never
+  // again.
+  if (localStorage.getItem(STORE_ORIENT) === "off")
+    $("orient").classList.add("dismissed");
+  $("orientx").onclick = dismissOrient;
 
   $("libsearch").oninput = renderLibrary;
   for (const b of document.querySelectorAll("#libtabs .subtab"))

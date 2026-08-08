@@ -26,6 +26,7 @@ const STORE_LANG = "jsrxe.lang";
 const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
+const STORE_ORIENT = "jsrxe.orient";
 
 // Language, in priority order: a ".pt-br." (or ".en.") tag in the page's file
 // name, so a translated copy can be shared by its URL and open in the right
@@ -425,11 +426,19 @@ function matchesFilter(ex) {
   }
 }
 
+// Retire the landscape nudge for good: the reader has committed to using the
+// page as it is.
+function dismissOrient() {
+  $("orient").classList.add("dismissed");
+  localStorage.setItem(STORE_ORIENT, "off");
+}
+
 // On a small screen, picking an example folds the library away and brings the
 // workbench into view, so the result is what you are looking at. A no-op on
 // wide screens, where both panes are on screen at once.
 function collapseOnMobile() {
   if (!window.matchMedia("(max-width: 900px)").matches) return;
+  dismissOrient();                       // tapping an example counts as committing
   $("left").classList.add("lib-collapsed");
   $("libtoggle").setAttribute("aria-expanded", "false");
   $("work").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -958,6 +967,17 @@ function wire() {
     const collapsed = $("left").classList.toggle("lib-collapsed");
     $("libtoggle").setAttribute("aria-expanded", String(!collapsed));
   };
+  // On a small screen the library sits first but starts folded, so the page
+  // opens on a slim header and the workbench, not a wall of examples.
+  if (window.matchMedia("(max-width: 900px)").matches) {
+    $("left").classList.add("lib-collapsed");
+    $("libtoggle").setAttribute("aria-expanded", "false");
+  }
+  // The landscape nudge: shown until the reader taps an example, then never
+  // again.
+  if (localStorage.getItem(STORE_ORIENT) === "off")
+    $("orient").classList.add("dismissed");
+  $("orientx").onclick = dismissOrient;
 
   $("libsearch").oninput = renderLibrary;
   for (const b of document.querySelectorAll("#libtabs .subtab"))

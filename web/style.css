@@ -16,6 +16,19 @@ body {
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* A nudge for small portrait screens, until the reader commits by tapping an
+   example -- at which point it is dismissed for good. */
+#orient { display: none; align-items: center; gap: .6rem;
+          background: var(--accent-bg); color: var(--accent);
+          border-bottom: 1px solid var(--accent);
+          padding: .5rem .9rem; font-size: .85rem; line-height: 1.35; }
+#orient span { flex: 1; }
+#orientx { background: none; border: 0; color: var(--accent); cursor: pointer;
+           font-size: 1.3rem; line-height: 1; padding: 0 .2rem; }
+@media (orientation: portrait) and (max-width: 900px) {
+  #orient:not(.dismissed) { display: flex; }
+}
+
 header { display: flex; align-items: baseline; flex-wrap: wrap;
          gap: .1rem .55rem; padding: .9rem 1.4rem .7rem; }
 header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; }
@@ -38,8 +51,11 @@ main {
    follows below, out of the way but a scroll away, and stops being sticky so it
    does not trail the page. */
 @media (max-width: 900px) {
-  main { grid-template-columns: 1fr; }
-  #work { order: -1; }
+  main { grid-template-columns: 1fr; padding: .8rem .8rem 3rem; }
+  /* Grid items must be allowed to shrink below their content's min width, or a
+     long example row stretches the single 1fr track past the viewport and the
+     whole page scrolls sideways. */
+  #left, #work { min-width: 0; }
   #left { position: static; }
   #left #libtoggle { display: flex; }   /* beats the base rule below, any order */
   #left .panetitle { display: none; }   /* the toggle is the header here */
