@@ -12,6 +12,18 @@ that differed anywhere would be worse than no port at all. Only the user
 interface is written in JavaScript.
 
 
+LIVE DEMO
+=========
+
+    https://rxenum.postcogito.org
+
+That is the single-file build (dist/rxenum.html) served from a static host: a
+library of example regexes, each one counted, walked and seekable, with the
+keyed shuffle, the per-element code, the word dictionaries, and a reveal of how
+long visiting every member would take. Nothing is sent anywhere -- the
+WebAssembly runs in the page, so it works offline and even from a file:// URL.
+
+
 WHAT GETS BUILT
 ===============
 
@@ -21,8 +33,8 @@ bin/rxenum.js       The demo program compiled whole, run under node.
 
                         cd ../rxe && RXENUM=../jsrxe/bin/rxenum-wasm make test
 
-                    That is the real check on the port. It runs the 353 pinned
-                    cases, the 66-pattern oracle and the shortlex brute-force
+                    That is the real check on the port. It runs the 401 pinned
+                    cases, the 96-pattern oracle and the shortlex brute-force
                     against the WebAssembly build, so the port is verified
                     rather than assumed. Nothing here reimplements the option
                     parsing or the output formatting, on purpose: this is
