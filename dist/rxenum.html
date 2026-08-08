@@ -265,7 +265,7 @@ dialog menu button { background: var(--bg); color: var(--fg);
   <h1 data-t="title">rxenum</h1>
   <span class="sep">::</span>
   <span class="sub" data-t="subtitle"></span>
-  <span class="repo">(<a id="repo" href="https://github.com/marcocarnut/rxe"
+  <span class="repo">(<a id="repo" href="https://github.com/marcocarnut/jsrxe"
      target="_blank" rel="noopener" data-t="repoTag"></a>)</span>
   <select id="lang" aria-label="Language"></select>
 </header>
@@ -652,9 +652,10 @@ const STRINGS = {
 
     workbench:        "Workbench",
     badgeInfinite:    "infinite set",
-    badgeCode:        "has code",
-    spokenAbout:      "about",
-    spokenMoreThan:   "more than",
+    badgeCode:        "has auxiliary code",
+    spokenExactly:    "exactly",
+    spokenBitLess:    "a bit less than",
+    spokenBitMore:    "a bit more than",
     spokenDigitsPre:  "a number with",
     spokenDigitsPost: "digits",
 
@@ -694,7 +695,7 @@ const STRINGS = {
     savedHere:        "Saved in this browser only.",
 
     size:             "Size of the set",
-    sizeInfinite:     "No largest member",
+    sizeInfinite:     "Infinite",
     sizeEmpty:        "Empty — nothing matches",
     approx:           "approximately",
     exact:            "exactly",
@@ -760,9 +761,10 @@ const STRINGS = {
 
     workbench:        "Bancada",
     badgeInfinite:    "conjunto infinito",
-    badgeCode:        "tem código",
-    spokenAbout:      "cerca de",
-    spokenMoreThan:   "mais de",
+    badgeCode:        "tem código auxiliar",
+    spokenExactly:    "exatamente",
+    spokenBitLess:    "pouco menos que",
+    spokenBitMore:    "pouco mais que",
     spokenDigitsPre:  "um número de",
     spokenDigitsPost: "algarismos",
 
@@ -802,7 +804,7 @@ const STRINGS = {
     savedHere:        "Guardado apenas neste navegador.",
 
     size:             "Tamanho do conjunto",
-    sizeInfinite:     "Não há maior elemento",
+    sizeInfinite:     "Infinito",
     sizeEmpty:        "Vazio — nada casa",
     approx:           "aproximadamente",
     exact:            "exatamente",
@@ -1080,7 +1082,7 @@ const BUILTIN = [
     family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}",
     flags: "",
-    name: { en: "valid check digit (code)", pt: "verificador válido (código)" },
+    name: { en: "valid check digit", pt: "verificador válido" },
     note: {
       en: "Now the regex stops before the checksum and the code computes it, " +
           "so every row is a genuinely valid CNPJ rather than one in a " +
@@ -1133,7 +1135,7 @@ const BUILTIN = [
     family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}",
     flags: "",
-    name: { en: "valid check digit (code)", pt: "verificador válido (código)" },
+    name: { en: "valid check digit", pt: "verificador válido" },
     note: {
       en: "The regex stops before the checksum and the code appends it, so " +
           "every row is a valid CPF rather than one in a hundred. This is " +
@@ -1851,8 +1853,16 @@ function spoken(s) {
   const nice = mant >= 100 ? Math.round(mant / 10) * 10
              : mant >= 10  ? Math.round(mant)
              :               Math.round(mant * 10) / 10;
-  // "more than" only when we rounded down and the truth genuinely exceeds it.
-  const lead = mant > nice * 1.005 ? t("spokenMoreThan") : t("spokenAbout");
+
+  // The exact integer we are about to say aloud, so we can tell whether the
+  // real count lands on it, just under, or just over -- the spoken echo of the
+  // "=" versus "~" on the numeric exponents. nice*10 is always whole (nice has
+  // at most one decimal), so the scale keeps this exact for any size.
+  const spokenValue = BigInt(Math.round(nice * 10)) * (10n ** BigInt(3 * g - 1));
+  const actual = BigInt(s);
+  const lead = actual === spokenValue ? t("spokenExactly")
+             : actual <  spokenValue  ? t("spokenBitLess")
+             :                          t("spokenBitMore");
 
   let word = table[g];
   // Portuguese pluralises the -ão scale words; "mil" and English do not.

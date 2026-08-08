@@ -104,8 +104,16 @@ function spoken(s) {
   const nice = mant >= 100 ? Math.round(mant / 10) * 10
              : mant >= 10  ? Math.round(mant)
              :               Math.round(mant * 10) / 10;
-  // "more than" only when we rounded down and the truth genuinely exceeds it.
-  const lead = mant > nice * 1.005 ? t("spokenMoreThan") : t("spokenAbout");
+
+  // The exact integer we are about to say aloud, so we can tell whether the
+  // real count lands on it, just under, or just over -- the spoken echo of the
+  // "=" versus "~" on the numeric exponents. nice*10 is always whole (nice has
+  // at most one decimal), so the scale keeps this exact for any size.
+  const spokenValue = BigInt(Math.round(nice * 10)) * (10n ** BigInt(3 * g - 1));
+  const actual = BigInt(s);
+  const lead = actual === spokenValue ? t("spokenExactly")
+             : actual <  spokenValue  ? t("spokenBitLess")
+             :                          t("spokenBitMore");
 
   let word = table[g];
   // Portuguese pluralises the -ão scale words; "mil" and English do not.

@@ -150,7 +150,7 @@ export const BUILTIN = [
     family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}",
     flags: "",
-    name: { en: "valid check digit (code)", pt: "verificador válido (código)" },
+    name: { en: "valid check digit", pt: "verificador válido" },
     note: {
       en: "Now the regex stops before the checksum and the code computes it, " +
           "so every row is a genuinely valid CNPJ rather than one in a " +
@@ -203,7 +203,7 @@ export const BUILTIN = [
     family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}",
     flags: "",
-    name: { en: "valid check digit (code)", pt: "verificador válido (código)" },
+    name: { en: "valid check digit", pt: "verificador válido" },
     note: {
       en: "The regex stops before the checksum and the code appends it, so " +
           "every row is a valid CPF rather than one in a hundred. This is " +

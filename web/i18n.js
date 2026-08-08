@@ -10,9 +10,10 @@ export const STRINGS = {
 
     workbench:        "Workbench",
     badgeInfinite:    "infinite set",
-    badgeCode:        "has code",
-    spokenAbout:      "about",
-    spokenMoreThan:   "more than",
+    badgeCode:        "has auxiliary code",
+    spokenExactly:    "exactly",
+    spokenBitLess:    "a bit less than",
+    spokenBitMore:    "a bit more than",
     spokenDigitsPre:  "a number with",
     spokenDigitsPost: "digits",
 
@@ -52,7 +53,7 @@ export const STRINGS = {
     savedHere:        "Saved in this browser only.",
 
     size:             "Size of the set",
-    sizeInfinite:     "No largest member",
+    sizeInfinite:     "Infinite",
     sizeEmpty:        "Empty — nothing matches",
     approx:           "approximately",
     exact:            "exactly",
@@ -118,9 +119,10 @@ export const STRINGS = {
 
     workbench:        "Bancada",
     badgeInfinite:    "conjunto infinito",
-    badgeCode:        "tem código",
-    spokenAbout:      "cerca de",
-    spokenMoreThan:   "mais de",
+    badgeCode:        "tem código auxiliar",
+    spokenExactly:    "exatamente",
+    spokenBitLess:    "pouco menos que",
+    spokenBitMore:    "pouco mais que",
     spokenDigitsPre:  "um número de",
     spokenDigitsPost: "algarismos",
 
@@ -160,7 +162,7 @@ export const STRINGS = {
     savedHere:        "Guardado apenas neste navegador.",
 
     size:             "Tamanho do conjunto",
-    sizeInfinite:     "Não há maior elemento",
+    sizeInfinite:     "Infinito",
     sizeEmpty:        "Vazio — nada casa",
     approx:           "aproximadamente",
     exact:            "exatamente",
