@@ -4,6 +4,7 @@ bin/rxenum.js
 bin/rxenum.wasm
 web/librxe.js
 web/librxe.wasm
+web/version.js
 node_modules/
 *~
 build/librxe-node.mjs

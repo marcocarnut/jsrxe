@@ -11,6 +11,7 @@
 import createLibrxe from "./librxe.js";
 import { makeEngine } from "./engine.js";
 import { makeTransform } from "./sandbox.js";
+import { WASM_VERSION } from "./version.js";
 
 let engine = null;
 
@@ -28,6 +29,12 @@ self.onmessage = (ev) => {
 // Without the catch this would be an unhandled rejection inside the worker,
 // which the page never sees: it would simply wait for a 'ready' that never
 // came, with nothing to say why.
-createLibrxe()
+// Tag the .wasm request with the library's own checksum, so a rebuilt library
+// is fetched fresh rather than served from the browser's cache under a stale
+// name. A plain reload otherwise keeps a heuristically-cached .wasm, which is
+// how a fixed build could still behave like the old one.
+createLibrxe({
+  locateFile: (path) => path.endsWith(".wasm") ? path + "?v=" + WASM_VERSION : path
+})
   .then((Module) => { engine = makeEngine(Module, { makeTransform }); self.postMessage({ ready: true }); })
   .catch((e) => self.postMessage({ fatal: String(e && e.stack ? e.stack : e) }));

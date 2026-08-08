@@ -91,6 +91,9 @@ LIBFLAGS := -sEXPORT_NAME=createLibrxe -sEXPORT_ES6=1 \
 web/librxe.js: $(RXE_SRC) src/binding.c $(GMP_LIB)
 	$(EMCC) $(CFLAGS) $(COMMON) $(LIBFLAGS) -sENVIRONMENT=web,worker \
 	    $(RXE_SRC) src/binding.c $(GMP_LIB) -lm -o $@
+	@printf 'export const WASM_VERSION = "%s";\n' \
+	    "$$(cksum web/librxe.wasm | cut -d' ' -f1)" > web/version.js
+	@echo "wrote web/version.js ($$(cat web/version.js | cut -d'"' -f2))"
 
 # The same binding built for node, so that engine.js can be exercised without
 # a browser. Not shipped; it exists to be tested.
@@ -121,13 +124,15 @@ test: bin/rxenum.js build/librxe-node.mjs web/librxe.js bundle
 	$(NODE) tests/node.mjs
 	$(NODE) tests/browser.mjs
 
+# A no-store dev server, so a rebuilt .wasm or edited module is picked up on
+# reload rather than served stale. python -m http.server sends no Cache-Control
+# and the browser then caches heuristically; tools/serve.py fixes only that.
 serve: web/librxe.js
-	@echo "http://localhost:8000/web/"
-	python3 -m http.server 8000
+	python3 tools/serve.py
 
 clean:
 	rm -f bin/rxenum.js bin/rxenum.wasm web/librxe.js web/librxe.wasm \
-	      build/librxe-node.mjs build/librxe-node.wasm \
+	      web/version.js build/librxe-node.mjs build/librxe-node.wasm \
 	      build/librxe-single.js dist/rxenum.html
 
 distclean: clean
