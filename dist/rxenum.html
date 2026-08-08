@@ -2811,6 +2811,13 @@ function dismissOrient() {
   localStorage.setItem(STORE_ORIENT, "off");
 }
 
+// Unfold the library. On a wide screen it is never folded, so this is a no-op
+// there; on a small one it is what makes "start here" visibly do something.
+function expandLibrary() {
+  $("left").classList.remove("lib-collapsed");
+  $("libtoggle").setAttribute("aria-expanded", "true");
+}
+
 // On a small screen, picking an example folds the library away and brings the
 // workbench into view, so the result is what you are looking at. A no-op on
 // wide screens, where both panes are on screen at once.
@@ -3362,15 +3369,18 @@ function wire() {
     b.onclick = () => setFilter(b.dataset.filter);
 
   // The on-ramp: newcomers land on the first tutorial step, veterans on the
-  // first highlight -- each also switching the filter so the neighbours show.
+  // first highlight -- each also switching the filter so the neighbours show,
+  // and unfolding the library so that switch is visible on a small screen.
   $("ob-new").onclick = (e) => {
     e.preventDefault();
+    expandLibrary();
     setFilter("tutorial");
     const ex = allExamples().find((x) => x.tutorial);
     if (ex) selectExample(ex);
   };
   $("ob-best").onclick = (e) => {
     e.preventDefault();
+    expandLibrary();
     setFilter("highlights");
     const ex = allExamples().find((x) => x.highlight);
     if (ex) selectExample(ex);
@@ -3389,8 +3399,7 @@ function wire() {
     show($("helpers-view"), side === "helpers");
     show($("dicts-view"), side === "dicts");
     // Reopen the pane so the tab you just chose is not hidden behind a collapse.
-    $("left").classList.remove("lib-collapsed");
-    $("libtoggle").setAttribute("aria-expanded", "true");
+    expandLibrary();
   };
 
   $("adddict").onclick = () => {
