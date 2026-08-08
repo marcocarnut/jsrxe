@@ -116,8 +116,9 @@ function spoken(s) {
              :                          t("spokenBitMore");
 
   let word = table[g];
-  // Portuguese pluralises the -ão scale words; "mil" and English do not.
-  if (lang === "pt" && nice !== 1 && word.endsWith("ão"))
+  // Portuguese pluralises the -ão scale words at two and above (1,5 milhão
+  // stays singular); "mil" and English never change.
+  if (lang === "pt" && nice >= 2 && word.endsWith("ão"))
     word = word.slice(0, -2) + "ões";
 
   const mantStr = Number.isInteger(nice) ? String(nice) : dec(nice, 1);
@@ -126,13 +127,15 @@ function spoken(s) {
 
 // A non-negative integer (as a decimal string) named the way a person says it:
 // "342", "13.8 billion", "5.4 duodecillion". Past the naming table it degrades
-// to a power of ten. Like spoken() but plain, for composing time phrases.
-function fmtScale(nStr) {
+// to a power of ten. Returns whether the scale word is a "big" one -- milhão
+// and up -- because Portuguese links those to a following noun with "de" and
+// pluralises them, where "mil" and bare numbers do neither.
+function scaledNumber(nStr) {
   const d = nStr.length;
   const g = Math.floor((d - 1) / 3);
-  if (g < 1) return group(nStr);                 // under a thousand: exact
+  if (g < 1) return { str: group(nStr), big: false };      // under a thousand
   const table = SCALES[lang] || SCALES.en;
-  if (g >= table.length) return "10^" + (d - 1);  // beyond names
+  if (g >= table.length) return { str: "10^" + (d - 1), big: false };
   const intLen = d - 3 * g;
   const head = nStr.slice(0, Math.min(d, intLen + 3));
   const mant = Number(head) / Math.pow(10, head.length - intLen);
@@ -140,18 +143,38 @@ function fmtScale(nStr) {
              : mant >= 10  ? Math.round(mant * 10) / 10
              :               Math.round(mant * 100) / 100;
   const mantStr = Number.isInteger(nice) ? String(nice) : dec(nice, nice >= 10 ? 1 : 2);
-  return `${mantStr} ${table[g]}`;
+  let word = table[g];
+  const big = g >= 2;                              // milhão and up
+  if (lang === "pt" && big && nice >= 2 && word.endsWith("ão"))
+    word = word.slice(0, -2) + "ões";             // milhão -> milhões
+  return { str: `${mantStr} ${word}`, big };
+}
+
+// Join a scaled number to the noun it counts, with the Portuguese "de" that
+// milhão and up require: "173 nonilhões de anos", but "173 mil anos" and
+// "342 anos" and, in English, always a plain space.
+function scaledPhrase(nStr, noun) {
+  const { str, big } = scaledNumber(nStr);
+  return str + (lang === "pt" && big ? " de " : " ") + noun;
 }
 
 // A small count with one optional decimal, in the language's decimal mark.
 function num1(x) { return Number.isInteger(x) ? String(x) : dec(x, 1); }
+
+// Time-unit names carry both forms as "singular|plural"; pick by the value so
+// it never reads "1 segundos" or "1 days".
+function unitName(key, value) {
+  const [s, p] = t(key).split("|");
+  return value === 1 ? s : p;
+}
 
 // How the speed slider reads: 10^e visits a second, said as "N per second",
 // with the clean powers annotated by the time between visits.
 function rateLabel(e) {
   const per = { 3: "millisecond", 6: "microsecond", 9: "nanosecond",
                 12: "picosecond", 15: "femtosecond" };
-  let label = `${fmtScale((10n ** BigInt(e)).toString())} ${t("perSecond")}`;
+  // "per second" is elliptical (one per second of visits), so no "de" here.
+  let label = `${scaledNumber((10n ** BigInt(e)).toString()).str} ${t("perSecond")}`;
   if (per[e]) label += ` (${t("timeOnePer")} ${t("period_" + per[e])})`;
   return label;
 }
@@ -166,13 +189,22 @@ function durationBig(seconds) {
     ["timeHours", 3600n, 86400n], ["timeDays", 86400n, 2629800n],
     ["timeMonths", 2629800n, YEAR]
   ];
-  for (const [key, unit, next] of rungs)
-    if (seconds < next) return `${num1(Number(seconds * 10n / unit) / 10)} ${t(key)}`;
+  const say = (key, unit) => {
+    const v = Number(seconds * 10n / unit) / 10;
+    return `${num1(v)} ${unitName(key, v)}`;
+  };
+  for (const [key, unit, next] of rungs) if (seconds < next) return say(key, unit);
   const years = seconds / YEAR;
-  if (years < 100n)     return `${num1(Number(seconds * 10n / YEAR) / 10)} ${t("timeYears")}`;
-  if (years < 1000n)    return `${num1(Number(years * 10n / 100n) / 10)} ${t("timeCenturies")}`;
-  if (years < 1000000n) return `${num1(Number(years * 10n / 1000n) / 10)} ${t("timeMillennia")}`;
-  return `${fmtScale(years.toString())} ${t("timeYears")}`;
+  if (years < 100n)     return say("timeYears", YEAR);
+  const sayY = (key, per) => {
+    const v = Number(years * 10n / per) / 10;
+    return `${num1(v)} ${unitName(key, v)}`;
+  };
+  if (years < 1000n)    return sayY("timeCenturies", 100n);
+  if (years < 1000000n) return sayY("timeMillennia", 1000n);
+  // Beyond a million years the noun always follows "de" in Portuguese, so it is
+  // plural regardless -- "1 milhão de anos".
+  return scaledPhrase(years.toString(), t("timeYears").split("|")[1]);
 }
 
 // The spoken simplification: how the span compares to spans a person has a feel
@@ -181,9 +213,9 @@ function durationTip(seconds) {
   const YEAR = 31557600n;
   const years = seconds / YEAR;
   const UNIVERSE = 13790000000n, EARTH = 4543000000n, HISTORY = 5000n;
-  if (years >= UNIVERSE) return `≈ ${fmtScale((years / UNIVERSE).toString())} ${t("timeUniverse")}`;
-  if (years >= EARTH)    return `≈ ${fmtScale((years / EARTH).toString())} ${t("timeEarth")}`;
-  if (years >= HISTORY)  return `≈ ${fmtScale((years / HISTORY).toString())} ${t("timeHistory")}`;
+  if (years >= UNIVERSE) return "≈ " + scaledPhrase((years / UNIVERSE).toString(), t("timeUniverse"));
+  if (years >= EARTH)    return "≈ " + scaledPhrase((years / EARTH).toString(), t("timeEarth"));
+  if (years >= HISTORY)  return "≈ " + scaledPhrase((years / HISTORY).toString(), t("timeHistory"));
   return "";
 }
 
