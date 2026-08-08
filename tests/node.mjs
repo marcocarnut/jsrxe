@@ -94,6 +94,18 @@ e.key({ key: "", count: "9" });
 check("  clearing the key restores index order", "ax,ay,az",
       value(e.rows({ from: "0", n: 3 })));
 
+// A keyed page must never run past the set. Asking for fifty rows of a
+// three-member set once spun forever: the map was handed indices past the
+// domain and cycle-walked values the set does not contain. It must return
+// exactly the three, and promptly.
+e.parse({ pattern: "cat|dog|fish", flags: "" });
+e.key({ key: "hello", count: "3" });
+r = e.rows({ from: "0", n: 50 });
+check("a keyed page stops at the end of a small set", 3, r.rows.length);
+check("  and still visits every member", "cat,dog,fish",
+      r.rows.map((x) => x.value).sort().join(","));
+e.key({ key: "", count: "3" });
+
 // --- the empty string is a member and must survive as one
 e.parse({ pattern: "a?", flags: "" });
 check("the empty string round-trips", "|a",

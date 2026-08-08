@@ -52,6 +52,7 @@ export function makeEngine(Module, {
 
   let rxe = 0;        // the parsed expression
   let perm = 0;       // the keyed permutation, when one is set
+  let permCount = null; // its domain, so a keyed page never runs past the set
   let transform = null; // the example's code, applied to each element
 
   // Take ownership of a char* the library allocated.
@@ -79,7 +80,7 @@ export function makeEngine(Module, {
     return out;
   };
 
-  const clearPerm = () => { if (perm) { api.permRelease(perm); perm = 0; } };
+  const clearPerm = () => { if (perm) { api.permRelease(perm); perm = 0; } permCount = null; };
   const clearRxe = () => { clearPerm(); if (rxe) { api.release(rxe); rxe = 0; } };
 
   // Where an index actually lands. With a shuffle key the two differ: the key
@@ -140,6 +141,7 @@ export function makeEngine(Module, {
       clearPerm();
       if (!key || !count || count === "0") return { ok: true, active: false };
       perm = api.permNew(count, key);
+      if (perm) permCount = BigInt(count);
       return { ok: true, active: !!perm };
     },
 
@@ -153,6 +155,10 @@ export function makeEngine(Module, {
       let index = BigInt(from);
       for (let i = 0; i < n; i++) {
         if (index < 0n) break;
+        // With a key the walk is a permutation of [0, count); there is nothing
+        // beyond it, and asking the map for an out-of-range index is exactly
+        // what used to spin.
+        if (perm && permCount !== null && index >= permCount) break;
         if (api.seek(rxe, targetFor(index.toString()))) break;
         rows.push(withTransform(index.toString(), currentElement()));
         index += 1n;
