@@ -161,6 +161,38 @@ try {
     }
   }
 
+  // Share: the state encodes into the URL hash and restores on reload.
+  let share = null;
+  if (app && !app.err) {
+    await cdp.send("Runtime.evaluate", { expression: `(function(){
+      const p = document.getElementById("pattern");
+      p.value = "[a-c]{2}"; p.dispatchEvent(new Event("input", { bubbles: true }));
+    })()` });
+    await sleep(500);
+    await cdp.send("Runtime.evaluate", { expression: `(function(){
+      const k = document.getElementById("key");
+      k.value = "zz"; k.dispatchEvent(new Event("input", { bubbles: true }));
+    })()` });
+    await sleep(500);
+    await cdp.send("Runtime.evaluate", { expression: `document.getElementById("share").click()` });
+    await sleep(200);
+    const u = await cdp.send("Runtime.evaluate", { expression: `location.href`, returnByValue: true });
+    const url = u.result?.result?.value || "";
+    if (url.includes("#s=")) {
+      await cdp.send("Page.navigate", { url });
+      for (let i = 0; i < 100; i++) {
+        await sleep(100);
+        const r = await cdp.send("Runtime.evaluate", {
+          expression: `JSON.stringify({ p: document.getElementById("pattern").value,
+                                        k: document.getElementById("key").value })`,
+          returnByValue: true
+        });
+        const v = JSON.parse(r.result?.result?.value || "null");
+        if (v && v.p) { share = v; break; }
+      }
+    }
+  }
+
   // And the single-file build, from a file:// URL, which is the whole reason
   // it exists: no server, no worker, no fetch of a .wasm.
   let bundle = null;
@@ -229,6 +261,16 @@ try {
     if (!ok) code = 1;
   } else if (app && !app.err) {
     console.log("onboard: 'start here' never opened the tutorial");
+    code = 1;
+  }
+
+  if (share) {
+    const ok = share.p === "[a-c]{2}" && share.k === "zz";
+    console.log(ok ? "share: the view round-trips through the URL"
+                   : "share: FAILED " + JSON.stringify(share));
+    if (!ok) code = 1;
+  } else if (app && !app.err) {
+    console.log("share: state never round-tripped through the URL");
     code = 1;
   }
 

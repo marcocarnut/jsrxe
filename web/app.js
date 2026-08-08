@@ -349,6 +349,7 @@ function applyLanguage() {
     el.title = t(el.dataset.ttip);
   $("code").placeholder = t("codePlace");
   $("codetoggle").title = t("codeToggle");
+  setShareLabel();
   renderLibrary();
   renderHelpers();
   renderDicts();
@@ -874,6 +875,90 @@ function setFrom(v) {
   loadRows();
 }
 
+/* ------------------------------------------------------------------- share */
+
+// The workbench state, small keys, defaults omitted, so a bare pattern shares
+// as a short link. 'from' is a decimal string because it can be a bignum.
+function currentShareState() {
+  const s = { p: $("pattern").value };
+  const code = $("code").value.trim(), key = $("key").value.trim();
+  if (code) s.c = code;
+  if (key) s.k = key;
+  if (state.from !== 0n) s.f = state.from.toString();
+  if (state.per !== 50) s.n = state.per;
+  if (!state.zeroBased) s.z = false;
+  return s;
+}
+
+function applyShareState(s) {
+  if (typeof s.p === "string") $("pattern").value = s.p;
+  $("code").value = typeof s.c === "string" ? s.c : "";
+  setCodeVisible(!!$("code").value); refreshCodeToggle();
+  $("key").value = typeof s.k === "string" ? s.k : "";
+  state.per = (typeof s.n === "number" && s.n >= 1 && s.n <= 1000) ? s.n : 50;
+  $("per").value = String(state.per);
+  state.zeroBased = s.z !== false;
+  $("zero").checked = state.zeroBased;
+  try { state.from = BigInt(s.f || "0"); } catch { state.from = 0n; }
+  if (state.from < 0n) state.from = 0n;
+  $("from").value = (state.from + (state.zeroBased ? 0n : 1n)).toString();
+  state.selected = null;
+  renderNote(); renderLibrary();
+}
+
+// UTF-8-safe, URL-safe base64: patterns and code hold arbitrary text.
+function encodeState(o) {
+  const bytes = new TextEncoder().encode(JSON.stringify(o));
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function decodeState(b64) {
+  const s = b64.replace(/-/g, "+").replace(/_/g, "/");
+  const bytes = Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+// Build the sharable URL and put it in the address bar (without adding a
+// history entry), so it is also copyable from there if all else fails.
+function shareUrl() {
+  const url = location.href.replace(/#.*$/, "") + "#s=" + encodeState(currentShareState());
+  history.replaceState(null, "", url);
+  return url;
+}
+
+function readShareHash() {
+  const h = location.hash || "";
+  if (!h.startsWith("#s=")) return null;
+  try { return decodeState(h.slice(3)); } catch { return null; }
+}
+
+function setShareLabel() {
+  $("share").textContent = navigator.share ? t("share") : t("shareCopy");
+}
+
+let flashTimer = null;
+function flashCopied() {
+  const b = $("share");
+  b.textContent = t("shareCopied");
+  b.classList.add("done");
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { b.classList.remove("done"); setShareLabel(); }, 1600);
+}
+
+// Native share sheet where there is one (phones, and some desktops); a
+// clipboard copy otherwise. Either way the URL is in the address bar.
+async function doShare() {
+  if (!$("pattern").value) return;
+  const url = shareUrl();
+  if (navigator.share) {
+    try { await navigator.share({ title: "rxenum", url }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }  // cancelled; do nothing
+  }
+  try { await navigator.clipboard.writeText(url); } catch { /* address bar has it */ }
+  flashCopied();
+}
+
 function wire() {
   $("lang").innerHTML = Object.entries(LANGS)
     .map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
@@ -939,6 +1024,7 @@ function wire() {
     const r = await call("random", { count: state.count, n: state.per });
     renderRows(r.rows || []);
   };
+  $("share").onclick = doShare;
 
   $("slider").oninput = () => {
     if (state.slider === "length") {
@@ -1105,7 +1191,9 @@ function saveFromBox() {
 async function onReady() {
   renderHelpers();
   await classifyExamples();
-  if ($("pattern").value) reparse();
+  const shared = readShareHash();
+  if (shared) { applyShareState(shared); reparse(); }
+  else if ($("pattern").value) reparse();
   else selectExample(BUILTIN[0]);
 }
 

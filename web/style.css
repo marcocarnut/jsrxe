@@ -256,6 +256,10 @@ main {
 .nav button:hover:not(:disabled) { border-color: var(--accent);
                                    color: var(--accent); }
 .nav button:disabled { opacity: .4; cursor: default; }
+/* Share sits apart at the end -- it acts on the whole view, not the position. */
+#share { margin-left: auto; background: var(--accent-bg); color: var(--accent);
+         border-color: var(--accent); }
+#share.done { background: var(--accent); color: var(--panel); }
 
 #bookmarks { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 .6rem;
              align-items: center; }

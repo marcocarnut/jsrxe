@@ -120,6 +120,9 @@ export const STRINGS = {
     randomHint:       "-r",
     randomNeedsFinite:"Random choice needs a finite set.",
     go:               "Go",
+    share:            "Share",
+    shareCopy:        "Copy link",
+    shareCopied:      "Link copied",
 
     indexCol:         "index",
     valueCol:         "element",
@@ -266,6 +269,9 @@ export const STRINGS = {
     randomHint:       "-r",
     randomNeedsFinite:"A escolha aleatória precisa de um conjunto finito.",
     go:               "Ir",
+    share:            "Compartilhar",
+    shareCopy:        "Copiar link",
+    shareCopied:      "Link copiado",
 
     indexCol:         "índice",
     valueCol:         "elemento",
