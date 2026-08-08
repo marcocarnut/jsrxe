@@ -57,7 +57,7 @@ export const BUILTIN = [
   {
     id: "one-word",
     tutorial: true,
-    pattern: "hello",
+    pattern: { en: "hello", pt: "olá" },
     flags: "",
     name: { en: "A single word", pt: "Uma única palavra" },
     note: {
@@ -65,14 +65,14 @@ export const BUILTIN = [
           "this whole set is still just one string: hello. Length is not the " +
           "same as size -- five characters, one member.",
       pt: "Caracteres comuns representam a si mesmos e ficam lado a lado, " +
-          "então este conjunto ainda é uma só cadeia: hello. Comprimento não " +
-          "é o mesmo que tamanho -- cinco caracteres, um membro."
+          "então este conjunto ainda é uma só cadeia: olá. Comprimento não é o " +
+          "mesmo que tamanho -- várias letras, um único membro."
     }
   },
   {
     id: "choice",
     tutorial: true,
-    pattern: "cat|dog|fish",
+    pattern: { en: "cat|dog|fish", pt: "gato|cachorro|peixe" },
     flags: "",
     name: { en: "A choice", pt: "Uma escolha" },
     note: {
@@ -85,7 +85,10 @@ export const BUILTIN = [
   {
     id: "weekdays",
     tutorial: true,
-    pattern: "(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day",
+    pattern: {
+      en: "(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day",
+      pt: "(segunda|terça|quarta|quinta|sexta)-feira"
+    },
     flags: "",
     name: { en: "A subexpression", pt: "Uma subexpressão" },
     note: {
@@ -94,9 +97,9 @@ export const BUILTIN = [
           "the shared 'day' is written once: seven weekdays, not seven copies " +
           "of the word.",
       pt: "Os parênteses agrupam um pedaço do padrão para que um operador se " +
-          "aplique a ele inteiro. Aqui a escolha de sete prefixos é agrupada " +
-          "e o 'day' comum é escrito uma vez só: sete dias da semana, não sete " +
-          "cópias da palavra."
+          "aplique a ele inteiro. Aqui a escolha de cinco prefixos é agrupada " +
+          "e o '-feira' comum é escrito uma vez só: os cinco dias úteis, não " +
+          "cinco cópias da palavra."
     }
   },
   {
@@ -182,18 +185,19 @@ export const BUILTIN = [
   {
     id: "coin",
     tutorial: true,
-    pattern: "[HT]{10}",
+    pattern: { en: "[HT]{10}", pt: "[Cc]{10}" },
     flags: "",
     name: { en: "Ten coin flips", pt: "Dez lançamentos de moeda" },
     note: {
-      en: "Heads or tails, ten times over: 2^10 = 1,024 sequences. Every " +
-          "extra flip doubles the set -- the very same doubling that makes the " +
-          "eight-character password set enormous. You have arrived at real " +
-          "keyspaces.",
-      pt: "Cara ou coroa, dez vezes seguidas: 2^10 = 1.024 sequências. Cada " +
-          "lançamento a mais dobra o conjunto -- a mesmíssima duplicação que " +
-          "torna enorme o conjunto de senhas de oito caracteres. Você chegou " +
-          "aos espaços de chaves de verdade."
+      en: "Heads or tails, ten times over (H and T): 2^10 = 1,024 sequences. " +
+          "Every extra flip doubles the set -- the very same doubling that " +
+          "makes the eight-character password set enormous. You have arrived " +
+          "at real keyspaces.",
+      pt: "Cara ou coroa, dez vezes seguidas (c de cara, C de Coroa, que a " +
+          "expressão distingue por serem maiúscula e minúscula): 2^10 = 1.024 " +
+          "sequências. Cada lançamento a mais dobra o conjunto -- a mesmíssima " +
+          "duplicação que torna enorme o conjunto de senhas de oito " +
+          "caracteres. Você chegou aos espaços de chaves de verdade."
     }
   },
   {
@@ -668,17 +672,36 @@ export const BUILTIN = [
   },
   {
     id: "cards",
-    pattern: "[2-9TJQKA][SHDC]",
+    pattern: {
+      en: "(Ace|[2-9]|10|Jack|Queen|King) of (Spades|Clubs|Hearts|Diamonds)",
+      pt: "(Ás|[2-9]|10|Valete|Dama|Rei) de (Espadas|Paus|Copas|Ouros)"
+    },
     flags: "",
     name: { en: "A deck of cards", pt: "Um baralho" },
     note: {
-      en: "Fifty-two: thirteen ranks times four suits. T is ten; S, H, D, C " +
-          "are spades, hearts, diamonds and clubs. Small enough to see whole, " +
-          "like the chessboard.",
-      pt: "Cinquenta e duas: treze valores vezes quatro naipes. T é o dez; S, " +
-          "H, D, C são espadas, copas, ouros e paus. Pequeno o bastante para " +
-          "ver inteiro, como o tabuleiro de xadrez."
-    }
+      en: "Fifty-two, written out in full: thirteen ranks by four suits. In " +
+          "plain index order it comes out sorted, the Ace of Spades first. " +
+          "Each bookmark carries a shuffle key -- a keyed permutation reorders " +
+          "the whole deck without ever repeating or losing a card, and returns " +
+          "to the top, so you can deal from a shuffle you can name and come " +
+          "back to. That is what a key does that picking at random cannot.",
+      pt: "Cinquenta e duas, escritas por extenso: treze valores por quatro " +
+          "naipes. Em ordem de índice sai ordenado, o Ás de Espadas primeiro. " +
+          "Cada marcador leva uma chave de embaralhamento -- uma permutação " +
+          "com chave reordena o baralho inteiro sem nunca repetir nem perder " +
+          "uma carta, e volta ao topo, para você dar as cartas de um embaralho " +
+          "que pode nomear e ao qual pode voltar. É o que uma chave faz e que " +
+          "escolher ao acaso não faz."
+    },
+    bookmarks: [
+      { name: { en: "in order", pt: "em ordem" }, index: "0" },
+      { name: { en: "shuffle: riffle", pt: "embaralho: riffle" },
+        index: "0", key: "riffle" },
+      { name: { en: "shuffle: overhand", pt: "embaralho: cascata" },
+        index: "0", key: "overhand" },
+      { name: { en: "shuffle: casino", pt: "embaralho: cassino" },
+        index: "0", key: "casino" }
+    ]
   },
   {
     id: "tictactoe",

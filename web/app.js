@@ -172,13 +172,32 @@ function attachTip(el, getter) {
   el.addEventListener("mouseleave", () => { tip.hidden = true; });
 }
 
+// A member arrives as a byte string, one character per byte, because the
+// library counts and seeks in bytes and knows nothing of Unicode. When those
+// bytes happen to be valid UTF-8 -- as an accented Portuguese literal is --
+// decode them so the text reads correctly; a genuinely binary member is not
+// valid UTF-8 and keeps its raw bytes. Nothing here changes what the library
+// enumerates, only how the same bytes are shown.
+function decodeMember(s) {
+  let hi = false;
+  for (let i = 0; i < s.length; i++)
+    if (s.charCodeAt(i) > 127) { hi = true; break; }
+  if (!hi) return s;                       // pure ASCII, nothing to decode
+  try {
+    return new TextDecoder("utf-8", { fatal: true })
+             .decode(Uint8Array.from(s, (c) => c.charCodeAt(0)));
+  } catch {
+    return s;                              // not UTF-8: show the raw bytes
+  }
+}
+
 // Members can hold any byte, including control characters. Render those
 // visibly rather than letting them disappear into the markup.
 function renderValue(s) {
   if (s === "") return `<span class="dim">${t("emptyString")}</span>`;
   let out = "";
-  for (const ch of s) {
-    const c = ch.charCodeAt(0);
+  for (const ch of decodeMember(s)) {
+    const c = ch.codePointAt(0);
     if (c < 32 || c === 127) out += `<span class="ctrl">\\x${c.toString(16).padStart(2, "0")}</span>`;
     else if (ch === "&") out += "&amp;";
     else if (ch === "<") out += "&lt;";
@@ -210,6 +229,16 @@ function applyLanguage() {
   renderCount();
   renderOrder();
   renderRows(lastRows);
+  // A selected example whose regex has a language variant follows the language:
+  // swap the pattern text and re-read from the top.
+  const sel = state.selected &&
+              allExamples().find((e) => e.id === state.selected);
+  if (sel && typeof sel.pattern !== "string") {
+    const inline = sel.flags ? "(?" + sel.flags + ")" : "";
+    $("pattern").value = inline + examplePattern(sel);
+    $("from").value = "0"; state.from = 0n;
+    reparse();
+  }
 }
 
 /* --------------------------------------------------------- example library */
@@ -230,6 +259,16 @@ function exampleFamily(ex) {
 function exampleNote(ex) {
   if (!ex.note) return "";
   return typeof ex.note === "string" ? ex.note : (ex.note[lang] || ex.note.en);
+}
+
+// The regex itself can have language variants, like the note: an example whose
+// members are English words reads wrong in Portuguese, so it carries a
+// translated pattern. The library stays byte-based -- these are accented
+// literals, which it handles as byte sequences -- and only the display decodes
+// them (see decodeMember).
+function examplePattern(ex) {
+  return typeof ex.pattern === "string" ? ex.pattern
+                                        : (ex.pattern[lang] || ex.pattern.en);
 }
 
 // Which bucket an example goes in. The library is asked rather than the text
@@ -271,7 +310,7 @@ async function classifyExamples() {
   const list = allExamples().filter((e) => !classified.has(e.id));
   if (!list.length) return;
   const r = await call("classify",
-                       { patterns: list.map((e) => ({ id: e.id, pattern: e.pattern })) });
+                       { patterns: list.map((e) => ({ id: e.id, pattern: examplePattern(e) })) });
   for (const c of r.classified || []) classified.set(c.id, c.infinite);
   renderLibrary();
 }
@@ -287,7 +326,7 @@ function renderLibrary() {
     const family = exampleFamily(ex);
     if (q && !name.toLowerCase().includes(q) &&
         !(family || "").toLowerCase().includes(q) &&
-        !ex.pattern.toLowerCase().includes(q)) continue;
+        !examplePattern(ex).toLowerCase().includes(q)) continue;
 
     // A run of examples sharing a family gets one heading, and its members
     // are shown indented beneath it: two ways of the same thing -- every CPF
@@ -311,7 +350,7 @@ function renderLibrary() {
           `<button class="del" title="${t("deleteOne")}">&times;</button>`
         : "");
     li.querySelector(".nm").textContent = name;
-    li.querySelector("code").textContent = ex.pattern;
+    li.querySelector("code").textContent = examplePattern(ex);
     // Marks to the right of the name, so the list says what the title would
     // otherwise have to: infinite sets, and examples that carry code.
     const badges = li.querySelector(".badges");
@@ -408,7 +447,7 @@ function selectExample(ex) {
   // Flags are expressed inline now, so an older example that still carries a
   // 'flags' field has it folded onto the front of the pattern as (?...).
   const inline = ex.flags ? "(?" + ex.flags + ")" : "";
-  $("pattern").value = inline + ex.pattern;
+  $("pattern").value = inline + examplePattern(ex);
   $("from").value = "0";
   $("key").value = "";
   $("code").value = ex.code || "";
@@ -597,8 +636,9 @@ function currentBookmarks() {
   const mfam = state.selected ? (marks[state.selected] || []) : [];
   return built.map((b) => ({
     name: typeof b.name === "string" ? b.name : (b.name[lang] || b.name.en),
-    index: b.index, own: false
-  })).concat(mfam.map((b) => ({ name: b.name, index: b.index, own: true })));
+    index: b.index, key: b.key || "", own: false
+  })).concat(mfam.map((b) =>
+    ({ name: b.name, index: b.index, key: b.key || "", own: true })));
 }
 
 function renderBookmarks() {
@@ -606,15 +646,16 @@ function renderBookmarks() {
   const list = currentBookmarks();
   const canAdd = state.ok && !!state.selected;
   let html = list.map((b, i) =>
-    `<span class="mark"><button class="markgo" data-i="${i}">` +
-    `${escapeAttr(b.name)}</button>` +
+    `<span class="mark ${b.key ? "keyed" : ""}"><button class="markgo" data-i="${i}"` +
+    (b.key ? ` title="${escapeAttr(t("bmWith") + " " + b.key)}"` : "") +
+    `>${escapeAttr(b.name)}</button>` +
     (b.own ? `<button class="markdel" data-i="${i}" title="${t("deleteOne")}">&times;</button>` : "") +
     `</span>`).join("");
   if (canAdd)
     html += `<button id="markadd" title="${t("addBookmark")}">&#9733; +</button>`;
   box.innerHTML = html;
   for (const b of box.querySelectorAll(".markgo"))
-    b.onclick = () => { const bm = list[+b.dataset.i]; if (bm) jumpToIndex(bm.index); };
+    b.onclick = () => { const bm = list[+b.dataset.i]; if (bm) applyBookmark(bm); };
   for (const b of box.querySelectorAll(".markdel"))
     b.onclick = () => { deleteBookmark(list[+b.dataset.i]); };
   const add = $("markadd");
@@ -628,10 +669,23 @@ function jumpToIndex(index) {
   setFrom(v < 0n ? 0n : v);
 }
 
+// A bookmark is a position in an ordering, and the ordering is the shuffle key,
+// so applying one sets the key first and then jumps. With no key it lands in
+// plain index order -- the way back from any shuffle.
+async function applyBookmark(bm) {
+  const want = bm.key || "";
+  if ($("key").value !== want) {
+    $("key").value = want;
+    await applyKey();
+  }
+  jumpToIndex(bm.index);
+}
+
 function deleteBookmark(bm) {
   if (!state.selected || !bm || !bm.own) return;
   marks[state.selected] = (marks[state.selected] || [])
-    .filter((m) => !(m.name === bm.name && m.index === bm.index));
+    .filter((m) => !(m.name === bm.name && m.index === bm.index &&
+                     (m.key || "") === (bm.key || "")));
   localStorage.setItem(STORE_MARKS, JSON.stringify(marks));
   renderBookmarks();
 }
@@ -642,6 +696,10 @@ function openBookmarkBox() {
   // The index shown is the one the reader is looking at, in their numbering.
   $("bmindex").textContent =
     group((state.from + (state.zeroBased ? 0n : 1n)).toString());
+  // A bookmark remembers the shuffle key in force, so show which one it keeps.
+  const key = $("key").value.trim();
+  show($("bmkeyline"), !!key);
+  $("bmkey").textContent = key;
   $("bmbox").showModal();
 }
 
@@ -801,9 +859,12 @@ function wire() {
     if ($("bmbox").returnValue !== "save") return;
     const name = $("bmname").value.trim();
     if (!name || !state.selected) return;
-    // Stored as a zero-based index, whatever numbering was on screen.
+    // Stored as a zero-based index, whatever numbering was on screen, together
+    // with the shuffle key it belongs to so the same element comes back.
     const idx = (state.from).toString();
-    (marks[state.selected] = marks[state.selected] || []).push({ name, index: idx });
+    const bkey = $("key").value.trim();
+    (marks[state.selected] = marks[state.selected] || [])
+      .push({ name, index: idx, key: bkey });
     localStorage.setItem(STORE_MARKS, JSON.stringify(marks));
     renderBookmarks();
   });
