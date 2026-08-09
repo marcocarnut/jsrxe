@@ -152,7 +152,13 @@
         <button id="next" data-t="next"></button>
         <button id="last" data-t="last"></button>
         <button id="random" data-t="random"></button>
-        <button id="share"></button>
+        <button id="export" class="iconbtn" data-ttip="exportBtn" aria-label="export">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 9.5 12 14l4.5-4.5"/><path d="M4 20h16"/></svg>
+        </button>
+        <button id="share" class="iconbtn" aria-label="share">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+        </button>
+        <span id="copied" class="copiedtip" hidden></span>
       </div>
 
       <div id="bookmarks"></div>
@@ -232,6 +238,26 @@
     <menu>
       <button value="cancel" data-t="addCancel"></button>
       <button value="save" data-t="addSave"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="exportbox">
+  <form id="exportform">
+    <h3 data-t="exportTitle"></h3>
+    <p class="dim" id="exportfrom"></p>
+    <label><span data-t="exportCount"></span>
+      <input id="exportcount" type="text" inputmode="numeric" required></label>
+    <label class="check"><input id="exportindex" type="checkbox">
+      <span data-t="exportIndex"></span></label>
+    <p class="warn" id="exportmem" hidden data-t="exportMem"></p>
+    <div id="exportrun" hidden>
+      <progress id="exportprog" max="100" value="0"></progress>
+      <p class="dim" id="exportstatus"></p>
+    </div>
+    <menu>
+      <button type="button" id="exportcancel" data-t="exportCancel"></button>
+      <button type="submit" id="exportgo" data-t="exportGo"></button>
     </menu>
   </form>
 </dialog>

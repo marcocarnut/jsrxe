@@ -281,10 +281,16 @@ main {
 .nav button:hover:not(:disabled) { border-color: var(--accent);
                                    color: var(--accent); }
 .nav button:disabled { opacity: .4; cursor: default; }
-/* Share sits apart at the end -- it acts on the whole view, not the position. */
-#share { margin-left: auto; background: var(--accent-bg); color: var(--accent);
-         border-color: var(--accent); }
+/* Export and share are icons, and sit apart at the end -- they act on the whole
+   view, not the current position. */
+.nav .iconbtn { padding: .3rem .5rem; display: inline-flex; align-items: center; }
+.nav .iconbtn svg { width: 18px; height: 18px; display: block; }
+#export { margin-left: auto; }
+#share { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
 #share.done { background: var(--accent); color: var(--panel); }
+.copiedtip { align-self: center; color: var(--accent); font-size: .82rem; }
+#exportrun { margin: .7rem 0 .2rem; }
+#exportprog { width: 100%; height: .7rem; }
 
 #bookmarks { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 .6rem;
              align-items: center; }
@@ -493,7 +499,13 @@ dialog menu button { background: var(--bg); color: var(--fg);
         <button id="next" data-t="next"></button>
         <button id="last" data-t="last"></button>
         <button id="random" data-t="random"></button>
-        <button id="share"></button>
+        <button id="export" class="iconbtn" data-ttip="exportBtn" aria-label="export">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 9.5 12 14l4.5-4.5"/><path d="M4 20h16"/></svg>
+        </button>
+        <button id="share" class="iconbtn" aria-label="share">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+        </button>
+        <span id="copied" class="copiedtip" hidden></span>
       </div>
 
       <div id="bookmarks"></div>
@@ -573,6 +585,26 @@ dialog menu button { background: var(--bg); color: var(--fg);
     <menu>
       <button value="cancel" data-t="addCancel"></button>
       <button value="save" data-t="addSave"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="exportbox">
+  <form id="exportform">
+    <h3 data-t="exportTitle"></h3>
+    <p class="dim" id="exportfrom"></p>
+    <label><span data-t="exportCount"></span>
+      <input id="exportcount" type="text" inputmode="numeric" required></label>
+    <label class="check"><input id="exportindex" type="checkbox">
+      <span data-t="exportIndex"></span></label>
+    <p class="warn" id="exportmem" hidden data-t="exportMem"></p>
+    <div id="exportrun" hidden>
+      <progress id="exportprog" max="100" value="0"></progress>
+      <p class="dim" id="exportstatus"></p>
+    </div>
+    <menu>
+      <button type="button" id="exportcancel" data-t="exportCancel"></button>
+      <button type="submit" id="exportgo" data-t="exportGo"></button>
     </menu>
   </form>
 </dialog>
@@ -927,6 +959,15 @@ const STRINGS = {
     share:            "Share",
     shareCopy:        "Copy link",
     shareCopied:      "Link copied",
+    exportBtn:        "Export to a file",
+    exportTitle:      "Export elements",
+    exportFrom:       "From index {i} onward, in the order shown.",
+    exportCount:      "How many",
+    exportIndex:      "Include the index column",
+    exportMem:        "Your browser can't stream to a file, so this is built in memory first — a very large count may freeze the tab. That's your call.",
+    exportProgress:   "Exported {done} of {total}",
+    exportGo:         "Export",
+    exportCancel:     "Cancel",
 
     indexCol:         "index",
     valueCol:         "element",
@@ -1077,6 +1118,15 @@ const STRINGS = {
     share:            "Compartilhar",
     shareCopy:        "Copiar link",
     shareCopied:      "Link copiado",
+    exportBtn:        "Exportar para arquivo",
+    exportTitle:      "Exportar elementos",
+    exportFrom:       "A partir do índice {i}, na ordem exibida.",
+    exportCount:      "Quantos",
+    exportIndex:      "Incluir a coluna de índice",
+    exportMem:        "Seu navegador não grava direto em arquivo, então isto é montado na memória primeiro — uma quantidade muito grande pode travar a aba. A escolha é sua.",
+    exportProgress:   "Exportados {done} de {total}",
+    exportGo:         "Exportar",
+    exportCancel:     "Cancelar",
 
     indexCol:         "índice",
     valueCol:         "elemento",
@@ -3531,16 +3581,18 @@ function readShareHash() {
 }
 
 function setShareLabel() {
-  $("share").textContent = navigator.share ? t("share") : t("shareCopy");
+  // The button is an icon now; its label lives in the tooltip.
+  $("share").title = navigator.share ? t("share") : t("shareCopy");
 }
 
 let flashTimer = null;
 function flashCopied() {
-  const b = $("share");
-  b.textContent = t("shareCopied");
-  b.classList.add("done");
+  const c = $("copied");
+  c.textContent = t("shareCopied");
+  c.hidden = false;
+  $("share").classList.add("done");
   clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { b.classList.remove("done"); setShareLabel(); }, 1600);
+  flashTimer = setTimeout(() => { c.hidden = true; $("share").classList.remove("done"); }, 1600);
 }
 
 // Native share sheet where there is one (phones, and some desktops); a
@@ -3554,6 +3606,118 @@ async function doShare() {
   }
   try { await navigator.clipboard.writeText(url); } catch { /* address bar has it */ }
   flashCopied();
+}
+
+/* ------------------------------------------------------------------ export */
+
+// A run of members, from the current index onward, written to a file. The good
+// path streams straight to disk with the File System Access API, so the whole
+// export never sits in memory at once; Firefox and Safari lack it, so there we
+// build a Blob and download it, which the count field lets the user size (and,
+// if they insist, overrun). Members ride the same per-member cap as the page;
+// raise it with ?maxlen= for whole ones.
+
+let exportAbort = false;
+
+function openExportBox() {
+  if (!state.ok) return;
+  const off = state.zeroBased ? 0n : 1n;
+  $("exportfrom").textContent =
+    t("exportFrom").replace("{i}", group((state.from + off).toString()));
+  // Default to the rest of a finite set when that is a modest number, otherwise
+  // a round handful the user can raise.
+  let def = 100000n;
+  if (state.count) {
+    const remaining = BigInt(state.count) - state.from;
+    if (remaining > 0n && remaining < 1000000n) def = remaining;
+  }
+  $("exportcount").value = def.toString();
+  $("exportindex").checked = false;
+  $("exportmem").hidden = !!window.showSaveFilePicker;   // warn only on the Blob path
+  $("exportrun").hidden = true;
+  $("exportstatus").textContent = "";
+  $("exportgo").disabled = false;
+  $("exportbox").showModal();
+}
+
+// One member per line, index tab-prefixed when asked. Members can hold any
+// byte, so the line is written as raw bytes (one char = one byte), never
+// UTF-8 re-encoded -- exactly the bytes rxenum would print.
+function bytesForRows(rows, withIndex, off) {
+  let s = "";
+  for (const r of rows) {
+    if (withIndex) s += (BigInt(r.index) + off).toString() + "\t";
+    s += r.value + "\n";
+  }
+  const b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
+  return b;
+}
+
+function downloadBytes(parts, name) {
+  const url = URL.createObjectURL(new Blob(parts, { type: "text/plain" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function runExport() {
+  if (!state.ok) return;
+  let total;
+  try { total = BigInt(($("exportcount").value || "").replace(/[^0-9]/g, "") || "0"); }
+  catch { total = 0n; }
+  if (total <= 0n) return;
+  if (state.count) {                             // never walk past a finite set
+    const remaining = BigInt(state.count) - state.from;
+    if (remaining <= 0n) { $("exportbox").close(); return; }
+    if (total > remaining) total = remaining;
+  }
+  const withIndex = $("exportindex").checked;
+  const off = state.zeroBased ? 0n : 1n;
+
+  let writable = null, parts = null;
+  if (window.showSaveFilePicker) {
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: "rxenum-export.txt",
+        types: [{ description: "Text", accept: { "text/plain": [".txt"] } }]
+      });
+    } catch { return; }                          // user dismissed the picker
+    writable = await handle.createWritable();
+  } else {
+    parts = [];
+  }
+
+  exportAbort = false;
+  $("exportgo").disabled = true;
+  $("exportrun").hidden = false;
+  const prog = $("exportprog");
+  const BATCH = 512;
+  let done = 0n, from = state.from;
+  try {
+    while (done < total && !exportAbort) {
+      const want = total - done < BigInt(BATCH) ? Number(total - done) : BATCH;
+      const r = await call("rows", { from: from.toString(), n: want });
+      const rows = r.rows || [];
+      if (!rows.length) break;                   // reached the end
+      const bytes = bytesForRows(rows, withIndex, off);
+      if (writable) await writable.write(bytes);
+      else parts.push(bytes);
+      done += BigInt(rows.length);
+      from += BigInt(rows.length);
+      prog.value = Number((done * 1000n) / total) / 10;
+      $("exportstatus").textContent = t("exportProgress")
+        .replace("{done}", group(done.toString()))
+        .replace("{total}", group(total.toString()));
+    }
+  } finally {
+    if (writable) { try { await writable.close(); } catch { /* partial file kept */ } }
+  }
+  if (parts && !exportAbort) downloadBytes(parts, "rxenum-export.txt");
+  $("exportgo").disabled = false;
+  $("exportbox").close();
 }
 
 function wire() {
@@ -3618,6 +3782,9 @@ function wire() {
     renderRows(r.rows || [], !!r.overflow);
   };
   $("share").onclick = doShare;
+  $("export").onclick = openExportBox;
+  $("exportform").onsubmit = (e) => { e.preventDefault(); runExport(); };
+  $("exportcancel").onclick = () => { exportAbort = true; $("exportbox").close(); };
 
   $("slider").oninput = () => {
     if (state.slider === "length") {
