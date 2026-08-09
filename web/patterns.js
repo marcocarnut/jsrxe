@@ -797,16 +797,43 @@ export const BUILTIN = [
   {
     id: "megasena",
     family: { en: "Combinatorics", pt: "Combinatória" },
-    pattern: "([1-9]|[1-5][0-9]|60){{6}}",
+    pattern: "( 0[1-9]| [1-5][0-9]| 60){{6}}",
     flags: "",
     name: { en: "Mega-Sena tickets", pt: "Jogos da Mega-Sena" },
     note: {
       en: "Six numbers from 1 to 60, unordered: C(60,6) = 50,063,860 -- every " +
-          "possible Mega-Sena ticket. Open the time reveal on the size box to " +
-          "see how long buying them all would take.",
+          "possible Mega-Sena ticket. Each number carries its own space so the " +
+          "games read cleanly, two digits wide (there's a harmless leading " +
+          "space). Open the time reveal on the size box to see how long buying " +
+          "them all would take.",
       pt: "Seis números de 1 a 60, sem ordem: C(60,6) = 50.063.860 -- todo " +
-          "jogo possível da Mega-Sena. Abra a revelação de tempo na caixa do " +
-          "tamanho para ver quanto levaria comprar todos."
+          "jogo possível da Mega-Sena. Cada número traz seu próprio espaço, " +
+          "então os jogos se leem com clareza, dois dígitos de largura (sobra " +
+          "um espaço inofensivo no início). Abra a revelação de tempo na caixa " +
+          "do tamanho para ver quanto levaria comprar todos."
+    }
+  },
+  {
+    id: "keyed-shuffle",
+    highlight: true,
+    family: { en: "Combinatorics", pt: "Combinatória" },
+    pattern: "(?~secret:\\d{2})-\\d{2}",
+    flags: "",
+    name: { en: "Keyed shuffle of a field", pt: "Embaralhamento com chave" },
+    note: {
+      en: "'(?~key:...)' reorders a subexpression's set by a key. The left " +
+          "field visits all of 00-99 in a scrambled but reproducible order, " +
+          "while the right one counts up plainly beside it -- same 10,000 " +
+          "members, one field shuffled. Change 'secret' to any word and the " +
+          "left field reshuffles; it is format-preserving encryption in " +
+          "miniature. Only finite sets can be shuffled.",
+      pt: "'(?~chave:...)' reordena o conjunto de uma subexpressão por uma " +
+          "chave. O campo da esquerda percorre todos os 00-99 numa ordem " +
+          "embaralhada mas reproduzível, enquanto o da direita conta normalmente " +
+          "ao lado -- os mesmos 10.000 membros, um campo embaralhado. Troque " +
+          "'secret' por qualquer palavra e a esquerda se reembaralha; é cifra " +
+          "que preserva formato em miniatura. Só conjuntos finitos podem ser " +
+          "embaralhados."
     }
   },
   {
