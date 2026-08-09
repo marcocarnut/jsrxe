@@ -79,6 +79,22 @@ main {
 .dim { color: var(--dim); font-size: .87rem; }
 /* The playful over-cap nudge: warmer than .dim, calmer than .err. */
 .warn { color: var(--err); font-size: .87rem; margin-top: .4rem; opacity: .85; }
+/* A warning triangle that pulses to draw the eye, without the whole line
+   blinking (which is tiring to read). The icon carries the motion. */
+.warn::before {
+  content: "\26A0";           /* ⚠ */
+  display: inline-block;
+  margin-right: .45em;
+  font-weight: 700;
+  animation: warnpulse 1.3s ease-in-out infinite;
+}
+@keyframes warnpulse {
+  0%, 100% { opacity: 1;  transform: scale(1); }
+  50%      { opacity: .35; transform: scale(1.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .warn::before { animation: none; }
+}
 .big { font-family: var(--mono); font-size: 1.15rem; word-break: break-all;
        line-height: 1.35; }
 

@@ -353,6 +353,16 @@ function renderValue(s) {
 
 /* ------------------------------------------------------------------ i18n UI */
 
+// Switch language and re-render everything in it. Kept separate from the
+// selector's handler so a shared example link can pin its language too.
+function setLang(l) {
+  if (!LANGS[l]) return;
+  lang = l;
+  localStorage.setItem(STORE_LANG, lang);
+  $("lang").value = lang;
+  applyLanguage();
+}
+
 function applyLanguage() {
   t = makeT(lang);
   document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
@@ -920,12 +930,33 @@ function currentShareState() {
   if (state.from !== 0n) s.f = state.from.toString();
   if (state.per !== 50) s.n = state.per;
   if (!state.zeroBased) s.z = false;
+  // A link to an example carries its id and the language it was read in, so
+  // the receiver lands on the same example -- note, bookmarks and all -- and,
+  // for one whose regex differs by language (Powerball vs Mega-Sena), on the
+  // same variant. The pattern text rides along too, as a fallback for a link
+  // whose example no longer exists.
+  if (state.selected) { s.sel = state.selected; s.lang = lang; }
   return s;
 }
 
 function applyShareState(s) {
-  if (typeof s.p === "string") $("pattern").value = s.p;
-  $("code").value = typeof s.c === "string" ? s.c : "";
+  // An example link names an example and the language it was read in. Pin the
+  // language first (this also swaps in that language's regex via applyLanguage),
+  // then take the pattern from the live example so the link tracks the current
+  // definition. A link whose example has since vanished falls back to s.p.
+  const ex = (typeof s.sel === "string")
+    ? allExamples().find((e) => e.id === s.sel) : null;
+  if (ex) {
+    state.selected = ex.id;
+    if (typeof s.lang === "string" && LANGS[s.lang] && s.lang !== lang)
+      setLang(s.lang);
+    $("pattern").value = (ex.flags ? "(?" + ex.flags + ")" : "") + examplePattern(ex);
+    $("code").value = ex.code || "";
+  } else {
+    state.selected = null;
+    if (typeof s.p === "string") $("pattern").value = s.p;
+    $("code").value = typeof s.c === "string" ? s.c : "";
+  }
   setCodeVisible(!!$("code").value); refreshCodeToggle();
   $("key").value = typeof s.k === "string" ? s.k : "";
   state.per = (typeof s.n === "number" && s.n >= 1 && s.n <= 1000) ? s.n : 50;
@@ -935,7 +966,6 @@ function applyShareState(s) {
   try { state.from = BigInt(s.f || "0"); } catch { state.from = 0n; }
   if (state.from < 0n) state.from = 0n;
   $("from").value = (state.from + (state.zeroBased ? 0n : 1n)).toString();
-  state.selected = null;
   renderNote(); renderLibrary();
 }
 
@@ -996,11 +1026,7 @@ function wire() {
   $("lang").innerHTML = Object.entries(LANGS)
     .map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   $("lang").value = lang;
-  $("lang").onchange = () => {
-    lang = $("lang").value;
-    localStorage.setItem(STORE_LANG, lang);
-    applyLanguage();
-  };
+  $("lang").onchange = () => setLang($("lang").value);
 
   $("pattern").oninput = () => {
     state.selected = null; renderNote(); renderLibrary(); renderBookmarks();

@@ -797,15 +797,19 @@ export const BUILTIN = [
   {
     id: "megasena",
     family: { en: "Combinatorics", pt: "Combinatória" },
-    pattern: "( 0[1-9]| [1-5][0-9]| 60){{6}}",
+    pattern: {
+      en: "( 0[1-9]| [1-5][0-9]| 6[0-9]){{5}} \\+( 0[1-9]| 1[0-9]| 2[0-6])",
+      pt: "( 0[1-9]| [1-5][0-9]| 60){{6}}"
+    },
     flags: "",
-    name: { en: "Mega-Sena tickets", pt: "Jogos da Mega-Sena" },
+    name: { en: "Powerball tickets", pt: "Jogos da Mega-Sena" },
     note: {
-      en: "Six numbers from 1 to 60, unordered: C(60,6) = 50,063,860 -- every " +
-          "possible Mega-Sena ticket. Each number carries its own space so the " +
-          "games read cleanly, two digits wide (there's a harmless leading " +
-          "space). Open the time reveal on the size box to see how long buying " +
-          "them all would take.",
+      en: "Five white balls from 1 to 69, unordered, then one red Powerball " +
+          "from 1 to 26 -- set off with a '+' because it is drawn separately " +
+          "and may repeat a white number. C(69,5) x 26 = 292,201,338 plays, " +
+          "every possible Powerball ticket. Each number is two digits wide with " +
+          "its own space (there's a harmless leading one). Open the time reveal " +
+          "on the size box to see how long buying them all would take.",
       pt: "Seis números de 1 a 60, sem ordem: C(60,6) = 50.063.860 -- todo " +
           "jogo possível da Mega-Sena. Cada número traz seu próprio espaço, " +
           "então os jogos se leem com clareza, dois dígitos de largura (sobra " +
