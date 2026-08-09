@@ -77,6 +77,8 @@ main {
 .row { display: flex; gap: .9rem; flex-wrap: wrap; }
 .grow { flex: 1 1 16rem; }
 .dim { color: var(--dim); font-size: .87rem; }
+/* The playful over-cap nudge: warmer than .dim, calmer than .err. */
+.warn { color: var(--err); font-size: .87rem; margin-top: .4rem; opacity: .85; }
 .big { font-family: var(--mono); font-size: 1.15rem; word-break: break-all;
        line-height: 1.35; }
 

@@ -28,6 +28,20 @@ const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
 const STORE_ORIENT = "jsrxe.orient";
 
+// A member is trimmed on the page past this many bytes -- the DOM is happy
+// with a few kilobytes a row, not megabytes. The library could show far more;
+// this is the page being kind to the browser. ?maxlen= in the URL lifts it,
+// for anyone who means it, up to a ceiling that still cannot wedge the tab.
+const DEFAULT_MAX_MEMBER = 4096;
+const MAX_MEMBER_CEILING = 8 * 1024 * 1024;
+function readMaxMember() {
+  const raw = new URLSearchParams(location.search).get("maxlen");
+  if (raw === null) return DEFAULT_MAX_MEMBER;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_MAX_MEMBER;
+  return Math.min(n, MAX_MEMBER_CEILING);
+}
+
 // Language, in priority order: a ".pt-br." (or ".en.") tag in the page's file
 // name, so a translated copy can be shared by its URL and open in the right
 // language; then a choice saved from the selector; then the browser; then
@@ -49,7 +63,8 @@ let state = {
   ok: false, infinite: false, shortlex: false, count: null,
   from: 0n, per: 50, zeroBased: true, keyActive: false, filter: "all",
   selected: null, slider: "none", codeActive: false,
-  note: "", orderTip: "", sliderTip: "", countSpoken: "", timeTip: ""
+  note: "", orderTip: "", sliderTip: "", countSpoken: "", timeTip: "",
+  maxMember: readMaxMember()
 };
 
 let mine = [];
@@ -753,9 +768,19 @@ function renderOrder() {
 }
 
 let lastRows = [];
+let lastOverflow = false;
 
-function renderRows(rows) {
+// The playful nudge shown when a page came back trimmed. {n} is the current
+// cap, grouped, and {url} names the knob that lifts it.
+function tooBigMessage() {
+  return t("tooBig")
+    .replace("{n}", group(String(state.maxMember)))
+    .replace("{url}", "?maxlen=");
+}
+
+function renderRows(rows, overflow = lastOverflow) {
   lastRows = rows;
+  lastOverflow = overflow;
   const body = $("results").querySelector("tbody");
   const off = state.zeroBased ? 0n : 1n;
   body.innerHTML = rows.map((r) => {
@@ -768,7 +793,14 @@ function renderRows(rows) {
     return `<tr><td class="ix">${group((BigInt(r.index) + off).toString())}</td>` +
            `<td class="val">${renderValue(r.value)}</td>${out}</tr>`;
   }).join("");
-  $("status").textContent = rows.length ? "" : (state.ok ? t("pastEnd") : "");
+  const st = $("status");
+  if (overflow) {
+    st.textContent = tooBigMessage();
+    st.className = "warn";
+  } else {
+    st.textContent = rows.length ? "" : (state.ok ? t("pastEnd") : "");
+    st.className = "dim";
+  }
 }
 
 function escapeAttr(s) {
@@ -779,7 +811,7 @@ function escapeAttr(s) {
 async function loadRows() {
   if (!state.ok) { renderRows([]); return; }
   const r = await call("rows", { from: state.from.toString(), n: state.per });
-  renderRows(r.rows || []);
+  renderRows(r.rows || [], !!r.overflow);
   syncSlider();
   renderBookmarks();
 }
@@ -1022,7 +1054,7 @@ function wire() {
   $("random").onclick = async () => {
     if (!state.count || state.count === "0") return;
     const r = await call("random", { count: state.count, n: state.per });
-    renderRows(r.rows || []);
+    renderRows(r.rows || [], !!r.overflow);
   };
   $("share").onclick = doShare;
 
@@ -1211,6 +1243,7 @@ function saveDictFromBox() {
 }
 
 transport.ready(async () => {
+  await call("setMaxMember", { bytes: state.maxMember });
   await registerAllDicts();
   ready = true;
   onReady();

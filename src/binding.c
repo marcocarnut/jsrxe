@@ -147,12 +147,39 @@ int rxe_js_next(struct rxe *rxe)
 EMSCRIPTEN_KEEPALIVE
 char *rxe_js_current(struct rxe *rxe, int *len_out)
 {
-    char *buf = malloc(JS_MAXSTRLEN+1);
+    // Render up to the byte cap the page has set, rather than a fixed buffer,
+    // so a member longer than the page wants to show is trimmed here and the
+    // overflow latch is raised. One byte past the cap is built so a member
+    // that only just exceeds it is caught rather than passing as an exact fit.
+    size_t lim = rxe_max_member ? rxe_max_member : (size_t)JS_MAXSTRLEN;
+    char *buf = malloc(lim + 2);
     char *end;
+    int len;
     if (!buf) return NULL;
-    end = rxe_current(buf,JS_MAXSTRLEN,rxe);
-    if (len_out) *len_out = (int)(end - buf);
+    end = rxe_current(buf,(int)(lim + 1),rxe);
+    len = (int)(end - buf);
+    if (len > (int)lim) { rxe_member_overflow = 1; len = (int)lim; buf[len] = 0; }
+    if (len_out) *len_out = len;
     return buf;
+}
+
+// The page sets the per-member byte cap to suit the DOM, far below the
+// library's file-sized default. Zero lifts it.
+
+EMSCRIPTEN_KEEPALIVE
+void rxe_js_set_max_member(int bytes)
+{
+    rxe_set_max_member(bytes < 0 ? 0 : (size_t)bytes);
+}
+
+// Non-zero when a member since the last check was refused or trimmed for
+// exceeding the cap. Reads and clears, so the page checks once per rendered
+// page and learns whether any row came back short.
+
+EMSCRIPTEN_KEEPALIVE
+int rxe_js_check_overflow(void)
+{
+    return rxe_check_overflow();
 }
 
 /* ---------------------------- Dictionaries ------------------------------ */
