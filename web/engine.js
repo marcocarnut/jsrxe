@@ -47,7 +47,9 @@ export function makeEngine(Module, {
     permRelease:  c("rxe_js_permutation_release", null,     ["number"]),
     permMap:      c("rxe_js_permutation_map",     "number", ["number","string"]),
     registerDict: c("rxe_js_register_dict",       null,     ["string","string"]),
-    freeDicts:    c("rxe_js_free_dicts",           null,     [])
+    freeDicts:    c("rxe_js_free_dicts",           null,     []),
+    setMaxMember: c("rxe_js_set_max_member",      null,     ["number"]),
+    checkOverflow:c("rxe_js_check_overflow",      "number", [])
   };
 
   let rxe = 0;        // the parsed expression
@@ -151,6 +153,7 @@ export function makeEngine(Module, {
     // shown alongside -- a check digit appended, a hash compared, and so on.
     rows({ from, n }) {
       if (!rxe) return { rows: [] };
+      api.checkOverflow();               // clear any stale latch first
       const rows = [];
       let index = BigInt(from);
       for (let i = 0; i < n; i++) {
@@ -163,7 +166,17 @@ export function makeEngine(Module, {
         rows.push(withTransform(index.toString(), currentElement()));
         index += 1n;
       }
-      return { rows };
+      // A member too large to build stops the seek, so the page can come back
+      // short; the flag lets the page say why rather than look merely empty.
+      return { rows, overflow: !!api.checkOverflow() };
+    },
+
+    // Set the per-member byte cap. Below it members render whole; above it
+    // they are trimmed and the page is told, so it can admonish rather than
+    // choke the DOM on a giant string.
+    setMaxMember({ bytes }) {
+      api.setMaxMember(bytes | 0);
+      return {};
     },
 
     // Uniformly chosen members. The range is the library's idea of the set's
@@ -171,6 +184,7 @@ export function makeEngine(Module, {
     // bias far below anything that could show.
     random({ count, n }) {
       if (!rxe || !count || count === "0") return { rows: [] };
+      api.checkOverflow();
       const total = BigInt(count);
       const bytes = Math.ceil(total.toString(2).length / 8) + 8;
       const rows = [];
@@ -182,7 +196,7 @@ export function makeEngine(Module, {
         if (api.seek(rxe, index.toString())) continue;
         rows.push(withTransform(index.toString(), currentElement()));
       }
-      return { rows };
+      return { rows, overflow: !!api.checkOverflow() };
     },
 
     // How many members have each length. Meaningful for every expression, and
