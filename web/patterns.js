@@ -733,6 +733,83 @@ export const BUILTIN = [
     }
   },
   {
+    id: "choose-letters",
+    highlight: true,
+    family: { en: "Combinatorics", pt: "Combinatória" },
+    pattern: "[a-z]{{3}}",
+    flags: "",
+    name: { en: "Three distinct letters", pt: "Três letras distintas" },
+    note: {
+      en: "The nonstandard {{ }} quantifier chooses from a set rather than " +
+          "repeating it. '[a-z]{{3}}' is every unordered set of three distinct " +
+          "letters -- C(26,3) = 2,600. Compare '[a-z]{3}', which is 17,576: " +
+          "ordinary repetition allows repeats and counts order.",
+      pt: "O quantificador não padrão {{ }} escolhe de um conjunto em vez de " +
+          "repeti-lo. '[a-z]{{3}}' é todo conjunto não ordenado de três letras " +
+          "distintas -- C(26,3) = 2.600. Compare com '[a-z]{3}', que dá 17.576: " +
+          "a repetição comum permite repetições e conta a ordem."
+    }
+  },
+  {
+    id: "handshakes",
+    family: { en: "Combinatorics", pt: "Combinatória" },
+    pattern: "(A|B|C|D|E){{2}}",
+    flags: "",
+    name: { en: "Handshakes", pt: "Apertos de mão" },
+    note: {
+      en: "Five people, every pair that can shake hands: C(5,2) = 10, small " +
+          "enough to see whole. Each pair is written once and in order, so it " +
+          "is A with B, never also B with A.",
+      pt: "Cinco pessoas, todo par que pode se cumprimentar: C(5,2) = 10, " +
+          "pequeno o bastante para ver inteiro. Cada par aparece uma vez e em " +
+          "ordem, então é A com B, nunca também B com A."
+    }
+  },
+  {
+    id: "anagrams",
+    family: { en: "Combinatorics", pt: "Combinatória" },
+    pattern: { en: "(S|T|O|P){{*}}", pt: "(A|M|O|R){{*}}" },
+    flags: "",
+    name: { en: "Anagrams of STOP", pt: "Anagramas de AMOR" },
+    note: {
+      en: "'{{*}}' is every ordering of the members: 4! = 24 rearrangements " +
+          "of S, T, O, P, with real words among them -- POTS, TOPS, OPTS, SPOT.",
+      pt: "'{{*}}' é toda ordenação dos membros: 4! = 24 rearranjos de A, M, " +
+          "O, R, com palavras reais entre eles -- ROMA, RAMO, MORA, AMOR."
+    }
+  },
+  {
+    id: "poker",
+    highlight: true,
+    family: { en: "Combinatorics", pt: "Combinatória" },
+    pattern: "([2-9TJQKA][SHDC]){{5}}",
+    flags: "",
+    name: { en: "Poker hands", pt: "Mãos de pôquer" },
+    note: {
+      en: "Every five-card hand from a 52-card deck: C(52,5) = 2,598,960. " +
+          "Seek to any of them instantly, or ask for a random one -- the whole " +
+          "space of hands, indexed, without dealing a single card.",
+      pt: "Toda mão de cinco cartas de um baralho de 52: C(52,5) = 2.598.960. " +
+          "Vá a qualquer uma na hora, ou peça uma aleatória -- todo o espaço " +
+          "de mãos, indexado, sem distribuir uma única carta."
+    }
+  },
+  {
+    id: "megasena",
+    family: { en: "Combinatorics", pt: "Combinatória" },
+    pattern: "([1-9]|[1-5][0-9]|60){{6}}",
+    flags: "",
+    name: { en: "Mega-Sena tickets", pt: "Jogos da Mega-Sena" },
+    note: {
+      en: "Six numbers from 1 to 60, unordered: C(60,6) = 50,063,860 -- every " +
+          "possible Mega-Sena ticket. Open the time reveal on the size box to " +
+          "see how long buying them all would take.",
+      pt: "Seis números de 1 a 60, sem ordem: C(60,6) = 50.063.860 -- todo " +
+          "jogo possível da Mega-Sena. Abra a revelação de tempo na caixa do " +
+          "tamanho para ver quanto levaria comprar todos."
+    }
+  },
+  {
     id: "celular",
     pattern: "\\+55 \\d{2} 9\\d{4}-\\d{4}",
     flags: "",
