@@ -137,7 +137,7 @@ export const STRINGS = {
     working:          "Working…",
     parseError:       "Cannot read that expression",
     pastEnd:          "That index is past the end of the set",
-    tooBig:           "Easy, tiger — let's not crash the tab. Members past {n} bytes are trimmed here. Want them whole? Add {url} to the URL and reload. You've been warned.",
+    tooBig:           "Easy, tiger — some items could not be generated, to keep your browser tab from crashing (each runs past {n} bytes). Want them anyway? Add {url} to the URL and reload. You've been warned.",
     truncated:        "shown truncated",
 
     sliderHintFinite: "The slider moves in large jumps through the whole set; the mouse wheel over the list moves a few elements at a time.",
@@ -287,7 +287,7 @@ export const STRINGS = {
     working:          "Trabalhando…",
     parseError:       "Não consigo ler essa expressão",
     pastEnd:          "Esse índice está além do fim do conjunto",
-    tooBig:           "Calma, fera — não vamos travar a aba. Membros acima de {n} bytes são cortados aqui. Quer eles inteiros? Adicione {url} à URL e recarregue. Você foi avisado.",
+    tooBig:           "Calma, fera — alguns itens não puderam ser gerados, para não travar sua aba (cada um passa de {n} bytes). Quer eles mesmo assim? Adicione {url} à URL e recarregue. Você foi avisado.",
     truncated:        "mostrado truncado",
 
     sliderHintFinite: "O cursor deslizante se move em grandes saltos por todo o conjunto; a roda do mouse sobre a lista move poucos elementos por vez.",

@@ -793,14 +793,15 @@ function renderRows(rows, overflow = lastOverflow) {
     return `<tr><td class="ix">${group((BigInt(r.index) + off).toString())}</td>` +
            `<td class="val">${renderValue(r.value)}</td>${out}</tr>`;
   }).join("");
-  const st = $("status");
-  if (overflow) {
-    st.textContent = tooBigMessage();
-    st.className = "warn";
-  } else {
-    st.textContent = rows.length ? "" : (state.ok ? t("pastEnd") : "");
-    st.className = "dim";
-  }
+  // The nudge lives up by the input, not here, so the set's size cannot scroll
+  // it off screen; this line keeps only its plain past-the-end note -- and not
+  // even that when the page is empty because members were held back, not because
+  // the index ran off the end.
+  $("status").textContent =
+    (rows.length || overflow) ? "" : (state.ok ? t("pastEnd") : "");
+  const tb = $("toobig");
+  tb.textContent = overflow ? tooBigMessage() : "";
+  tb.hidden = !overflow;
 }
 
 function escapeAttr(s) {
@@ -809,7 +810,7 @@ function escapeAttr(s) {
 }
 
 async function loadRows() {
-  if (!state.ok) { renderRows([]); return; }
+  if (!state.ok) { renderRows([], false); return; }
   const r = await call("rows", { from: state.from.toString(), n: state.per });
   renderRows(r.rows || [], !!r.overflow);
   syncSlider();

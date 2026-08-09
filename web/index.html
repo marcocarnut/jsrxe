@@ -102,6 +102,9 @@
         <button id="codetoggle" type="button" title="">&lt;/&gt;</button>
       </div>
       <div id="err" class="err" hidden></div>
+      <!-- the over-cap nudge, kept up here by the input so the set's size,
+           which can run to thousands of digits, never scrolls it out of view -->
+      <div id="toobig" class="warn" hidden></div>
       <!-- the per-element code, folded in behind the </> button to save a line -->
       <div id="codewrap" hidden>
         <p class="dim" data-t="codeHint"></p>
