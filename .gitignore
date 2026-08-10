@@ -9,3 +9,4 @@ node_modules/
 *~
 build/librxe-node.mjs
 build/librxe-node.wasm
+spike/vendor/

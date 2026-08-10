@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rxe tree — Cytoscape spike</title>
+<style>
+  :root { --bg:#faf8f4; --fg:#2a2723; --dim:#8a8377; --line:#e3ddd2;
+          --accent:#a8641e; --leaf:#fff; --repeat:#eef3ef; --alt:#f6efe0;
+          --seq:#eae6df; --sub:#f7e4d4; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.4 system-ui,sans-serif; color:var(--fg);
+         background:var(--bg); }
+  header { padding:.6rem 1rem; border-bottom:1px solid var(--line);
+           display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
+  header b { font-size:1.05rem; }
+  select, button { font:inherit; padding:.3rem .6rem; border:1px solid var(--line);
+                   border-radius:6px; background:#fff; color:var(--fg); cursor:pointer; }
+  button:hover, select:hover { border-color:var(--accent); }
+  .pat { font-family:ui-monospace,monospace; color:var(--accent); }
+  #cy { position:absolute; top:52px; left:0; right:0; bottom:0; }
+  .hint { color:var(--dim); font-size:.85rem; }
+</style>
+</head>
+<body>
+<header>
+  <b>rxe tree spike</b>
+  <label>sample
+    <select id="sample"></select>
+  </label>
+  <label>direction
+    <select id="dir"><option value="TB">top→bottom</option>
+                     <option value="LR">left→right</option></select>
+  </label>
+  <button id="relayout">re-layout</button>
+  <button id="collapseAll">collapse ⨂</button>
+  <button id="expandAll">expand ⊕</button>
+  <span class="hint">pattern: <span id="patshow" class="pat"></span>
+    — click any node to fold/unfold it (a ⊕ marks a folded one; in the
+    alternation sample the words start folded — click “cat”)</span>
+</header>
+<div id="cy"></div>
+
+<script src="./vendor/cytoscape.min.js"></script>
+<script src="./vendor/dagre.min.js"></script>
+<script src="./vendor/cytoscape-dagre.js"></script>
+<script src="./vendor/cytoscape-expand-collapse.js"></script>
+<script>
+// Hand-encoded parse trees, standing in for what the wasm binding would emit.
+// Each node: id, syntax (top line), card (second line), type (styling). Each
+// edge: from, to, and kind: "seq" (a tree edge) or "ref" (a subroutine or
+// backreference pointing back). A node with collapsible:true (a subroutine, or
+// an alternation group) can be folded. The point is only to judge whether dagre
+// lays a real parse tree out legibly.
+const SAMPLES = {
+  "date  \\d{4}-\\d{2}-\\d{2}": {
+    nodes: [
+      { id:"e",  syntax:"·  ·  ·",  card:"×100,000,000", type:"seq" },
+      { id:"r1", syntax:"\\d{4}", card:"×10,000", type:"repeat" },
+      { id:"b1", syntax:"\\d",    card:"×10", type:"leaf" },
+      { id:"h1", syntax:"-",       card:"×1",  type:"leaf" },
+      { id:"r2", syntax:"\\d{2}", card:"×100", type:"repeat" },
+      { id:"b2", syntax:"\\d",    card:"×10", type:"leaf" },
+      { id:"h2", syntax:"-",       card:"×1",  type:"leaf" },
+      { id:"r3", syntax:"\\d{2}", card:"×100", type:"repeat" },
+      { id:"b3", syntax:"\\d",    card:"×10", type:"leaf" },
+    ],
+    edges: [ ["e","r1"],["e","h1"],["e","r2"],["e","h2"],["e","r3"],
+             ["r1","b1"],["r2","b2"],["r3","b3"] ],
+  },
+  "alternation  (cat|dog|fish)": {
+    // Each word is a folded literal run -- click it to unfold into its letters,
+    // rxedot's -w drawn as a click. The letters carry no cardinality of their
+    // own; the word is the leaf as far as the numbering is concerned.
+    nodes: [
+      { id:"a", syntax:"alternation", card:"×3", type:"alt", collapsible:true },
+      { id:"c1", syntax:"cat",  card:"0 +1", type:"leaf", collapsible:true, collapsedStart:true },
+      { id:"c1a", syntax:"c", type:"leaf" }, { id:"c1b", syntax:"a", type:"leaf" }, { id:"c1c", syntax:"t", type:"leaf" },
+      { id:"c2", syntax:"dog",  card:"1 +1", type:"leaf", collapsible:true, collapsedStart:true },
+      { id:"c2a", syntax:"d", type:"leaf" }, { id:"c2b", syntax:"o", type:"leaf" }, { id:"c2c", syntax:"g", type:"leaf" },
+      { id:"c3", syntax:"fish", card:"2 +1", type:"leaf", collapsible:true, collapsedStart:true },
+      { id:"c3a", syntax:"f", type:"leaf" }, { id:"c3b", syntax:"i", type:"leaf" }, { id:"c3c", syntax:"s", type:"leaf" }, { id:"c3d", syntax:"h", type:"leaf" },
+    ],
+    edges: [ ["a","c1"],["a","c2"],["a","c3"],
+             ["c1","c1a"],["c1","c1b"],["c1","c1c"],
+             ["c2","c2a"],["c2","c2b"],["c2","c2c"],
+             ["c3","c3a"],["c3","c3b"],["c3","c3c"],["c3","c3d"] ],
+  },
+  "subroutine  (\\d{3})-(?1)": {
+    nodes: [
+      { id:"e", syntax:"·  ·  ·", card:"×1,000,000", type:"seq" },
+      { id:"g", syntax:"( ① )", card:"×1,000", type:"seq", collapsible:true },
+      { id:"gr", syntax:"\\d{3}", card:"×1,000", type:"repeat" },
+      { id:"gb", syntax:"\\d", card:"×10", type:"leaf" },
+      { id:"h", syntax:"-", card:"×1", type:"leaf" },
+      { id:"s", syntax:"(?1)", card:"→ ①", type:"sub" },
+    ],
+    edges: [ ["e","g"],["e","h"],["e","s"],["g","gr"],["gr","gb"] ],
+    refs:  [ ["s","g"] ],
+  },
+  "nested  ((a|b)(c|d)){2}": {
+    nodes: [
+      { id:"r", syntax:"{2}", card:"×16", type:"repeat" },
+      { id:"c", syntax:"·  ·", card:"×4", type:"seq" },
+      { id:"a1", syntax:"(a|b)", card:"×2", type:"alt", collapsible:true },
+      { id:"a", syntax:"a", card:"0 +1", type:"leaf" },
+      { id:"b", syntax:"b", card:"1 +1", type:"leaf" },
+      { id:"a2", syntax:"(c|d)", card:"×2", type:"alt", collapsible:true },
+      { id:"cc", syntax:"c", card:"0 +1", type:"leaf" },
+      { id:"d", syntax:"d", card:"1 +1", type:"leaf" },
+    ],
+    edges: [ ["r","c"],["c","a1"],["c","a2"],["a1","a"],["a1","b"],
+             ["a2","cc"],["a2","d"] ],
+  },
+  "poker  ([2-9TJQKA][SHDC]){{5}}": {
+    nodes: [
+      { id:"k", syntax:"{{5}}  choose", card:"×2,598,960", type:"repeat" },
+      { id:"c", syntax:"·  ·", card:"×52", type:"seq" },
+      { id:"rank", syntax:"[2-9TJQKA]", card:"×13", type:"leaf" },
+      { id:"suit", syntax:"[SHDC]", card:"×4", type:"leaf" },
+    ],
+    edges: [ ["k","c"],["c","rank"],["c","suit"] ],
+  },
+};
+
+cytoscape.use(window.cytoscapeDagre);
+
+const COLORS = { leaf:"#ffffff", repeat:"#eef3ef", alt:"#f6efe0",
+                 seq:"#eae6df", sub:"#f7e4d4" };
+
+let cy;
+
+function buildElements(spec) {
+  const els = [];
+  for (const n of spec.nodes) {
+    const base = n.card ? `${n.syntax}\n${n.card}` : n.syntax;
+    els.push({ data: { id:n.id, label:base, baseLabel:base, type:n.type,
+                       collapsible: !!n.collapsible,
+                       collapsedStart: !!n.collapsedStart } });
+  }
+  for (const [s,t] of (spec.edges||[]))
+    els.push({ data:{ id:`e_${s}_${t}`, source:s, target:t, kind:"seq" } });
+  for (const [s,t] of (spec.refs||[]))
+    els.push({ data:{ id:`r_${s}_${t}`, source:s, target:t, kind:"ref" } });
+  return els;
+}
+
+function render(name, dir) {
+  const spec = SAMPLES[name];
+  document.getElementById("patshow").textContent = name.split("  ").slice(1).join("  ");
+  if (cy) cy.destroy();
+  cy = cytoscape({
+    container: document.getElementById("cy"),
+    elements: buildElements(spec),
+    style: [
+      { selector:"node", style:{
+          "label":"data(label)", "text-wrap":"wrap", "text-valign":"center",
+          "text-halign":"center", "text-justification":"center",
+          "font-family":"ui-monospace, monospace", "font-size":"13px",
+          "shape":"round-rectangle", "width":"label", "height":"label",
+          "padding":"10px", "background-color":(n)=>COLORS[n.data("type")]||"#fff",
+          "border-width":1, "border-color":"#cdc6b8", "color":"#2a2723" } },
+      { selector:'node[type="sub"]', style:{
+          "border-style":"dashed", "border-color":"#a8641e", "border-width":2 } },
+      { selector:"node[?collapsible]", style:{ "border-style":"dashed" } },
+      { selector:"edge", style:{
+          "width":1.5, "line-color":"#b8b0a2", "curve-style":"bezier",
+          "target-arrow-shape":"triangle", "target-arrow-color":"#b8b0a2",
+          "arrow-scale":.9 } },
+      { selector:'edge[kind="ref"]', style:{
+          "line-style":"dashed", "line-color":"#a8641e",
+          "target-arrow-color":"#a8641e", "curve-style":"unbundled-bezier",
+          "control-point-distances":[40], "control-point-weights":[.5] } },
+      { selector:".cy-expand-collapse-collapsed-node", style:{
+          "background-color":"#f7e4d4", "border-style":"solid" } },
+    ],
+    layout: dagreLayout(dir),
+    wheelSensitivity: .25,
+  });
+  cy.on("tap", "node", (ev) => toggle(ev.target));
+  cy.nodes("[?collapsedStart]").forEach((n) => setCollapsed(n, true));
+  cy.layout(dagreLayout(dir)).run();
+}
+
+// Collapse works over the edge-tree, not compound nesting -- the expand-collapse
+// extension only folds compound parent/child nodes, which a node-link tree has
+// none of. So this hides a node's outgoing subtree directly, the same thing the
+// real Tree tab will do to fold a subroutine or a word into its letters.
+function subtree(node) {
+  const nodes = cy.collection(), edges = cy.collection();
+  const stack = [node], seen = new Set([node.id()]);
+  while (stack.length) {
+    stack.pop().outgoers('edge[kind="seq"]').forEach((e) => {
+      edges.merge(e);
+      const t = e.target();
+      if (!seen.has(t.id())) { seen.add(t.id()); nodes.merge(t); stack.push(t); }
+    });
+  }
+  return nodes.union(edges);
+}
+function setCollapsed(n, on) {
+  const kids = subtree(n);
+  if (!kids.length) return false;
+  if (on) { kids.hide(); n.addClass("collapsed"); n.data("label", n.data("baseLabel") + "\n⊕"); }
+  else    { kids.show(); n.removeClass("collapsed"); n.data("label", n.data("baseLabel")); }
+  return true;
+}
+function toggle(n) {
+  if (setCollapsed(n, !n.hasClass("collapsed")))
+    cy.layout(dagreLayout(dirSel.value)).run();
+}
+
+function dagreLayout(dir) {
+  return { name:"dagre", rankDir:dir, nodeSep:28, rankSep:46,
+           edgeSep:12, fit:true, padding:24 };
+}
+
+// wire up
+const sel = document.getElementById("sample");
+for (const k of Object.keys(SAMPLES)) {
+  const o = document.createElement("option"); o.value=k; o.textContent=k; sel.appendChild(o);
+}
+const dirSel = document.getElementById("dir");
+const draw = () => render(sel.value, dirSel.value);
+sel.onchange = draw;
+dirSel.onchange = draw;
+document.getElementById("relayout").onclick =
+  () => cy.layout(dagreLayout(dirSel.value)).run();
+document.getElementById("collapseAll").onclick = () => {
+  cy.nodes("[?collapsible]").forEach((n) => { if (!n.hasClass("collapsed")) setCollapsed(n, true); });
+  cy.layout(dagreLayout(dirSel.value)).run();
+};
+document.getElementById("expandAll").onclick = () => {
+  cy.elements().show();
+  cy.nodes(".collapsed").forEach((n) => { n.removeClass("collapsed"); n.data("label", n.data("baseLabel")); });
+  cy.layout(dagreLayout(dirSel.value)).run();
+};
+draw();
+</script>
+</body>
+</html>
