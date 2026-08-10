@@ -997,16 +997,18 @@ function readShareHash() {
 }
 
 function setShareLabel() {
-  $("share").textContent = navigator.share ? t("share") : t("shareCopy");
+  // The button is an icon now; its label lives in the tooltip.
+  $("share").title = navigator.share ? t("share") : t("shareCopy");
 }
 
 let flashTimer = null;
 function flashCopied() {
-  const b = $("share");
-  b.textContent = t("shareCopied");
-  b.classList.add("done");
+  const c = $("copied");
+  c.textContent = t("shareCopied");
+  c.hidden = false;
+  $("share").classList.add("done");
   clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { b.classList.remove("done"); setShareLabel(); }, 1600);
+  flashTimer = setTimeout(() => { c.hidden = true; $("share").classList.remove("done"); }, 1600);
 }
 
 // Native share sheet where there is one (phones, and some desktops); a
@@ -1020,6 +1022,135 @@ async function doShare() {
   }
   try { await navigator.clipboard.writeText(url); } catch { /* address bar has it */ }
   flashCopied();
+}
+
+/* ------------------------------------------------------------------ export */
+
+// A run of members, from the current index onward, written to a file. The good
+// path streams straight to disk with the File System Access API, so the whole
+// export never sits in memory at once; Firefox and Safari lack it, so there we
+// build a Blob and download it, which the count field lets the user size (and,
+// if they insist, overrun). Members ride the same per-member cap as the page;
+// raise it with ?maxlen= for whole ones.
+
+let exportAbort = false;
+
+function openExportBox() {
+  if (!state.ok) return;
+  const off = state.zeroBased ? 0n : 1n;
+  $("exportfrom").textContent =
+    t("exportFrom").replace("{i}", group((state.from + off).toString()));
+  // Default to the rest of a finite set when that is a modest number, otherwise
+  // a round handful the user can raise.
+  let def = 100000n;
+  if (state.count) {
+    const remaining = BigInt(state.count) - state.from;
+    if (remaining > 0n && remaining < 1000000n) def = remaining;
+  }
+  $("exportcount").value = def.toString();
+  $("exportindex").checked = false;
+  // The element/transformed/both choice is only meaningful with a transform;
+  // hide it otherwise. Its value is left as the user last set it (both to start).
+  $("exportcolswrap").hidden = !state.codeActive;
+  $("exportmem").hidden = !!window.showSaveFilePicker;   // warn only on the Blob path
+  $("exportrun").hidden = true;
+  $("exportstatus").textContent = "";
+  $("exportgo").disabled = false;
+  $("exportbox").showModal();
+}
+
+// One member per line. Which columns and how they are joined is the caller's
+// choice: an optional index, then the element and/or the code's output (o.cols
+// is "element", "output" or "both"), joined by o.sep. Members can hold any
+// byte, so the line is written as raw bytes (one char = one byte), never UTF-8
+// re-encoded -- the bytes rxenum would print.
+function bytesForRows(rows, o) {
+  let s = "";
+  for (const r of rows) {
+    const f = [];
+    if (o.withIndex) f.push((BigInt(r.index) + o.off).toString());
+    const out = r.output != null ? r.output : "";
+    if (o.cols === "output") f.push(out);
+    else if (o.cols === "both") { f.push(r.value); f.push(out); }
+    else f.push(r.value);
+    s += f.join(o.sep) + "\n";
+  }
+  const b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
+  return b;
+}
+
+function downloadBytes(parts, name) {
+  const url = URL.createObjectURL(new Blob(parts, { type: "text/plain" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function runExport() {
+  if (!state.ok) return;
+  let total;
+  try { total = BigInt(($("exportcount").value || "").replace(/[^0-9]/g, "") || "0"); }
+  catch { total = 0n; }
+  if (total <= 0n) return;
+  if (state.count) {                             // never walk past a finite set
+    const remaining = BigInt(state.count) - state.from;
+    if (remaining <= 0n) { $("exportbox").close(); return; }
+    if (total > remaining) total = remaining;
+  }
+  const SEPS = { tab: "\t", space: " ", comma: "," };
+  const o = {
+    withIndex: $("exportindex").checked,
+    off: state.zeroBased ? 0n : 1n,
+    sep: SEPS[$("exportsep").value] || "\t",
+    // The columns choice only means anything with a transform running; without
+    // one there is nothing but the element to write.
+    cols: state.codeActive ? $("exportcols").value : "element"
+  };
+
+  let writable = null, parts = null;
+  if (window.showSaveFilePicker) {
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: "rxenum-export.txt",
+        types: [{ description: "Text", accept: { "text/plain": [".txt"] } }]
+      });
+    } catch { return; }                          // user dismissed the picker
+    writable = await handle.createWritable();
+  } else {
+    parts = [];
+  }
+
+  exportAbort = false;
+  $("exportgo").disabled = true;
+  $("exportrun").hidden = false;
+  const prog = $("exportprog");
+  const BATCH = 512;
+  let done = 0n, from = state.from;
+  try {
+    while (done < total && !exportAbort) {
+      const want = total - done < BigInt(BATCH) ? Number(total - done) : BATCH;
+      const r = await call("rows", { from: from.toString(), n: want });
+      const rows = r.rows || [];
+      if (!rows.length) break;                   // reached the end
+      const bytes = bytesForRows(rows, o);
+      if (writable) await writable.write(bytes);
+      else parts.push(bytes);
+      done += BigInt(rows.length);
+      from += BigInt(rows.length);
+      prog.value = Number((done * 1000n) / total) / 10;
+      $("exportstatus").textContent = t("exportProgress")
+        .replace("{done}", group(done.toString()))
+        .replace("{total}", group(total.toString()));
+    }
+  } finally {
+    if (writable) { try { await writable.close(); } catch { /* partial file kept */ } }
+  }
+  if (parts && !exportAbort) downloadBytes(parts, "rxenum-export.txt");
+  $("exportgo").disabled = false;
+  $("exportbox").close();
 }
 
 function wire() {
@@ -1084,6 +1215,9 @@ function wire() {
     renderRows(r.rows || [], !!r.overflow);
   };
   $("share").onclick = doShare;
+  $("export").onclick = openExportBox;
+  $("exportform").onsubmit = (e) => { e.preventDefault(); runExport(); };
+  $("exportcancel").onclick = () => { exportAbort = true; $("exportbox").close(); };
 
   $("slider").oninput = () => {
     if (state.slider === "length") {
