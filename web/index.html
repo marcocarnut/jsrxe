@@ -250,6 +250,18 @@
       <input id="exportcount" type="text" inputmode="numeric" required></label>
     <label class="check"><input id="exportindex" type="checkbox">
       <span data-t="exportIndex"></span></label>
+    <label id="exportcolswrap"><span data-t="exportColumns"></span>
+      <select id="exportcols">
+        <option value="element" data-t="exportColElement"></option>
+        <option value="output" data-t="exportColOutput"></option>
+        <option value="both" data-t="exportColBoth" selected></option>
+      </select></label>
+    <label><span data-t="exportSep"></span>
+      <select id="exportsep">
+        <option value="tab" data-t="exportSepTab"></option>
+        <option value="space" data-t="exportSepSpace"></option>
+        <option value="comma" data-t="exportSepComma"></option>
+      </select></label>
     <p class="warn" id="exportmem" hidden data-t="exportMem"></p>
     <div id="exportrun" hidden>
       <progress id="exportprog" max="100" value="0"></progress>

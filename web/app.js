@@ -1049,6 +1049,9 @@ function openExportBox() {
   }
   $("exportcount").value = def.toString();
   $("exportindex").checked = false;
+  // The element/transformed/both choice is only meaningful with a transform;
+  // hide it otherwise. Its value is left as the user last set it (both to start).
+  $("exportcolswrap").hidden = !state.codeActive;
   $("exportmem").hidden = !!window.showSaveFilePicker;   // warn only on the Blob path
   $("exportrun").hidden = true;
   $("exportstatus").textContent = "";
@@ -1056,18 +1059,21 @@ function openExportBox() {
   $("exportbox").showModal();
 }
 
-// One member per line, mirroring the columns on screen: index when asked, the
-// element, and -- when the code section is running -- its output beside it,
-// tab-separated, exactly as the table shows them. Members can hold any byte, so
-// the line is written as raw bytes (one char = one byte), never UTF-8
+// One member per line. Which columns and how they are joined is the caller's
+// choice: an optional index, then the element and/or the code's output (o.cols
+// is "element", "output" or "both"), joined by o.sep. Members can hold any
+// byte, so the line is written as raw bytes (one char = one byte), never UTF-8
 // re-encoded -- the bytes rxenum would print.
-function bytesForRows(rows, withIndex, off, withCode) {
+function bytesForRows(rows, o) {
   let s = "";
   for (const r of rows) {
-    if (withIndex) s += (BigInt(r.index) + off).toString() + "\t";
-    s += r.value;
-    if (withCode) s += "\t" + (r.output != null ? r.output : "");
-    s += "\n";
+    const f = [];
+    if (o.withIndex) f.push((BigInt(r.index) + o.off).toString());
+    const out = r.output != null ? r.output : "";
+    if (o.cols === "output") f.push(out);
+    else if (o.cols === "both") { f.push(r.value); f.push(out); }
+    else f.push(r.value);
+    s += f.join(o.sep) + "\n";
   }
   const b = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
@@ -1093,9 +1099,15 @@ async function runExport() {
     if (remaining <= 0n) { $("exportbox").close(); return; }
     if (total > remaining) total = remaining;
   }
-  const withIndex = $("exportindex").checked;
-  const withCode = state.codeActive;
-  const off = state.zeroBased ? 0n : 1n;
+  const SEPS = { tab: "\t", space: " ", comma: "," };
+  const o = {
+    withIndex: $("exportindex").checked,
+    off: state.zeroBased ? 0n : 1n,
+    sep: SEPS[$("exportsep").value] || "\t",
+    // The columns choice only means anything with a transform running; without
+    // one there is nothing but the element to write.
+    cols: state.codeActive ? $("exportcols").value : "element"
+  };
 
   let writable = null, parts = null;
   if (window.showSaveFilePicker) {
@@ -1123,7 +1135,7 @@ async function runExport() {
       const r = await call("rows", { from: from.toString(), n: want });
       const rows = r.rows || [];
       if (!rows.length) break;                   // reached the end
-      const bytes = bytesForRows(rows, withIndex, off, withCode);
+      const bytes = bytesForRows(rows, o);
       if (writable) await writable.write(bytes);
       else parts.push(bytes);
       done += BigInt(rows.length);
