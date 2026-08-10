@@ -76,6 +76,7 @@ let state = {
   from: 0n, per: 50, zeroBased: true, key: "", keyActive: false, filter: "all",
   selected: null, slider: "none", codeActive: false, tab: "elements",
   note: "", orderTip: "", sliderTip: "", countSpoken: "", timeTip: "",
+  assoc: false,
   maxMember: readMaxMember()
 };
 
@@ -904,6 +905,9 @@ function toggleZero() {
   state.zeroBased = !state.zeroBased;
   syncZero();
   $("from").value = (state.from + (state.zeroBased ? 0n : 1n)).toString();
+  // The Tree tab's index field carries the offset too.
+  if (treePath !== "")
+    $("treeidx").value = (BigInt(treePath) + (state.zeroBased ? 0n : 1n)).toString();
   renderRows(lastRows);
 }
 
@@ -994,11 +998,26 @@ const TREE_FILL = {
 };
 const TREE_HL = "#d1442a";   // the lit-path colour, rxedot's -f
 
+// A number for a box: the exact decimal grouped with the locale's separators
+// when the library could hand it over whole, the infinity sign when endless,
+// and the abbreviated form only as a last resort for one too long to show.
+function treeNum(exact, fallback, inf) {
+  if (inf) return "∞";
+  return exact ? group(exact) : (fallback || "");
+}
+
 function treeLabel(n) {
   if (n.kind === "alt") return "alternation";
-  let s = n.line1 + (n.card ? "\n" + n.card : "");
-  if (n.place) s += "\n" + n.place;
-  if (n.choices) s += "\n" + n.choices;
+  let s = n.line1;
+  const card = treeNum(n.cardExact, n.card, n.inf);
+  if (card) s += "\n" + card;
+  if (n.place) s += "\n" + (n.placeExact ? "×" + group(n.placeExact) : n.place);
+  // A lit node shows what it produced on a third line (∅ for the empty string),
+  // unless that would only repeat its own label; the per-iteration list is the
+  // fallback when there is no such text.
+  const lit = n.onPath && n.text != null && n.text !== n.line1;
+  if (lit) s += "\n" + (n.text === "" ? t("treeEmptyStr") : n.text);
+  else if (n.choices) s += "\n" + n.choices;
   return s;
 }
 
@@ -1007,7 +1026,10 @@ function buildTreeElements(g) {
   for (const n of g.nodes) {
     const label = treeLabel(n);
     els.push({ data: { id: "n" + n.id, label, baseLabel: label, kind: n.kind,
-                       inf: !!n.inf, onPath: !!n.onPath } });
+                       inf: !!n.inf, onPath: !!n.onPath,
+                       // kept for the associativity overlay: the node's own
+                       // size and its place value, as exact decimal strings.
+                       card: n.cardExact || "", place: n.placeExact || "" } });
   }
   for (const e of g.edges) {
     const branch = e.fromPort >= 0 && e.label;
@@ -1016,7 +1038,9 @@ function buildTreeElements(g) {
       source: "n" + e.from, target: "n" + e.to,
       kind: e.isRef ? "ref" : "seq",
       label: branch ? e.label.replace(/\n/g, " ") : "",
-      onPath: !!e.onPath } });
+      onPath: !!e.onPath,
+      // which concatenation this edge belongs to, for grouping siblings.
+      parent: e.from, port: e.fromPort } });
   }
   return els;
 }
@@ -1049,13 +1073,70 @@ function treeStyle() {
         "curve-style": "unbundled-bezier", "control-point-distances": [40],
         "control-point-weights": [0.5] } },
     { selector: "edge[?onPath]", style: {
-        "line-color": TREE_HL, "target-arrow-color": TREE_HL, "width": 2.4 } }
+        "line-color": TREE_HL, "target-arrow-color": TREE_HL, "width": 2.4 } },
+    // The associativity overlay: a light dashed arrow between carrying siblings,
+    // in significance order, bowed clear of the boxes it spans and tagged with
+    // the place-value multiplier.
+    { selector: 'edge[kind="assoc"]', style: {
+        "line-color": "#c9c2b4", "line-style": "dashed", "width": 1.1,
+        "target-arrow-shape": "vee", "target-arrow-color": "#c9c2b4", "arrow-scale": 0.7,
+        "curve-style": "unbundled-bezier", "control-point-distances": [-52],
+        "control-point-weights": [0.5], "label": "data(label)", "font-size": "10px",
+        "color": "#8f866a", "font-family": "ui-monospace, Menlo, monospace",
+        "text-background-color": "#ffffff", "text-background-opacity": 0.9,
+        "text-background-padding": "2px", "text-margin-y": 2 } }
   ];
 }
 
 function dagreLayout() {
   return { name: "dagre", rankDir: treeDir, nodeSep: 26, rankSep: 44,
            edgeSep: 10, fit: true, padding: 22 };
+}
+
+// Lay the tree out. The associativity arrows connect same-rank siblings, which
+// dagre would try to rank apart, so they are stripped before the layout and, if
+// the toggle is on, rebuilt over the settled positions afterwards.
+function treeLayout() {
+  if (!cy) return;
+  cy.remove('edge[kind="assoc"]');
+  cy.layout(dagreLayout()).run();
+  if (state.assoc) addAssociativity();
+}
+
+// Draw the place-value chain. Within each concatenation (the children sharing
+// one parent-and-port), the carrying nodes -- those bigger than one -- are put
+// in significance order and joined tail to head, least significant first, since
+// that is the direction the odometer carries. Each arrow is tagged with the
+// size of the node it leaves, the base at which that digit rolls over. Only
+// visible nodes take part, so a folded branch drops out of the chain cleanly.
+function addAssociativity() {
+  if (!cy) return;
+  const groups = new Map();
+  cy.edges('edge[kind="seq"]').forEach((e) => {
+    const s = e.source(), tg = e.target();
+    if (!s.visible() || !tg.visible()) return;
+    const key = e.data("parent") + ":" + e.data("port");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(tg);
+  });
+  const placeOf = (n) => n.data("place") ? BigInt(n.data("place")) : 1n;
+  const adds = [];
+  for (const sibs of groups.values()) {
+    const carry = sibs.filter((n) => n.data("card") !== "1");
+    if (carry.length < 2) continue;
+    carry.sort((a, b) => {
+      const pa = placeOf(a), pb = placeOf(b);
+      return pa < pb ? 1 : pa > pb ? -1 : 0;   // most significant first
+    });
+    for (let i = 0; i < carry.length - 1; i++) {
+      const more = carry[i], less = carry[i + 1];
+      const size = less.data("card");
+      adds.push({ classes: "assoc", data: {
+        id: `a_${less.id()}_${more.id()}`, source: less.id(), target: more.id(),
+        kind: "assoc", label: size && size !== "1" ? "×" + group(size) : "" } });
+    }
+  }
+  if (adds.length) cy.add(adds);
 }
 
 function destroyTree() { if (cy) { cy.destroy(); cy = null; } }
@@ -1089,8 +1170,7 @@ function setFolded(n, on) {
   return true;
 }
 function toggleFold(n) {
-  if (setFolded(n, !n.hasClass("collapsed")))
-    cy.layout(dagreLayout()).run();
+  if (setFolded(n, !n.hasClass("collapsed"))) treeLayout();
 }
 
 function drawTree(g) {
@@ -1099,17 +1179,18 @@ function drawTree(g) {
     container: $("cy"),
     elements: buildTreeElements(g),
     style: treeStyle(),
-    layout: { name: "preset" },   // fold words first, then lay out once
+    layout: { name: "preset" },   // fold first, then lay out once
     wheelSensitivity: 0.25,
     minZoom: 0.1, maxZoom: 3
   });
   cy.on("tap", "node", (ev) => toggleFold(ev.target));
-  // A literal word carries its letters as children; it starts folded to a
-  // single box, and a click unfolds 'cat' into 'c' 'a' 't'.
-  cy.nodes('[kind="literal"]').forEach((n) => {
+  // A word starts folded to one box (a click unfolds 'cat' into 'c' 'a' 't'),
+  // and so does a (?N) subroutine's copied body (a click expands it) -- both are
+  // the same hidden-children fold.
+  cy.nodes('[kind="literal"], [kind="subroutine"]').forEach((n) => {
     if (n.outgoers('edge[kind="seq"]').length) setFolded(n, true);
   });
-  cy.layout(dagreLayout()).run();
+  treeLayout();
   // A handle for the console and the browser tests to reach the graph.
   window.__rxeCy = cy;
 }
@@ -1129,26 +1210,69 @@ async function renderTree(opts = {}) {
   // The expression may have changed, or the tab closed, while the libraries or
   // the graph were in flight; a stale render must not paint over a newer one.
   if (token !== treeToken || state.tab !== "tree") return;
-  const expandSubs = $("treesubs").checked;
-  const g = await call("tree", { collapse: !expandSubs, fold: true, path });
+  // Subroutine bodies are always fetched in full and folded on the client, so a
+  // click expands one -- there is no separate expand toggle.
+  const g = await call("tree", { collapse: false, fold: true, path });
   if (token !== treeToken || state.tab !== "tree") return;
   if (!g || !g.nodes || !g.nodes.length) { destroyTree(); setTreeMsg(t("treeEmpty")); return; }
   setTreeMsg("");
   drawTree(g);
 }
 
-// Read the "light member" field and light the route to it: a bare decimal is
-// an index seeked straight to; anything else is a member string, ranked to the
-// first index it sits at. An empty field, a non-member, or an unrankable set
-// simply lights nothing.
+// The Index field and its nav mirror the Elements tab: it lights the path to
+// one member, and first/prev/next/last and the wheel step through the indices.
+// The field shows the index under the current zero-offset; an empty field lights
+// nothing. A non-numeric entry is taken as a member string and ranked to the
+// index it sits at, the Search tie-in kept.
+const treeOffset = () => (state.zeroBased ? 0n : 1n);
+
+// Show 'ix' (a decimal string, or "" for none) as the lit index and redraw. The
+// value is the raw 0-based index; the field displays it under the offset.
+function treeGo(ix) {
+  treePath = ix === "" ? "" : String(ix);
+  $("treeidx").value = ix === "" ? "" : (BigInt(ix) + treeOffset()).toString();
+  renderTree({ path: treePath });
+}
+function treeClampGo(ix) {
+  if (ix < 0n) ix = 0n;
+  if (state.count && state.count !== "0") {
+    const last = BigInt(state.count) - 1n;
+    if (ix > last) ix = last;
+  }
+  treeGo(ix);
+}
+const treeCur = () => (treePath === "" ? null : BigInt(treePath));
+function treeFirst() { treeClampGo(0n); }
+function treeLast() { if (state.count && state.count !== "0") treeClampGo(BigInt(state.count) - 1n); }
+function treePrev() { const c = treeCur(); treeClampGo(c === null ? 0n : c - 1n); }
+function treeNext() { const c = treeCur(); treeClampGo(c === null ? 0n : c + 1n); }
+
+// The field changed: read it as an index (under the offset) or, failing that,
+// as a member string to rank.
 let lightTimer = null;
-async function resolveLight() {
+async function treeApplyInput() {
   const v = $("treeidx").value.trim();
   if (!v) { treePath = ""; renderTree({ path: "" }); return; }
-  if (/^\d+$/.test(v)) { treePath = v; renderTree({ path: v }); return; }
+  if (/^\d+$/.test(v)) {
+    let ix = BigInt(v) - treeOffset();
+    if (ix < 0n) ix = 0n;
+    treePath = ix.toString();
+    renderTree({ path: treePath });
+    return;
+  }
   const r = await call("rankFirst", { text: v });
   treePath = (r && r.index) ? r.index : "";
   renderTree({ path: treePath });
+}
+
+function toggleAssoc() {
+  state.assoc = !state.assoc;
+  const b = $("treeassoc");
+  b.classList.toggle("on", state.assoc);
+  b.setAttribute("aria-pressed", String(state.assoc));
+  if (!cy) return;
+  if (state.assoc) addAssociativity();
+  else cy.remove('edge[kind="assoc"]');
 }
 
 // The bookmarks for the current example: whatever it ships plus whatever the
@@ -1574,17 +1698,23 @@ function wire() {
   $("share2").onclick = doShare;
   $("share3").onclick = doShare;
 
-  // Tree controls. Fit re-frames the whole tree; Rotate swaps top-down for
-  // left-right (concatenation reads better along the text); the checkbox draws
-  // a (?N) subroutine in full rather than as a link and redraws.
+  // Tree controls. The index field and its nav mirror Elements; Fit re-frames
+  // the whole tree; Rotate swaps top-down for left-right; Associativity overlays
+  // the place-value chain.
+  $("treefirst").onclick = treeFirst;
+  $("treeprev").onclick = treePrev;
+  $("treenext").onclick = treeNext;
+  $("treelast").onclick = treeLast;
+  $("treeassoc").onclick = toggleAssoc;
   $("treefit").onclick = () => { if (cy) cy.fit(undefined, 24); };
-  $("treedir").onclick = () => {
-    treeDir = treeDir === "TB" ? "LR" : "TB";
-    if (cy) cy.layout(dagreLayout()).run();
-  };
-  $("treesubs").onchange = () => renderTree();
-  const lightSoon = () => { clearTimeout(lightTimer); lightTimer = setTimeout(resolveLight, 250); };
+  $("treedir").onclick = () => { treeDir = treeDir === "TB" ? "LR" : "TB"; treeLayout(); };
+  const lightSoon = () => { clearTimeout(lightTimer); lightTimer = setTimeout(treeApplyInput, 250); };
   $("treeidx").oninput = lightSoon;
+  // The wheel steps the lit index, like the Elements table.
+  $("treeidx").onwheel = (e) => {
+    e.preventDefault();
+    if (e.deltaY < 0) treeNext(); else treePrev();
+  };
   $("export").onclick = openExportBox;
   $("exportform").onsubmit = (e) => { e.preventDefault(); runExport(); };
   $("exportcancel").onclick = () => { exportAbort = true; $("exportbox").close(); };

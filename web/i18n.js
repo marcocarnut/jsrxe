@@ -121,14 +121,16 @@ export const STRINGS = {
     treeTab:          "Tree",
     treeHint:         "The parse tree. Each box shows its cardinality; a "
                     + "concatenation multiplies, an alternation sums. Click a "
-                    + "box to fold its subtree. Drag to pan, wheel to zoom.",
+                    + "box to fold its subtree — a word into its letters, a (?N) "
+                    + "into its body. An index lights the path to that member.",
     treeFit:          "Fit",
     treeDir:          "Rotate",           // toggles top-down / left-right
-    treeExpandSubs:   "Expand subroutines",
-    treeLight:        "Light member",
-    treeLightPlace:   "an index, or a member string",
+    treeAssoc:        "Associativity",
+    treeIndex:        "Index",
+    treeIdxPlace:     "an index, or a member string",
     treeEmpty:        "Enter a valid expression to see its tree.",
     treeLoading:      "Loading the tree view…",
+    treeEmptyStr:     "∅",                // shown for a node that produced ""
     fromIndex:        "From index",
     perPage:          "Per page",
     zeroBased:        "Count from zero",
@@ -315,14 +317,16 @@ export const STRINGS = {
     treeHint:         "A árvore de análise. Cada caixa mostra sua "
                     + "cardinalidade; uma concatenação multiplica, uma "
                     + "alternação soma. Clique numa caixa para dobrar sua "
-                    + "subárvore. Arraste para mover, role para ampliar.",
+                    + "subárvore — uma palavra em suas letras, um (?N) em seu "
+                    + "corpo. Um índice destaca o caminho até aquele membro.",
     treeFit:          "Ajustar",
     treeDir:          "Girar",
-    treeExpandSubs:   "Expandir sub-rotinas",
-    treeLight:        "Destacar membro",
-    treeLightPlace:   "um índice, ou uma string membro",
+    treeAssoc:        "Associatividade",
+    treeIndex:        "Índice",
+    treeIdxPlace:     "um índice, ou uma string membro",
     treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
     treeLoading:      "Carregando a árvore…",
+    treeEmptyStr:     "∅",
     fromIndex:        "A partir do índice",
     perPage:          "Por página",
     zeroBased:        "Contar a partir de zero",

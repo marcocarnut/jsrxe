@@ -347,15 +347,18 @@ static void jg_node(void *cx, const struct rxe_gnode_ev *n)
     struct jgraph *g = cx;
     struct jbuf *b = &g->nodes;
     if (g->nn++) jput(b, ",", 1);
-    jputs(b, "{\"id\":");     jputi(b, n->id);
-    jputs(b, ",\"kind\":");   jputq(b, gkind_name(n->kind));
-    jputs(b, ",\"line1\":");  jputq(b, n->line1);
-    jputs(b, ",\"card\":");   jputq(b, n->card);
-    jputs(b, ",\"inf\":");    jputs(b, n->is_inf ? "true" : "false");
-    jputs(b, ",\"place\":");  jputopt(b, n->place);
-    jputs(b, ",\"choices\":");jputopt(b, n->choices);
-    jputs(b, ",\"onPath\":"); jputs(b, n->on_path ? "true" : "false");
-    jputs(b, ",\"refTo\":");  jputi(b, n->ref_to);
+    jputs(b, "{\"id\":");       jputi(b, n->id);
+    jputs(b, ",\"kind\":");     jputq(b, gkind_name(n->kind));
+    jputs(b, ",\"line1\":");    jputq(b, n->line1);
+    jputs(b, ",\"card\":");     jputq(b, n->card);
+    jputs(b, ",\"cardExact\":");jputq(b, n->card_exact ? n->card_exact : "");
+    jputs(b, ",\"inf\":");      jputs(b, n->is_inf ? "true" : "false");
+    jputs(b, ",\"place\":");    jputopt(b, n->place);
+    jputs(b, ",\"placeExact\":");jputopt(b, n->place_exact);
+    jputs(b, ",\"choices\":");  jputopt(b, n->choices);
+    jputs(b, ",\"text\":");     jputopt(b, n->text);
+    jputs(b, ",\"onPath\":");   jputs(b, n->on_path ? "true" : "false");
+    jputs(b, ",\"refTo\":");    jputi(b, n->ref_to);
     if (n->kind == RXE_G_REPEAT || n->kind == RXE_G_COMB) {
         jputs(b, ",\"repMin\":"); jputi(b, n->rep_min);
         jputs(b, ",\"repMax\":"); jputi(b, n->rep_max);
@@ -377,9 +380,11 @@ static void jg_alt(void *cx, const struct rxe_galt_ev *a)
     jputs(b, ",\"subs\":[");
     for (int k = 0; k < a->nsub; k++) {
         if (k) jput(b, ",", 1);
-        jputs(b, "{\"start\":"); jputq(b, a->subs[k].start);
-        jputs(b, ",\"card\":");  jputq(b, a->subs[k].card);
-        jputs(b, ",\"inf\":");   jputs(b, a->subs[k].is_inf ? "true" : "false");
+        jputs(b, "{\"start\":");     jputq(b, a->subs[k].start);
+        jputs(b, ",\"card\":");      jputq(b, a->subs[k].card);
+        jputs(b, ",\"startExact\":");jputq(b, a->subs[k].start_exact ? a->subs[k].start_exact : "");
+        jputs(b, ",\"cardExact\":"); jputq(b, a->subs[k].card_exact ? a->subs[k].card_exact : "");
+        jputs(b, ",\"inf\":");       jputs(b, a->subs[k].is_inf ? "true" : "false");
         jput(b, "}", 1);
     }
     jputs(b, "]}");
@@ -418,9 +423,13 @@ char *rxe_js_graph(struct rxe *rxe, int collapse, int unroll, int fold,
         mpz_clear(idx);
     }
     struct jgraph g = { { NULL, 0, 0 }, { NULL, 0, 0 }, 0, 0 };
-    // letters on: the Tree tab folds each word to a single node but keeps its
-    // letters as hidden children, so a click can unfold 'cat' into 'c' 'a' 't'.
-    struct rxe_graph_opts opts = { collapse, unroll, fold, onpath, 1 };
+    // letters on: words fold to one node but keep their letters as hidden
+    // children, so a click unfolds 'cat' into 'c' 'a' 't'. alt_reverse on: an
+    // alternation's branches draw right-to-left by index, so a lit path reads in
+    // written order.
+    struct rxe_graph_opts opts = { .collapse = collapse, .unroll = unroll,
+                                   .fold = fold, .on_path = onpath,
+                                   .letters = 1, .alt_reverse = 1 };
     struct rxe_graph_visitor vis = { jg_node, jg_alt, jg_edge };
     rxe_graph_walk(rxe, &opts, &vis, &g);
 

@@ -210,7 +210,9 @@ check("tree: an alternation node appears", true, !!alt);
 check("  with a subsection per branch", 3, alt && alt.subs.length);
 check("  cardinalities across its branches", "1,1,1",
       alt && alt.subs.map((s) => s.card).join(","));
-check("  the words are folded to literal leaves", "cat,dog,fish",
+// branches come back in reverse index order (alt_reverse), so a lit path reads
+// in written order once drawn -- cat (index 0) is emitted last, sits rightmost.
+check("  the words are folded to literal leaves, reversed", "fish,dog,cat",
       g.nodes.filter((n) => n.kind === "literal").map((n) => n.line1).join(","));
 
 // a subroutine's edge points back at the group it copies
@@ -245,6 +247,16 @@ check("tree: a path lights every node on it", true,
       g.nodes.length > 0 && g.nodes.every((n) => n.onPath));
 check("  and reports what each repeat iteration chose", "→ a a a r",
       g.nodes.find((n) => n.kind === "repeat").choices);
+// on a lit path each node also carries the exact text it contributed
+check("  and the member text it contributed", "aaar",
+      g.nodes.find((n) => n.kind === "root").text);
+
+// numbers cross exactly, not as a rounded sketch: a 20-digit cardinality keeps
+// every digit in cardExact, for the browser to group with separators.
+e.parse({ pattern: "[0-9]{20}", flags: "" });
+g = e.tree();
+check("tree: a big cardinality is exact, not floated",
+      "100000000000000000000", g.nodes.find((n) => n.kind === "root").cardExact);
 
 console.log(fail ? `\nnode: ${fail} FAILED, ${pass} passed`
                  : `\nnode: all ${pass} binding checks passed`);
