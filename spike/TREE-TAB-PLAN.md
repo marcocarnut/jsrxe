@@ -1,9 +1,13 @@
 # Tree tab — design note (survives compaction)
 
-Status: **decided, not yet built.** The Search tab is done and committed
-(jsrxe `master`, commit "Add a Search tab"). rxe is at **1.1.0** (rxerank
-merged to master). This note is the handoff for building the third tab:
-the parse-tree drawing, rxedot brought into the browser.
+Status: **BUILT** (Aug 2026). The Tree tab shipped across four commits:
+`rxe_graph_walk` in librxe with rxedot as its DOT backend (golden-guarded),
+the `rxe_js_graph` JSON binding, the Cytoscape tab itself, and word-unfold +
+path highlighting. What follows is the design note it was built from, kept for
+reference; where the build diverged from it is noted inline. The chief
+divergence: the traversal is a **visitor** (`rxe_graph_walk` driving
+node/alt/edge callbacks), not a flat `rxe_graph` struct — a visitor keeps the
+DOT byte-identical for free and serves the JSON binding equally well.
 
 ## The decision: Cytoscape.js, not Graphviz
 
