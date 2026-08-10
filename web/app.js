@@ -336,10 +336,14 @@ function decodeMember(s) {
 
 // Members can hold any byte, including control characters. Render those
 // visibly rather than letting them disappear into the markup.
-function renderValue(s) {
+// A member is a byte string and may carry UTF-8 to decode; the code section's
+// output is already a JS string -- possibly real Unicode, like ♠♥♦♣ from a
+// transform -- and must not go through the byte decoder, or its code points get
+// truncated to bytes. Callers rendering an output pass asText.
+function renderValue(s, asText) {
   if (s === "") return `<span class="dim">${t("emptyString")}</span>`;
   let out = "";
-  for (const ch of decodeMember(s)) {
+  for (const ch of (asText ? s : decodeMember(s))) {
     const c = ch.codePointAt(0);
     if (c < 32 || c === 127) out += `<span class="ctrl">\\x${c.toString(16).padStart(2, "0")}</span>`;
     else if (ch === "&") out += "&amp;";
@@ -798,7 +802,7 @@ function renderRows(rows, overflow = lastOverflow) {
     if (state.codeActive) {
       out = r.error
         ? `<td class="out err-cell" title="${escapeAttr(r.error)}">!</td>`
-        : `<td class="out">${renderValue(r.output || "")}</td>`;
+        : `<td class="out">${renderValue(r.output || "", true)}</td>`;
     }
     return `<tr><td class="ix">${group((BigInt(r.index) + off).toString())}</td>` +
            `<td class="val">${renderValue(r.value)}</td>${out}</tr>`;
