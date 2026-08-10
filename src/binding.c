@@ -149,6 +149,81 @@ int rxe_js_next(struct rxe *rxe)
     return rxe_next(rxe) ? 1 : 0;
 }
 
+/* -------------------------------- Rank ---------------------------------- */
+
+// The inverse of seek: given a string, the index (or indices) at which it sits
+// in the set. The Search tab uses this. The string is passed as a pointer and
+// a length rather than a C string, because a member can hold any byte value --
+// including zero -- and the page hands over exactly the bytes it is showing.
+
+// Every index a string is reached by, newline-separated, up to 'max' of them.
+// Freshly allocated; release with rxe_js_free. Empty string when the string is
+// no member; NULL when the set is one rank cannot handle -- ask the reason.
+struct rank_collect { char *buf; size_t len, cap; int n, max; };
+static int rank_collect_cb(const mpz_t idx, void *v)
+{
+    struct rank_collect *c = v;
+    char *s = mpz_get_str(NULL, 10, idx);
+    size_t sl = strlen(s);
+    if (c->len + sl + 2 > c->cap) {
+        c->cap = (c->len + sl + 2) * 2;
+        c->buf = realloc(c->buf, c->cap);
+    }
+    if (c->n) c->buf[c->len++] = '\n';
+    memcpy(c->buf + c->len, s, sl);
+    c->len += sl;
+    free(s);
+    return ++c->n >= c->max;               // stop once the cap is reached
+}
+
+EMSCRIPTEN_KEEPALIVE
+char *rxe_js_rank_all(struct rxe *rxe, const char *s, int len, int max)
+{
+    char *tmp = malloc(len + 1);
+    if (!tmp) return NULL;
+    memcpy(tmp, s, len);
+    tmp[len] = 0;
+    struct rank_collect c = { malloc(16), 0, 16, 0, max > 0 ? max : 1 };
+    if (!c.buf) { free(tmp); return NULL; }
+    long rc = rxe_rank_all(rxe, tmp, rank_collect_cb, &c);
+    free(tmp);
+    if (rc < 0) { free(c.buf); return NULL; }   // refused
+    c.buf[c.len] = 0;
+    return c.buf;
+}
+
+// How many indices the string is reached by, as a decimal string. "0" for a
+// non-member; NULL when the set cannot be ranked. A value above one is a
+// duplicate. This is cheap and exact even when the count is astronomical, so
+// the page learns whether a listing was capped without building it.
+EMSCRIPTEN_KEEPALIVE
+char *rxe_js_rank_count(struct rxe *rxe, const char *s, int len)
+{
+    char *tmp = malloc(len + 1);
+    if (!tmp) return NULL;
+    memcpy(tmp, s, len);
+    tmp[len] = 0;
+    mpz_t c;
+    mpz_init(c);
+    int rc = rxe_rank_count(rxe, tmp, c);
+    free(tmp);
+    if (rc < 0) { mpz_clear(c); return NULL; }
+    char *out = mpz_get_str(NULL, 10, c);
+    mpz_clear(c);
+    return out;
+}
+
+// Why a set could not be ranked, when rxe_js_rank_all/count returned NULL.
+// Freshly allocated; release with rxe_js_free.
+EMSCRIPTEN_KEEPALIVE
+char *rxe_js_rank_reason(void)
+{
+    const char *msg = rxe_rank_reason();
+    char *out = malloc(strlen(msg) + 1);
+    if (out) strcpy(out, msg);
+    return out;
+}
+
 // The element currently selected. Freshly allocated; release with
 // rxe_js_free. Members can hold any byte value including zero, so the length
 // is reported separately rather than left to a terminator.
@@ -263,6 +338,25 @@ char *rxe_js_permutation_map(struct rxe_permutation *perm, const char *index)
     mpz_init(o);
     if (mpz_set_str(i,index,10)) { mpz_clear(i); mpz_clear(o); return NULL; }
     rxe_permutation_map(o,perm,i);
+    out = mpz_get_str(NULL,10,o);
+    mpz_clear(i);
+    mpz_clear(o);
+    return out;
+}
+
+// The inverse: given a natural set index, the position the key shows it at. The
+// Search tab uses it to place a found member's index in the shuffled view, so a
+// search lands on the right row whether or not a key is set.
+EMSCRIPTEN_KEEPALIVE
+char *rxe_js_permutation_unmap(struct rxe_permutation *perm, const char *image)
+{
+    mpz_t i,o;
+    char *out;
+    if (!image) return NULL;
+    mpz_init(i);
+    mpz_init(o);
+    if (mpz_set_str(i,image,10)) { mpz_clear(i); mpz_clear(o); return NULL; }
+    rxe_permutation_unmap(o,perm,i);
     out = mpz_get_str(NULL,10,o);
     mpz_clear(i);
     mpz_clear(o);

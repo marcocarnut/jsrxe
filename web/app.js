@@ -73,11 +73,16 @@ let t = makeT(lang);
 
 let state = {
   ok: false, infinite: false, shortlex: false, count: null,
-  from: 0n, per: 50, zeroBased: true, keyActive: false, filter: "all",
-  selected: null, slider: "none", codeActive: false,
+  from: 0n, per: 50, zeroBased: true, key: "", keyActive: false, filter: "all",
+  selected: null, slider: "none", codeActive: false, tab: "elements",
   note: "", orderTip: "", sliderTip: "", countSpoken: "", timeTip: "",
   maxMember: readMaxMember()
 };
+
+// The last search's result, kept so switching away from the Search tab and
+// back does not lose it. Null until a search is run; cleared when the
+// expression or key changes, since the indices would no longer mean anything.
+let lastSearch = null;
 
 let mine = [];
 try { mine = JSON.parse(localStorage.getItem(STORE_MINE) || "[]"); } catch { mine = []; }
@@ -644,7 +649,7 @@ function selectExample(ex) {
   const inline = ex.flags ? "(?" + ex.flags + ")" : "";
   $("pattern").value = inline + examplePattern(ex);
   $("from").value = "0";
-  $("key").value = "";
+  state.key = "";
   $("code").value = ex.code || "";
   setCodeVisible(!!ex.code);
   refreshCodeToggle();
@@ -668,6 +673,7 @@ function renderNote() {
 function currentFlags() { return ""; }
 
 let reparseTimer = null;
+let searchTimer = null;
 function scheduleReparse() {
   clearTimeout(reparseTimer);
   reparseTimer = setTimeout(reparse, 250);
@@ -696,7 +702,13 @@ async function reparse() {
   await applyCode();
   renderAll();
   await loadLengthStarts();
-  loadRows();
+  // The set (or its order) just changed, so any prior search no longer means
+  // anything; drop it and render whichever tab is showing -- re-running the
+  // search when the Search tab holds a query, so a shared link resolves it.
+  lastSearch = null;
+  if (state.tab === "search") {
+    if ($("findtext").value) runSearch(); else renderSearch();
+  } else loadRows();
 }
 
 async function applyCode() {
@@ -709,7 +721,7 @@ async function applyCode() {
 }
 
 async function applyKey() {
-  const key = $("key").value.trim();
+  const key = (state.key || "").trim();
   if (key && state.infinite) {
     $("err").textContent = t("keyNeedsFinite");
     show($("err"), true);
@@ -823,8 +835,11 @@ function renderRows(rows, overflow = lastOverflow) {
   // it off screen; this line keeps only its plain past-the-end note -- and not
   // even that when the page is empty because members were held back, not because
   // the index ran off the end.
+  // The past-the-end note belongs to enumeration only; on the Search tab an
+  // empty table means "not a member", which the search status says instead.
   $("status").textContent =
-    (rows.length || overflow) ? "" : (state.ok ? t("pastEnd") : "");
+    (rows.length || overflow || state.tab !== "elements")
+      ? "" : (state.ok ? t("pastEnd") : "");
   const tb = $("toobig");
   tb.textContent = overflow ? tooBigMessage() : "";
   tb.hidden = !overflow;
@@ -841,6 +856,83 @@ async function loadRows() {
   renderRows(r.rows || [], !!r.overflow);
   syncSlider();
   renderBookmarks();
+}
+
+// Re-render whichever tab owns the shared table. Used when something that
+// affects both -- the code column, the shuffle key -- changes: the Search tab
+// re-runs so its rows and count reflect the change, the Elements tab reloads.
+function refreshTable() {
+  if (state.tab === "search") { if (lastSearch) runSearch(); else renderSearch(); }
+  else loadRows();
+}
+
+/* --------------------------------------------------------------- searching */
+
+// Switch between enumerating (Elements) and searching (Search). They share the
+// results table, so switching just swaps which controls show and re-renders it.
+function setTab(tab) {
+  state.tab = tab;
+  for (const b of document.querySelectorAll(".etab"))
+    b.classList.toggle("on", b.dataset.etab === tab);
+  show($("elements-view"), tab === "elements");
+  show($("search-view"), tab === "search");
+  if (tab === "elements") loadRows();
+  else { renderSearch(); $("findtext").focus(); }
+}
+
+// The numbering toggle appears in both tabs' controls; both reflect the one
+// state, and flipping either re-renders the visible table under the new offset.
+function syncZero() {
+  for (const b of document.querySelectorAll(".zerotgl")) {
+    b.classList.toggle("on", state.zeroBased);
+    b.setAttribute("aria-pressed", String(state.zeroBased));
+  }
+}
+function toggleZero() {
+  state.zeroBased = !state.zeroBased;
+  syncZero();
+  $("from").value = (state.from + (state.zeroBased ? 0n : 1n)).toString();
+  renderRows(lastRows);
+}
+
+// Run the search now: rank the string and show every index it sits at, capped.
+async function runSearch() {
+  if (!state.ok) { lastSearch = null; renderSearch(); return; }
+  const text = $("findtext").value;
+  const cap = Math.max(1, Math.min(1000, parseInt($("findcap").value, 10) || 50));
+  lastSearch = await call("search", { text, cap });
+  renderSearch();
+}
+
+// Turn the library's refusal reason into the page's own words.
+function searchReason(reason) {
+  if (/variable-length/.test(reason || "")) return t("searchReasonVar");
+  if (/diagonal/.test(reason || "")) return t("searchReasonDiag");
+  return t("searchReasonGen");
+}
+
+// Show the search result: the matching rows in the shared table, and a line
+// saying how many there are -- a count above one being a duplicate, and a
+// capped listing saying so.
+function renderSearch() {
+  const ss = $("searchstatus");
+  ss.classList.remove("warn");
+  if (!lastSearch) { renderRows([], false); ss.textContent = ""; return; }
+  if (lastSearch.refused) {
+    renderRows([], false);
+    ss.classList.add("warn");
+    ss.textContent = t("searchRefused") + " " + searchReason(lastSearch.reason);
+    return;
+  }
+  renderRows(lastSearch.rows || [], false);
+  const count = lastSearch.count || "0";
+  if (count === "0") { ss.textContent = t("searchNotMember"); return; }
+  const n = BigInt(count);
+  let msg = n === 1n ? t("searchOne")
+                     : group(count) + " " + t("searchCopies");
+  if (BigInt(lastSearch.shown || 0) < n)
+    msg += " · " + t("searchShowing") + " " + lastSearch.shown;
+  ss.textContent = msg;
 }
 
 // The bookmarks for the current example: whatever it ships plus whatever the
@@ -889,8 +981,8 @@ function jumpToIndex(index) {
 // plain index order -- the way back from any shuffle.
 async function applyBookmark(bm) {
   const want = bm.key || "";
-  if ($("key").value !== want) {
-    $("key").value = want;
+  if (state.key !== want) {
+    state.key = want;
     await applyKey();
   }
   jumpToIndex(bm.index);
@@ -912,7 +1004,7 @@ function openBookmarkBox() {
   $("bmindex").textContent =
     group((state.from + (state.zeroBased ? 0n : 1n)).toString());
   // A bookmark remembers the shuffle key in force, so show which one it keeps.
-  const key = $("key").value.trim();
+  const key = (state.key || "").trim();
   show($("bmkeyline"), !!key);
   $("bmkey").textContent = key;
   $("bmbox").showModal();
@@ -940,12 +1032,15 @@ function setFrom(v) {
 // as a short link. 'from' is a decimal string because it can be a bignum.
 function currentShareState() {
   const s = { p: $("pattern").value };
-  const code = $("code").value.trim(), key = $("key").value.trim();
+  const code = $("code").value.trim(), key = (state.key || "").trim();
   if (code) s.c = code;
   if (key) s.k = key;
   if (state.from !== 0n) s.f = state.from.toString();
   if (state.per !== 50) s.n = state.per;
   if (!state.zeroBased) s.z = false;
+  // On the Search tab the link carries the query, so it reopens on the same
+  // lookup rather than the enumeration.
+  if (state.tab === "search") s.q = $("findtext").value;
   // A link to an example carries its id and the language it was read in, so
   // the receiver lands on the same example -- note, bookmarks and all -- and,
   // for one whose regex differs by language (Powerball vs Mega-Sena), on the
@@ -974,14 +1069,22 @@ function applyShareState(s) {
     $("code").value = typeof s.c === "string" ? s.c : "";
   }
   setCodeVisible(!!$("code").value); refreshCodeToggle();
-  $("key").value = typeof s.k === "string" ? s.k : "";
+  state.key = typeof s.k === "string" ? s.k : "";
   state.per = (typeof s.n === "number" && s.n >= 1 && s.n <= 1000) ? s.n : 50;
   $("per").value = String(state.per);
   state.zeroBased = s.z !== false;
-  $("zero").checked = state.zeroBased;
+  syncZero();
   try { state.from = BigInt(s.f || "0"); } catch { state.from = 0n; }
   if (state.from < 0n) state.from = 0n;
   $("from").value = (state.from + (state.zeroBased ? 0n : 1n)).toString();
+  // A link may carry a search: fill it and open the Search tab, so the receiver
+  // lands on the same lookup. reparse runs it once the expression is parsed.
+  if (typeof s.q === "string") {
+    $("findtext").value = s.q;
+    setTab("search");
+  } else {
+    setTab("elements");
+  }
   renderNote(); renderLibrary();
 }
 
@@ -1014,17 +1117,21 @@ function readShareHash() {
 
 function setShareLabel() {
   // The button is an icon now; its label lives in the tooltip.
-  $("share").title = navigator.share ? t("share") : t("shareCopy");
+  $("share").title = $("share2").title =
+    navigator.share ? t("share") : t("shareCopy");
 }
 
 let flashTimer = null;
 function flashCopied() {
-  const c = $("copied");
+  // Flash the share button of whichever tab is showing -- each has its own.
+  const onSearch = state.tab === "search";
+  const c = $(onSearch ? "copied2" : "copied");
+  const btn = $(onSearch ? "share2" : "share");
   c.textContent = t("shareCopied");
   c.hidden = false;
-  $("share").classList.add("done");
+  btn.classList.add("done");
   clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { c.hidden = true; $("share").classList.remove("done"); }, 1600);
+  flashTimer = setTimeout(() => { c.hidden = true; btn.classList.remove("done"); }, 1600);
 }
 
 // Native share sheet where there is one (phones, and some desktops); a
@@ -1193,7 +1300,7 @@ function wire() {
   $("code").oninput = () => {
     state.selected = null; renderNote(); renderLibrary(); refreshCodeToggle();
     clearTimeout(reparseTimer);
-    reparseTimer = setTimeout(async () => { await applyCode(); loadRows(); }, 300);
+    reparseTimer = setTimeout(async () => { await applyCode(); refreshTable(); }, 300);
   };
   // The </> button folds the code section in and out; a fresh open lands the
   // cursor in it so the reader can start typing at once.
@@ -1202,7 +1309,6 @@ function wire() {
     setCodeVisible(on);
     if (on) $("code").focus();
   };
-  $("key").oninput = () => { clearTimeout(reparseTimer); reparseTimer = setTimeout(async () => { await applyKey(); loadRows(); }, 250); };
 
   // The time-to-visit-them-all reveal, folded into the size box.
   $("timebtn").onclick = () => {
@@ -1218,11 +1324,7 @@ function wire() {
     $("per").value = String(state.per);
     loadRows();
   };
-  $("zero").onchange = () => {
-    state.zeroBased = $("zero").checked;
-    $("from").value = (state.from + (state.zeroBased ? 0n : 1n)).toString();
-    renderRows(lastRows);
-  };
+  for (const b of document.querySelectorAll(".zerotgl")) b.onclick = toggleZero;
   $("from").onchange = () => {
     let v;
     try { v = BigInt($("from").value.replace(/[^0-9]/g, "") || "0"); } catch { return; }
@@ -1241,7 +1343,15 @@ function wire() {
     const r = await call("random", { count: state.count, n: state.per });
     renderRows(r.rows || [], !!r.overflow);
   };
+  for (const b of document.querySelectorAll(".etab"))
+    b.onclick = () => setTab(b.dataset.etab);
+  // Search as you type, like the other inputs, so there is no button to press.
+  const searchSoon = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 200); };
+  $("findtext").oninput = searchSoon;
+  $("findcap").oninput = searchSoon;
+
   $("share").onclick = doShare;
+  $("share2").onclick = doShare;
   $("export").onclick = openExportBox;
   $("exportform").onsubmit = (e) => { e.preventDefault(); runExport(); };
   $("exportcancel").onclick = () => { exportAbort = true; $("exportbox").close(); };
@@ -1355,7 +1465,7 @@ function wire() {
     // Stored as a zero-based index, whatever numbering was on screen, together
     // with the shuffle key it belongs to so the same element comes back.
     const idx = (state.from).toString();
-    const bkey = $("key").value.trim();
+    const bkey = (state.key || "").trim();
     (marks[state.selected] = marks[state.selected] || [])
       .push({ name, index: idx, key: bkey });
     localStorage.setItem(STORE_MARKS, JSON.stringify(marks));
@@ -1410,6 +1520,7 @@ function saveFromBox() {
 
 async function onReady() {
   renderHelpers();
+  syncZero();                       // light the numbering toggle to match state
   await classifyExamples();
   const shared = readShareHash();
   if (shared) { applyShareState(shared); reparse(); }

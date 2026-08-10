@@ -50,7 +50,11 @@ export function makeEngine(Module, {
     registerDict: c("rxe_js_register_dict",       null,     ["string","string"]),
     freeDicts:    c("rxe_js_free_dicts",           null,     []),
     setMaxMember: c("rxe_js_set_max_member",      null,     ["number"]),
-    checkOverflow:c("rxe_js_check_overflow",      "number", [])
+    checkOverflow:c("rxe_js_check_overflow",      "number", []),
+    rankAll:      c("rxe_js_rank_all",            "number", ["number","number","number","number"]),
+    rankCount:    c("rxe_js_rank_count",          "number", ["number","number","number"]),
+    rankReason:   c("rxe_js_rank_reason",         "number", []),
+    permUnmap:    c("rxe_js_permutation_unmap",   "number", ["number","string"])
   };
 
   let rxe = 0;        // the parsed expression
@@ -81,6 +85,17 @@ export function makeEngine(Module, {
     api.free(ptr);
     Module._free(lenPtr);
     return out;
+  };
+
+  // A search string crosses the boundary as raw bytes, one per character's low
+  // eight bits, the same latin1 mapping the page renders members with -- so a
+  // member holding any byte, valid UTF-8 or not, is searched for exactly as it
+  // is shown. The caller frees the buffer.
+  const putBytes = (str) => {
+    const len = str.length;
+    const ptr = Module._malloc(len || 1);
+    for (let i = 0; i < len; i++) Module.HEAPU8[ptr + i] = str.charCodeAt(i) & 0xff;
+    return { ptr, len };
   };
 
   const clearPerm = () => { if (perm) { api.permRelease(perm); perm = 0; } permCount = null; };
@@ -171,6 +186,32 @@ export function makeEngine(Module, {
       // A member too large to build stops the seek, so the page can come back
       // short; the flag lets the page say why rather than look merely empty.
       return { rows, overflow: !!api.checkOverflow() };
+    },
+
+    // The inverse of rows: given a string, the indices it sits at. rank returns
+    // every one (up to the cap), so a duplicate shows as several rows of the
+    // same member at different addresses -- the Search tab's whole point. Each
+    // row is built exactly as an enumerated one, so the table, the code column
+    // and a shuffle key all behave the same; with a key the index shown is the
+    // permuted position (unmap), so a found member lands on its visible row.
+    search({ text, cap }) {
+      if (!rxe) return { rows: [], count: "0", shown: 0 };
+      const limit = Math.max(1, cap | 0);
+      const { ptr, len } = putBytes(text);
+      const listPtr = api.rankAll(rxe, ptr, len, limit);
+      if (!listPtr) {                       // the set cannot be ranked
+        Module._free(ptr);
+        return { refused: true, reason: takeString(api.rankReason()) };
+      }
+      const count = takeString(api.rankCount(rxe, ptr, len)) || "0";
+      Module._free(ptr);
+      const list = takeString(listPtr);
+      const indices = list ? list.split("\n") : [];
+      const rows = indices.map((i) => {
+        const shown = perm ? (takeString(api.permUnmap(perm, i)) || i) : i;
+        return withTransform(shown, text);
+      });
+      return { rows, count, shown: indices.length };
     },
 
     // Set the per-member byte cap. Below it members render whole; above it

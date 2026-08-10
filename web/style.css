@@ -237,6 +237,43 @@ main {
 /* The order rides in the Elements header as a natural-case parenthetical, not
    swept up into the header's small-caps treatment. */
 .ehead { display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; }
+
+/* The Elements/Search tab strip, styled to match the library tabs but sized
+   for a panel header, with the enumeration-order label riding along the end. */
+.etabs { display: flex; align-items: baseline; gap: .2rem; flex-wrap: wrap;
+         border-bottom: 1px solid var(--line); margin-bottom: .8rem; }
+.etab { background: none; border: 0; border-bottom: 2px solid transparent;
+        margin-bottom: -1px; padding: .3rem .1rem .5rem; margin-right: .8rem;
+        color: var(--dim); font: inherit; font-size: 1.15rem; font-weight: 600;
+        cursor: pointer; }
+.etab.on { color: var(--fg); border-bottom-color: var(--accent); }
+.etab:hover { color: var(--fg); }
+#searchstatus { margin: .2rem 0 .6rem; min-height: 1.2em; }
+#searchstatus.warn { color: var(--warn, #c0392b); }
+
+/* the enumeration-order label, right-aligned above the field it describes */
+.patlabel { display: flex; justify-content: space-between; align-items: baseline;
+            gap: .5rem; }
+.patlabel #orderlabel { flex: 0 1 auto; }
+
+/* the numbering toggle, styled like a nav button but staying lit while on --
+   a button among buttons, not a stray checkbox up in the tab strip */
+.zerotgl { background: var(--bg); color: var(--fg);
+           border: 1px solid var(--line); border-radius: 6px;
+           padding: .32rem .75rem; cursor: pointer; font: inherit;
+           font-size: .88rem; }
+.zerotgl:hover { border-color: var(--accent); color: var(--accent); }
+.zerotgl.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* when it is on (accent fill), hover must not repaint the text in the accent
+   colour too -- that is the fill colour, so the label would vanish */
+.zerotgl.on:hover { color: #fff; }
+#search-view .controls { align-items: end; }
+/* the search tab's share icon matches the nav one, which is scoped to .nav */
+#search-view .iconbtn { padding: .3rem .5rem; display: inline-flex;
+    align-items: center; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+#search-view .iconbtn svg { width: 18px; height: 18px; display: block; }
+#search-view .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
 #orderlabel { text-transform: none; letter-spacing: 0; font-weight: 400; }
 #orderlabel.tip-host { border-bottom: 1px dotted var(--dim); }
 .err { color: var(--err); font-size: .9rem; margin-top: .4rem;

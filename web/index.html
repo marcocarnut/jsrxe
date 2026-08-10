@@ -95,7 +95,12 @@
   <section id="work">
 
     <div class="panel">
-      <label for="pattern" data-t="patternLabel"></label>
+      <!-- the enumeration order rides at the right of the label, so it sits
+           above the field it describes rather than down by the results -->
+      <div class="patlabel">
+        <label for="pattern" data-t="patternLabel"></label>
+        <span id="orderlabel" class="tip-host"></span>
+      </div>
       <div class="patrow">
         <input id="pattern" type="text" spellcheck="false" autocapitalize="off"
                autocomplete="off" data-tplace="patternPlace">
@@ -131,40 +136,58 @@
     </div>
 
     <div class="panel">
-      <!-- the enumeration order rides in the header, with its own tooltip -->
-      <h2 class="ehead"><span data-t="elements"></span>
-          <span id="orderlabel" class="tip-host"></span></h2>
-
-      <div class="controls">
-        <label class="ctl"><span data-t="fromIndex"></span>
-          <input id="from" type="text" inputmode="numeric" value="0"></label>
-        <label class="ctl"><span data-t="perPage"></span>
-          <input id="per" type="number" min="1" max="1000" value="50"></label>
-        <label class="ctl chk"><input type="checkbox" id="zero" checked>
-          <span data-t="zeroBased"></span></label>
-        <label class="ctl grow"><span data-t="key"></span>
-          <input id="key" type="text" data-tplace="keyPlace"></label>
+      <!-- Elements enumerates by index; Search inverts it, finding the index
+           of a string. The two share the results table below; a third tab, the
+           parse-tree drawing, is the room this leaves. -->
+      <div class="etabs">
+        <button class="etab on" data-etab="elements" data-t="elements"></button>
+        <button class="etab" data-etab="search" data-t="searchTab"></button>
       </div>
 
-      <div class="nav">
-        <button id="first" data-t="first"></button>
-        <button id="prev" data-t="prev"></button>
-        <button id="next" data-t="next"></button>
-        <button id="last" data-t="last"></button>
-        <button id="random" data-t="random"></button>
-        <button id="export" class="iconbtn" data-ttip="exportBtn" aria-label="export">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 9.5 12 14l4.5-4.5"/><path d="M4 20h16"/></svg>
-        </button>
-        <button id="share" class="iconbtn" aria-label="share">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-        </button>
-        <span id="copied" class="copiedtip" hidden></span>
+      <div id="elements-view">
+        <div class="controls">
+          <label class="ctl"><span data-t="fromIndex"></span>
+            <input id="from" type="text" inputmode="numeric" value="0"></label>
+          <label class="ctl"><span data-t="perPage"></span>
+            <input id="per" type="number" min="1" max="1000" value="50"></label>
+        </div>
+
+        <div class="nav">
+          <button id="first" data-t="first"></button>
+          <button id="prev" data-t="prev"></button>
+          <button id="next" data-t="next"></button>
+          <button id="last" data-t="last"></button>
+          <button id="random" data-t="random"></button>
+          <button type="button" class="zerotgl" aria-pressed="true" data-t="zeroOffset"></button>
+          <button id="export" class="iconbtn" data-ttip="exportBtn" aria-label="export">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 9.5 12 14l4.5-4.5"/><path d="M4 20h16"/></svg>
+          </button>
+          <button id="share" class="iconbtn" aria-label="share">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+          </button>
+          <span id="copied" class="copiedtip" hidden></span>
+        </div>
+
+        <div id="bookmarks"></div>
+
+        <div id="coarse">
+          <input id="slider" class="tip-host" type="range" min="0" max="10000" value="0">
+        </div>
       </div>
 
-      <div id="bookmarks"></div>
-
-      <div id="coarse">
-        <input id="slider" class="tip-host" type="range" min="0" max="10000" value="0">
+      <div id="search-view" hidden>
+        <div class="controls">
+          <label class="ctl grow"><span data-t="searchFind"></span>
+            <input id="findtext" type="text" data-tplace="searchPlace"></label>
+          <label class="ctl"><span data-t="searchCap"></span>
+            <input id="findcap" type="number" min="1" max="1000" value="50"></label>
+          <button type="button" class="zerotgl" aria-pressed="true" data-t="zeroOffset"></button>
+          <button id="share2" class="iconbtn" aria-label="share">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+          </button>
+          <span id="copied2" class="copiedtip" hidden></span>
+        </div>
+        <div id="searchstatus" class="dim"></div>
       </div>
 
       <table id="results">
