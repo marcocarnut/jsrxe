@@ -706,6 +706,9 @@ async function reparse() {
   // anything; drop it and render whichever tab is showing -- re-running the
   // search when the Search tab holds a query, so a shared link resolves it.
   lastSearch = null;
+  // A lit member belongs to the set that was showing; the set just changed, so
+  // drop it rather than seek a now-meaningless index into the new one.
+  treePath = ""; $("treeidx").value = "";
   if (state.tab === "search") {
     if ($("findtext").value) runSearch(); else renderSearch();
   } else if (state.tab === "tree") renderTree();
@@ -981,6 +984,7 @@ function ensureCytoscape() {
 
 let cy = null;             // the Cytoscape instance, or null when none is drawn
 let treeDir = "TB";        // dagre rank direction, toggled by Rotate
+let treePath = "";         // the index whose route is lit, or "" for none
 
 // rxedot's palette, by node kind, so the tree reads the same as the DOT drawing.
 const TREE_FILL = {
@@ -1095,11 +1099,19 @@ function drawTree(g) {
     container: $("cy"),
     elements: buildTreeElements(g),
     style: treeStyle(),
-    layout: dagreLayout(),
+    layout: { name: "preset" },   // fold words first, then lay out once
     wheelSensitivity: 0.25,
     minZoom: 0.1, maxZoom: 3
   });
   cy.on("tap", "node", (ev) => toggleFold(ev.target));
+  // A literal word carries its letters as children; it starts folded to a
+  // single box, and a click unfolds 'cat' into 'c' 'a' 't'.
+  cy.nodes('[kind="literal"]').forEach((n) => {
+    if (n.outgoers('edge[kind="seq"]').length) setFolded(n, true);
+  });
+  cy.layout(dagreLayout()).run();
+  // A handle for the console and the browser tests to reach the graph.
+  window.__rxeCy = cy;
 }
 
 // Fetch the graph and draw it. Called on entering the Tree tab and whenever the
@@ -1109,6 +1121,7 @@ let treeToken = 0;
 async function renderTree(opts = {}) {
   if (state.tab !== "tree") return;
   if (!state.ok) { destroyTree(); setTreeMsg(t("treeEmpty")); return; }
+  const path = opts.path !== undefined ? opts.path : treePath;
   const token = ++treeToken;
   setTreeMsg(t("treeLoading"));
   try { await ensureCytoscape(); }
@@ -1117,11 +1130,25 @@ async function renderTree(opts = {}) {
   // the graph were in flight; a stale render must not paint over a newer one.
   if (token !== treeToken || state.tab !== "tree") return;
   const expandSubs = $("treesubs").checked;
-  const g = await call("tree", { collapse: !expandSubs, fold: true, path: opts.path || "" });
+  const g = await call("tree", { collapse: !expandSubs, fold: true, path });
   if (token !== treeToken || state.tab !== "tree") return;
   if (!g || !g.nodes || !g.nodes.length) { destroyTree(); setTreeMsg(t("treeEmpty")); return; }
   setTreeMsg("");
   drawTree(g);
+}
+
+// Read the "light member" field and light the route to it: a bare decimal is
+// an index seeked straight to; anything else is a member string, ranked to the
+// first index it sits at. An empty field, a non-member, or an unrankable set
+// simply lights nothing.
+let lightTimer = null;
+async function resolveLight() {
+  const v = $("treeidx").value.trim();
+  if (!v) { treePath = ""; renderTree({ path: "" }); return; }
+  if (/^\d+$/.test(v)) { treePath = v; renderTree({ path: v }); return; }
+  const r = await call("rankFirst", { text: v });
+  treePath = (r && r.index) ? r.index : "";
+  renderTree({ path: treePath });
 }
 
 // The bookmarks for the current example: whatever it ships plus whatever the
@@ -1556,6 +1583,8 @@ function wire() {
     if (cy) cy.layout(dagreLayout()).run();
   };
   $("treesubs").onchange = () => renderTree();
+  const lightSoon = () => { clearTimeout(lightTimer); lightTimer = setTimeout(resolveLight, 250); };
+  $("treeidx").oninput = lightSoon;
   $("export").onclick = openExportBox;
   $("exportform").onsubmit = (e) => { e.preventDefault(); runExport(); };
   $("exportcancel").onclick = () => { exportAbort = true; $("exportbox").close(); };

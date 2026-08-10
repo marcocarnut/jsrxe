@@ -215,6 +215,21 @@ export function makeEngine(Module, {
       return { rows, count, shown: indices.length };
     },
 
+    // The smallest raw index a string sits at, for lighting its path in the
+    // Tree tab. Unlike search() this returns the library's own index, not the
+    // key-permuted one, because the tree is seeked by the raw index. null when
+    // the string is not a member or the set cannot be ranked.
+    rankFirst({ text }) {
+      if (!rxe) return { index: null };
+      const { ptr, len } = putBytes(text);
+      const listPtr = api.rankAll(rxe, ptr, len, 1);
+      Module._free(ptr);
+      if (!listPtr) return { refused: true, index: null };
+      const list = takeString(listPtr);
+      const idx = list ? list.split("\n")[0] : "";
+      return { index: idx || null };
+    },
+
     // The parse tree, as the Tree tab draws it. The library's one traversal
     // (the same rxedot prints DOT from) builds a { nodes, edges } graph; here it
     // crosses as JSON and is handed back parsed. collapse/unroll/fold match

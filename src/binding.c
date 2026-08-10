@@ -418,7 +418,9 @@ char *rxe_js_graph(struct rxe *rxe, int collapse, int unroll, int fold,
         mpz_clear(idx);
     }
     struct jgraph g = { { NULL, 0, 0 }, { NULL, 0, 0 }, 0, 0 };
-    struct rxe_graph_opts opts = { collapse, unroll, fold, onpath };
+    // letters on: the Tree tab folds each word to a single node but keeps its
+    // letters as hidden children, so a click can unfold 'cat' into 'c' 'a' 't'.
+    struct rxe_graph_opts opts = { collapse, unroll, fold, onpath, 1 };
     struct rxe_graph_visitor vis = { jg_node, jg_alt, jg_edge };
     rxe_graph_walk(rxe, &opts, &vis, &g);
 

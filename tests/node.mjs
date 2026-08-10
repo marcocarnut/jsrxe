@@ -229,6 +229,15 @@ g = e.tree();
 check("tree: infinite repeats are flagged", 2,
       g.nodes.filter((n) => n.kind === "repeat" && n.inf).length);
 
+// a folded word carries its letters as children, so the Tree tab can unfold
+// 'cat' into 'c' 'a' 't'. An escape stays one letter: 'a\.b' is a, \., b.
+e.parse({ pattern: "a\\.b(x|y)", flags: "" });
+g = e.tree();
+const word = g.nodes.find((n) => n.kind === "literal");
+const letters = g.edges.filter((x) => x.from === word.id && !x.isRef)
+  .map((x) => g.nodes.find((n) => n.id === x.to).line1);
+check("tree: a word keeps its letters, escapes whole", "a,\\.,b", letters.join(","));
+
 // a path lights the route to a member: [a-z]{4} index 17 is 'aaar'
 e.parse({ pattern: "[a-z]{4}", flags: "" });
 g = e.tree({ path: "17" });

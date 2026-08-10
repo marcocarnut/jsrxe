@@ -125,6 +125,8 @@ export const STRINGS = {
     treeFit:          "Fit",
     treeDir:          "Rotate",           // toggles top-down / left-right
     treeExpandSubs:   "Expand subroutines",
+    treeLight:        "Light member",
+    treeLightPlace:   "an index, or a member string",
     treeEmpty:        "Enter a valid expression to see its tree.",
     treeLoading:      "Loading the tree view…",
     fromIndex:        "From index",
@@ -317,6 +319,8 @@ export const STRINGS = {
     treeFit:          "Ajustar",
     treeDir:          "Girar",
     treeExpandSubs:   "Expandir sub-rotinas",
+    treeLight:        "Destacar membro",
+    treeLightPlace:   "um índice, ou uma string membro",
     treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
     treeLoading:      "Carregando a árvore…",
     fromIndex:        "A partir do índice",

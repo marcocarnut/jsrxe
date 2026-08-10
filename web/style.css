@@ -285,6 +285,9 @@ main {
 .treectl .treechk { flex-direction: row; align-items: center; gap: .3rem;
     white-space: nowrap; }
 .treectl .treechk input { min-width: 0; width: auto; margin: 0; }
+.treectl .treelight { flex-direction: row; align-items: center; gap: .35rem;
+    white-space: nowrap; }
+.treectl .treelight input { min-width: 0; width: 11rem; }
 .treectl .iconbtn { padding: .3rem .5rem; display: inline-flex; align-items: center;
     background: var(--bg); color: var(--fg); border: 1px solid var(--line);
     border-radius: 6px; cursor: pointer; }
