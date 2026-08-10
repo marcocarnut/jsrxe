@@ -1056,14 +1056,18 @@ function openExportBox() {
   $("exportbox").showModal();
 }
 
-// One member per line, index tab-prefixed when asked. Members can hold any
-// byte, so the line is written as raw bytes (one char = one byte), never
-// UTF-8 re-encoded -- exactly the bytes rxenum would print.
-function bytesForRows(rows, withIndex, off) {
+// One member per line, mirroring the columns on screen: index when asked, the
+// element, and -- when the code section is running -- its output beside it,
+// tab-separated, exactly as the table shows them. Members can hold any byte, so
+// the line is written as raw bytes (one char = one byte), never UTF-8
+// re-encoded -- the bytes rxenum would print.
+function bytesForRows(rows, withIndex, off, withCode) {
   let s = "";
   for (const r of rows) {
     if (withIndex) s += (BigInt(r.index) + off).toString() + "\t";
-    s += r.value + "\n";
+    s += r.value;
+    if (withCode) s += "\t" + (r.output != null ? r.output : "");
+    s += "\n";
   }
   const b = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
@@ -1090,6 +1094,7 @@ async function runExport() {
     if (total > remaining) total = remaining;
   }
   const withIndex = $("exportindex").checked;
+  const withCode = state.codeActive;
   const off = state.zeroBased ? 0n : 1n;
 
   let writable = null, parts = null;
@@ -1118,7 +1123,7 @@ async function runExport() {
       const r = await call("rows", { from: from.toString(), n: want });
       const rows = r.rows || [];
       if (!rows.length) break;                   // reached the end
-      const bytes = bytesForRows(rows, withIndex, off);
+      const bytes = bytesForRows(rows, withIndex, off, withCode);
       if (writable) await writable.write(bytes);
       else parts.push(bytes);
       done += BigInt(rows.length);
