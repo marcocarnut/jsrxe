@@ -196,8 +196,10 @@
            with an interactive canvas. -->
       <div id="tree-view" hidden>
         <div class="controls">
-          <label class="ctl"><span data-t="treeIndex"></span>
+          <label class="ctl grow"><span data-t="treeIndex"></span>
             <input id="treeidx" type="text" inputmode="numeric" data-tplace="treeIdxPlace"></label>
+          <label class="ctl" data-ttip="treeUnrollTip"><span data-t="treeUnroll"></span>
+            <input id="treeunroll" type="number" min="0" max="50" value="0"></label>
         </div>
         <div class="nav treenav">
           <button id="treefirst" data-t="first"></button>

@@ -128,6 +128,8 @@ export const STRINGS = {
     treeAssoc:        "Associativity",
     treeIndex:        "Index",
     treeIdxPlace:     "an index, or a member string",
+    treeUnroll:       "Unroll",
+    treeUnrollTip:    "unroll a fixed {k} repetition into k copies of its body when k is at most this (0: never)",
     treeEmpty:        "Enter a valid expression to see its tree.",
     treeLoading:      "Loading the tree view…",
     treeEmptyStr:     "∅",                // shown for a node that produced ""
@@ -324,6 +326,8 @@ export const STRINGS = {
     treeAssoc:        "Associatividade",
     treeIndex:        "Índice",
     treeIdxPlace:     "um índice, ou uma string membro",
+    treeUnroll:       "Desenrolar",
+    treeUnrollTip:    "desenrola uma repetição fixa {k} em k cópias do corpo quando k é no máximo isto (0: nunca)",
     treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
     treeLoading:      "Carregando a árvore…",
     treeEmptyStr:     "∅",

@@ -251,6 +251,17 @@ check("  and reports what each repeat iteration chose", "→ a a a r",
 check("  and the member text it contributed", "aaar",
       g.nodes.find((n) => n.kind === "root").text);
 
+// unroll spells a fixed {k} repeat out into k copies of its body
+e.parse({ pattern: "[0-9]{3}", flags: "" });
+g = e.tree({ unroll: 3 });
+const rep = g.nodes.find((n) => n.kind === "repeat");
+check("tree: unroll draws k copies of the body", 3,
+      g.edges.filter((x) => x.from === rep.id && !x.isRef).length);
+check("  and off (0) draws the body once", 1,
+      (() => { const h = e.tree({ unroll: 0 });
+               const r = h.nodes.find((n) => n.kind === "repeat");
+               return h.edges.filter((x) => x.from === r.id && !x.isRef).length; })());
+
 // numbers cross exactly, not as a rounded sketch: a 20-digit cardinality keeps
 // every digit in cardExact, for the browser to group with separators.
 e.parse({ pattern: "[0-9]{20}", flags: "" });

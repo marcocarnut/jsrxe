@@ -1211,8 +1211,10 @@ async function renderTree(opts = {}) {
   // the graph were in flight; a stale render must not paint over a newer one.
   if (token !== treeToken || state.tab !== "tree") return;
   // Subroutine bodies are always fetched in full and folded on the client, so a
-  // click expands one -- there is no separate expand toggle.
-  const g = await call("tree", { collapse: false, fold: true, path });
+  // click expands one -- there is no separate expand toggle. Unroll spells a
+  // fixed {k} repetition out into k copies of its body when k is small enough.
+  const unroll = Math.max(0, Math.min(50, parseInt($("treeunroll").value, 10) || 0));
+  const g = await call("tree", { collapse: false, fold: true, unroll, path });
   if (token !== treeToken || state.tab !== "tree") return;
   if (!g || !g.nodes || !g.nodes.length) { destroyTree(); setTreeMsg(t("treeEmpty")); return; }
   setTreeMsg("");
@@ -1710,6 +1712,8 @@ function wire() {
   $("treedir").onclick = () => { treeDir = treeDir === "TB" ? "LR" : "TB"; treeLayout(); };
   const lightSoon = () => { clearTimeout(lightTimer); lightTimer = setTimeout(treeApplyInput, 250); };
   $("treeidx").oninput = lightSoon;
+  // Unroll redraws the tree; a fixed {k} repeat becomes k copies of its body.
+  $("treeunroll").oninput = () => { clearTimeout(lightTimer); lightTimer = setTimeout(renderTree, 250); };
   // The wheel steps the lit index, like the Elements table.
   $("treeidx").onwheel = (e) => {
     e.preventDefault();

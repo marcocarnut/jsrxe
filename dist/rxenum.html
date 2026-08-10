@@ -286,6 +286,7 @@ main {
    mirror the Elements tab, so they reuse .controls and .nav; it replaces the
    results table rather than sitting above it, so it wants real height. --- */
 #tree-view .controls { margin-bottom: .1rem; }
+#treeunroll { min-width: 0; width: 4.5rem; }
 .treenav { margin-top: .4rem; align-items: center; }
 /* Associativity is a toggle button styled like Zero offset. */
 #treeassoc { background: var(--bg); color: var(--fg); border: 1px solid var(--line);
@@ -611,8 +612,10 @@ dialog menu button { background: var(--bg); color: var(--fg);
            with an interactive canvas. -->
       <div id="tree-view" hidden>
         <div class="controls">
-          <label class="ctl"><span data-t="treeIndex"></span>
+          <label class="ctl grow"><span data-t="treeIndex"></span>
             <input id="treeidx" type="text" inputmode="numeric" data-tplace="treeIdxPlace"></label>
+          <label class="ctl" data-ttip="treeUnrollTip"><span data-t="treeUnroll"></span>
+            <input id="treeunroll" type="number" min="0" max="50" value="0"></label>
         </div>
         <div class="nav treenav">
           <button id="treefirst" data-t="first"></button>
@@ -5343,6 +5346,8 @@ const STRINGS = {
     treeAssoc:        "Associativity",
     treeIndex:        "Index",
     treeIdxPlace:     "an index, or a member string",
+    treeUnroll:       "Unroll",
+    treeUnrollTip:    "unroll a fixed {k} repetition into k copies of its body when k is at most this (0: never)",
     treeEmpty:        "Enter a valid expression to see its tree.",
     treeLoading:      "Loading the tree view…",
     treeEmptyStr:     "∅",                // shown for a node that produced ""
@@ -5539,6 +5544,8 @@ const STRINGS = {
     treeAssoc:        "Associatividade",
     treeIndex:        "Índice",
     treeIdxPlace:     "um índice, ou uma string membro",
+    treeUnroll:       "Desenrolar",
+    treeUnrollTip:    "desenrola uma repetição fixa {k} em k cópias do corpo quando k é no máximo isto (0: nunca)",
     treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
     treeLoading:      "Carregando a árvore…",
     treeEmptyStr:     "∅",
@@ -8322,8 +8329,10 @@ async function renderTree(opts = {}) {
   // the graph were in flight; a stale render must not paint over a newer one.
   if (token !== treeToken || state.tab !== "tree") return;
   // Subroutine bodies are always fetched in full and folded on the client, so a
-  // click expands one -- there is no separate expand toggle.
-  const g = await call("tree", { collapse: false, fold: true, path });
+  // click expands one -- there is no separate expand toggle. Unroll spells a
+  // fixed {k} repetition out into k copies of its body when k is small enough.
+  const unroll = Math.max(0, Math.min(50, parseInt($("treeunroll").value, 10) || 0));
+  const g = await call("tree", { collapse: false, fold: true, unroll, path });
   if (token !== treeToken || state.tab !== "tree") return;
   if (!g || !g.nodes || !g.nodes.length) { destroyTree(); setTreeMsg(t("treeEmpty")); return; }
   setTreeMsg("");
@@ -8821,6 +8830,8 @@ function wire() {
   $("treedir").onclick = () => { treeDir = treeDir === "TB" ? "LR" : "TB"; treeLayout(); };
   const lightSoon = () => { clearTimeout(lightTimer); lightTimer = setTimeout(treeApplyInput, 250); };
   $("treeidx").oninput = lightSoon;
+  // Unroll redraws the tree; a fixed {k} repeat becomes k copies of its body.
+  $("treeunroll").oninput = () => { clearTimeout(lightTimer); lightTimer = setTimeout(renderTree, 250); };
   // The wheel steps the lit index, like the Elements table.
   $("treeidx").onwheel = (e) => {
     e.preventDefault();

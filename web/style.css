@@ -279,6 +279,7 @@ main {
    mirror the Elements tab, so they reuse .controls and .nav; it replaces the
    results table rather than sitting above it, so it wants real height. --- */
 #tree-view .controls { margin-bottom: .1rem; }
+#treeunroll { min-width: 0; width: 4.5rem; }
 .treenav { margin-top: .4rem; align-items: center; }
 /* Associativity is a toggle button styled like Zero offset. */
 #treeassoc { background: var(--bg); color: var(--fg); border: 1px solid var(--line);
