@@ -1065,22 +1065,33 @@ function openExportBox() {
 
 // One member per line. Which columns and how they are joined is the caller's
 // choice: an optional index, then the element and/or the code's output (o.cols
-// is "element", "output" or "both"), joined by o.sep. Members can hold any
-// byte, so the line is written as raw bytes (one char = one byte), never UTF-8
-// re-encoded -- the bytes rxenum would print.
+// is "element", "output" or "both"), joined by o.sep. Each field is encoded by
+// its nature: a member is a byte string, written verbatim (the bytes rxenum
+// would print, which are already UTF-8 when it holds text); the code's output
+// is a JS string, so it is UTF-8 encoded, which is what carries ♠♥♦♣ and the
+// like through to the file. Index and separator are ASCII, so either agrees.
 function bytesForRows(rows, o) {
-  let s = "";
+  const enc = new TextEncoder();
+  const raw = (s) => {                               // a member: bytes as they are
+    const a = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 0xff;
+    return a;
+  };
+  const sep = enc.encode(o.sep), nl = enc.encode("\n");
+  const chunks = [];
   for (const r of rows) {
-    const f = [];
-    if (o.withIndex) f.push((BigInt(r.index) + o.off).toString());
-    const out = r.output != null ? r.output : "";
-    if (o.cols === "output") f.push(out);
-    else if (o.cols === "both") { f.push(r.value); f.push(out); }
-    else f.push(r.value);
-    s += f.join(o.sep) + "\n";
+    const fields = [];
+    if (o.withIndex) fields.push(enc.encode((BigInt(r.index) + o.off).toString()));
+    const out = enc.encode(r.output != null ? r.output : "");
+    if (o.cols === "output") fields.push(out);
+    else if (o.cols === "both") { fields.push(raw(r.value)); fields.push(out); }
+    else fields.push(raw(r.value));
+    fields.forEach((fld, i) => { if (i) chunks.push(sep); chunks.push(fld); });
+    chunks.push(nl);
   }
-  const b = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
+  let n = 0; for (const c of chunks) n += c.length;
+  const b = new Uint8Array(n);
+  let p = 0; for (const c of chunks) { b.set(c, p); p += c.length; }
   return b;
 }
 
