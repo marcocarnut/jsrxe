@@ -161,20 +161,45 @@ try {
     }
   }
 
-  // Share: the state encodes into the URL hash and restores on reload.
+  // The Tree tab: opening it loads Cytoscape from web/vendor on demand and
+  // mounts a canvas -- the whole graph pipeline, end to end in a real browser.
+  // The pattern here is the tutorial's "a", left by the onboard step above.
+  let tree = null;
+  if (app && !app.err) {
+    await cdp.send("Runtime.evaluate", { expression:
+      `document.querySelector('.etab[data-etab="tree"]').click()` });
+    for (let i = 0; i < 100; i++) {
+      await sleep(100);
+      const r = await cdp.send("Runtime.evaluate", {
+        expression: `JSON.stringify({
+          canvas: document.querySelectorAll("#cy canvas").length,
+          msg: document.getElementById("treemsg").classList.contains("show")
+        })`, returnByValue: true });
+      const v = JSON.parse(r.result?.result?.value || "null");
+      if (v && v.canvas > 0) { tree = v; break; }
+    }
+    await cdp.send("Runtime.evaluate", { expression:
+      `document.querySelector('.etab[data-etab="elements"]').click()` });
+    await sleep(200);
+  }
+
+  // Share: the state encodes into the URL hash and restores on reload. The
+  // secondary piece checked here is the Search tab's query -- the shuffle key
+  // it used to check moved out of the UI into example state.
   let share = null;
   if (app && !app.err) {
     await cdp.send("Runtime.evaluate", { expression: `(function(){
       const p = document.getElementById("pattern");
       p.value = "[a-c]{2}"; p.dispatchEvent(new Event("input", { bubbles: true }));
+      document.querySelector('.etab[data-etab="search"]').click();
     })()` });
     await sleep(500);
     await cdp.send("Runtime.evaluate", { expression: `(function(){
-      const k = document.getElementById("key");
-      k.value = "zz"; k.dispatchEvent(new Event("input", { bubbles: true }));
+      const f = document.getElementById("findtext");
+      f.value = "abc"; f.dispatchEvent(new Event("input", { bubbles: true }));
     })()` });
     await sleep(500);
-    await cdp.send("Runtime.evaluate", { expression: `document.getElementById("share").click()` });
+    await cdp.send("Runtime.evaluate", { expression: `document.getElementById("share2").click()` });
     await sleep(200);
     const u = await cdp.send("Runtime.evaluate", { expression: `location.href`, returnByValue: true });
     const url = u.result?.result?.value || "";
@@ -184,7 +209,7 @@ try {
         await sleep(100);
         const r = await cdp.send("Runtime.evaluate", {
           expression: `JSON.stringify({ p: document.getElementById("pattern").value,
-                                        k: document.getElementById("key").value })`,
+                                        q: document.getElementById("findtext").value })`,
           returnByValue: true
         });
         const v = JSON.parse(r.result?.result?.value || "null");
@@ -264,8 +289,18 @@ try {
     code = 1;
   }
 
+  if (tree) {
+    const ok = tree.canvas > 0 && !tree.msg;
+    console.log(ok ? "tree: the parse tree renders on a Cytoscape canvas"
+                   : "tree: FAILED " + JSON.stringify(tree));
+    if (!ok) code = 1;
+  } else if (app && !app.err) {
+    console.log("tree: the Tree tab never rendered");
+    code = 1;
+  }
+
   if (share) {
-    const ok = share.p === "[a-c]{2}" && share.k === "zz";
+    const ok = share.p === "[a-c]{2}" && share.q === "abc";
     console.log(ok ? "share: the view round-trips through the URL"
                    : "share: FAILED " + JSON.stringify(share));
     if (!ok) code = 1;

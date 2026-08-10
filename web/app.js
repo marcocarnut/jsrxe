@@ -708,7 +708,8 @@ async function reparse() {
   lastSearch = null;
   if (state.tab === "search") {
     if ($("findtext").value) runSearch(); else renderSearch();
-  } else loadRows();
+  } else if (state.tab === "tree") renderTree();
+  else loadRows();
 }
 
 async function applyCode() {
@@ -863,6 +864,8 @@ async function loadRows() {
 // re-runs so its rows and count reflect the change, the Elements tab reloads.
 function refreshTable() {
   if (state.tab === "search") { if (lastSearch) runSearch(); else renderSearch(); }
+  else if (state.tab === "tree") { /* the tree's shape is independent of the
+                                     code column and shuffle key; leave it. */ }
   else loadRows();
 }
 
@@ -876,8 +879,14 @@ function setTab(tab) {
     b.classList.toggle("on", b.dataset.etab === tab);
   show($("elements-view"), tab === "elements");
   show($("search-view"), tab === "search");
+  show($("tree-view"), tab === "tree");
+  // The Tree tab wants the whole panel, so it hides the shared results table
+  // and its status line rather than sitting above them.
+  show($("results"), tab !== "tree");
+  show($("status"), tab !== "tree");
   if (tab === "elements") loadRows();
-  else { renderSearch(); $("findtext").focus(); }
+  else if (tab === "search") { renderSearch(); $("findtext").focus(); }
+  else renderTree();
 }
 
 // The numbering toggle appears in both tabs' controls; both reflect the one
@@ -933,6 +942,186 @@ function renderSearch() {
   if (BigInt(lastSearch.shown || 0) < n)
     msg += " · " + t("searchShowing") + " " + lastSearch.shown;
   ss.textContent = msg;
+}
+
+/* --------------------------------------------------------------- tree view */
+
+// The parse tree, drawn with Cytoscape. The library's one traversal (the same
+// rxedot prints DOT from) hands over a { nodes, edges } graph; this turns it
+// into a picture that folds, pans and zooms -- everything a static SVG cannot.
+
+// Cytoscape and dagre are ~700 KB, and most visits never open the Tree tab, so
+// they load only when it is first shown. The single-file bundle inlines them
+// (window.cytoscape is already defined, so this resolves at once); the served
+// build injects the three vendor scripts in order the first time.
+let cytoscapeReady = null;
+let cyRegistered = false;
+function ensureCytoscape() {
+  if (cytoscapeReady) return cytoscapeReady;
+  cytoscapeReady = new Promise((resolve, reject) => {
+    if (window.cytoscape && window.cytoscapeDagre) { resolve(); return; }
+    const srcs = ["vendor/cytoscape.min.js", "vendor/dagre.min.js",
+                  "vendor/cytoscape-dagre.js"];
+    (function next(i) {
+      if (i >= srcs.length) { resolve(); return; }
+      const s = document.createElement("script");
+      s.src = srcs[i];
+      s.onload = () => next(i + 1);
+      s.onerror = () => reject(new Error("failed to load " + srcs[i]));
+      document.head.appendChild(s);
+    })(0);
+  }).then(() => {
+    if (window.cytoscape && window.cytoscapeDagre && !cyRegistered) {
+      window.cytoscape.use(window.cytoscapeDagre);
+      cyRegistered = true;
+    }
+  });
+  return cytoscapeReady;
+}
+
+let cy = null;             // the Cytoscape instance, or null when none is drawn
+let treeDir = "TB";        // dagre rank direction, toggled by Rotate
+
+// rxedot's palette, by node kind, so the tree reads the same as the DOT drawing.
+const TREE_FILL = {
+  root:"#333a44", leaf:"#ffffff", literal:"#ffffff", group:"#eeeeee",
+  alt:"#fff0c0", repeat:"#d4e4ff", comb:"#ffd4e6", shuffle:"#e6d4ff",
+  dict:"#d4f4d4", subroutine:"#ffe0b0", backref:"#ffe0b0"
+};
+const TREE_HL = "#d1442a";   // the lit-path colour, rxedot's -f
+
+function treeLabel(n) {
+  if (n.kind === "alt") return "alternation";
+  let s = n.line1 + (n.card ? "\n" + n.card : "");
+  if (n.place) s += "\n" + n.place;
+  if (n.choices) s += "\n" + n.choices;
+  return s;
+}
+
+function buildTreeElements(g) {
+  const els = [];
+  for (const n of g.nodes) {
+    const label = treeLabel(n);
+    els.push({ data: { id: "n" + n.id, label, baseLabel: label, kind: n.kind,
+                       inf: !!n.inf, onPath: !!n.onPath } });
+  }
+  for (const e of g.edges) {
+    const branch = e.fromPort >= 0 && e.label;
+    els.push({ data: {
+      id: `e${e.from}_${e.fromPort}_${e.to}`,
+      source: "n" + e.from, target: "n" + e.to,
+      kind: e.isRef ? "ref" : "seq",
+      label: branch ? e.label.replace(/\n/g, " ") : "",
+      onPath: !!e.onPath } });
+  }
+  return els;
+}
+
+function treeStyle() {
+  return [
+    { selector: "node", style: {
+        "label": "data(label)", "text-wrap": "wrap", "text-valign": "center",
+        "text-halign": "center", "text-justification": "center",
+        "font-family": "ui-monospace, Menlo, monospace", "font-size": "12px",
+        "shape": "round-rectangle", "width": "label", "height": "label",
+        "padding": "9px", "line-height": 1.25,
+        "background-color": (n) => TREE_FILL[n.data("kind")] || "#ffffff",
+        "border-width": 1, "border-color": "#cdc6b8", "color": "#2a2723" } },
+    { selector: 'node[kind="root"]', style: { "color": "#ffffff", "border-color": "#333a44" } },
+    { selector: 'node[kind="subroutine"], node[kind="backref"]', style: {
+        "border-style": "dashed", "border-color": "#a8641e", "border-width": 2 } },
+    { selector: "node[?inf]", style: { "border-color": "#2f60c0", "border-width": 2 } },
+    { selector: "node.collapsed", style: { "border-style": "double", "border-width": 3 } },
+    { selector: "node[?onPath]", style: { "border-color": TREE_HL, "border-width": 3 } },
+    { selector: "edge", style: {
+        "width": 1.4, "line-color": "#b8b0a2", "curve-style": "bezier",
+        "target-arrow-shape": "triangle", "target-arrow-color": "#b8b0a2",
+        "arrow-scale": 0.85, "label": "data(label)", "font-size": "10px",
+        "color": "#8a8377", "font-family": "ui-monospace, Menlo, monospace",
+        "text-rotation": "autorotate", "text-background-color": "#ffffff",
+        "text-background-opacity": 0.7, "text-background-padding": "1px" } },
+    { selector: 'edge[kind="ref"]', style: {
+        "line-style": "dashed", "line-color": "#a8641e", "target-arrow-color": "#a8641e",
+        "curve-style": "unbundled-bezier", "control-point-distances": [40],
+        "control-point-weights": [0.5] } },
+    { selector: "edge[?onPath]", style: {
+        "line-color": TREE_HL, "target-arrow-color": TREE_HL, "width": 2.4 } }
+  ];
+}
+
+function dagreLayout() {
+  return { name: "dagre", rankDir: treeDir, nodeSep: 26, rankSep: 44,
+           edgeSep: 10, fit: true, padding: 22 };
+}
+
+function destroyTree() { if (cy) { cy.destroy(); cy = null; } }
+
+function setTreeMsg(s) {
+  const m = $("treemsg");
+  m.textContent = s || "";
+  m.classList.toggle("show", !!s);
+}
+
+// A node's outgoing subtree, over the tree edges only (a dashed back-edge to a
+// subroutine's group is not part of it). The same hide/show folds a group, a
+// repeat body, or -- once words carry their letters -- a word into its letters.
+function subtree(node) {
+  const nodes = cy.collection(), edges = cy.collection();
+  const stack = [node], seen = new Set([node.id()]);
+  while (stack.length) {
+    stack.pop().outgoers('edge[kind="seq"]').forEach((e) => {
+      edges.merge(e);
+      const tgt = e.target();
+      if (!seen.has(tgt.id())) { seen.add(tgt.id()); nodes.merge(tgt); stack.push(tgt); }
+    });
+  }
+  return nodes.union(edges);
+}
+function setFolded(n, on) {
+  const kids = subtree(n);
+  if (!kids.length) return false;
+  if (on) { kids.hide(); n.addClass("collapsed"); n.data("label", n.data("baseLabel") + "\n⊕"); }
+  else    { kids.show(); n.removeClass("collapsed"); n.data("label", n.data("baseLabel")); }
+  return true;
+}
+function toggleFold(n) {
+  if (setFolded(n, !n.hasClass("collapsed")))
+    cy.layout(dagreLayout()).run();
+}
+
+function drawTree(g) {
+  destroyTree();
+  cy = window.cytoscape({
+    container: $("cy"),
+    elements: buildTreeElements(g),
+    style: treeStyle(),
+    layout: dagreLayout(),
+    wheelSensitivity: 0.25,
+    minZoom: 0.1, maxZoom: 3
+  });
+  cy.on("tap", "node", (ev) => toggleFold(ev.target));
+}
+
+// Fetch the graph and draw it. Called on entering the Tree tab and whenever the
+// expression changes while it is showing. 'path' is a decimal index the walk
+// lights the route to, tying the tree to a chosen member.
+let treeToken = 0;
+async function renderTree(opts = {}) {
+  if (state.tab !== "tree") return;
+  if (!state.ok) { destroyTree(); setTreeMsg(t("treeEmpty")); return; }
+  const token = ++treeToken;
+  setTreeMsg(t("treeLoading"));
+  try { await ensureCytoscape(); }
+  catch { setTreeMsg("The tree view could not load."); return; }
+  // The expression may have changed, or the tab closed, while the libraries or
+  // the graph were in flight; a stale render must not paint over a newer one.
+  if (token !== treeToken || state.tab !== "tree") return;
+  const expandSubs = $("treesubs").checked;
+  const g = await call("tree", { collapse: !expandSubs, fold: true, path: opts.path || "" });
+  if (token !== treeToken || state.tab !== "tree") return;
+  if (!g || !g.nodes || !g.nodes.length) { destroyTree(); setTreeMsg(t("treeEmpty")); return; }
+  setTreeMsg("");
+  drawTree(g);
 }
 
 // The bookmarks for the current example: whatever it ships plus whatever the
@@ -1041,6 +1230,9 @@ function currentShareState() {
   // On the Search tab the link carries the query, so it reopens on the same
   // lookup rather than the enumeration.
   if (state.tab === "search") s.q = $("findtext").value;
+  // The Tree tab has no query of its own; the link just names it so it reopens
+  // on the tree rather than the enumeration.
+  if (state.tab === "tree") s.tab = "tree";
   // A link to an example carries its id and the language it was read in, so
   // the receiver lands on the same example -- note, bookmarks and all -- and,
   // for one whose regex differs by language (Powerball vs Mega-Sena), on the
@@ -1082,6 +1274,8 @@ function applyShareState(s) {
   if (typeof s.q === "string") {
     $("findtext").value = s.q;
     setTab("search");
+  } else if (s.tab === "tree") {
+    setTab("tree");
   } else {
     setTab("elements");
   }
@@ -1124,9 +1318,8 @@ function setShareLabel() {
 let flashTimer = null;
 function flashCopied() {
   // Flash the share button of whichever tab is showing -- each has its own.
-  const onSearch = state.tab === "search";
-  const c = $(onSearch ? "copied2" : "copied");
-  const btn = $(onSearch ? "share2" : "share");
+  const c = $(state.tab === "search" ? "copied2" : state.tab === "tree" ? "copied3" : "copied");
+  const btn = $(state.tab === "search" ? "share2" : state.tab === "tree" ? "share3" : "share");
   c.textContent = t("shareCopied");
   c.hidden = false;
   btn.classList.add("done");
@@ -1352,6 +1545,17 @@ function wire() {
 
   $("share").onclick = doShare;
   $("share2").onclick = doShare;
+  $("share3").onclick = doShare;
+
+  // Tree controls. Fit re-frames the whole tree; Rotate swaps top-down for
+  // left-right (concatenation reads better along the text); the checkbox draws
+  // a (?N) subroutine in full rather than as a link and redraws.
+  $("treefit").onclick = () => { if (cy) cy.fit(undefined, 24); };
+  $("treedir").onclick = () => {
+    treeDir = treeDir === "TB" ? "LR" : "TB";
+    if (cy) cy.layout(dagreLayout()).run();
+  };
+  $("treesubs").onchange = () => renderTree();
   $("export").onclick = openExportBox;
   $("exportform").onsubmit = (e) => { e.preventDefault(); runExport(); };
   $("exportcancel").onclick = () => { exportAbort = true; $("exportbox").close(); };

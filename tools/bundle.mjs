@@ -30,11 +30,19 @@ function demodule(src) {
     .replace(/^export\s+(const|let|function|class)\s/gm, "$1 ");
 }
 
-const [libSingle, i18n, patterns, engine, sandbox, sha, dicts, app, css, html] = await Promise.all([
+const [libSingle, i18n, patterns, engine, sandbox, sha, dicts, app, css, html,
+       cyLib, dagreLib, cyDagreLib] = await Promise.all([
   read("build/librxe-single.js"),
   read("web/i18n.js"), read("web/patterns.js"), read("web/engine.js"),
   read("web/sandbox.js"), read("web/sha256.js"), read("web/dicts.js"),
-  read("web/app.js"), read("web/style.css"), read("web/index.html")
+  read("web/app.js"), read("web/style.css"), read("web/index.html"),
+  // The Tree tab's drawing libraries. Served, they load from web/vendor on
+  // demand; here there is no fetching a neighbour file, so they are inlined --
+  // once, up front, since a file:// page cannot pull them in later. They are
+  // UMD, so a plain <script> leaves cytoscape/dagre on window, exactly as the
+  // on-demand loader expects to find them.
+  read("web/vendor/cytoscape.min.js"), read("web/vendor/dagre.min.js"),
+  read("web/vendor/cytoscape-dagre.js")
 ]);
 
 // The transport the bundle substitutes: the same calls, answered here.
@@ -68,6 +76,9 @@ const body = html
   .replace(/<link rel="stylesheet"[^>]*>/, () => `<style>\n${css}\n</style>`)
   .replace(/<script type="module" src="app\.js"><\/script>/, () =>
     `<script>\n${libSingle}\n</script>\n` +
+    `<script>\n${cyLib}\n</script>\n` +
+    `<script>\n${dagreLib}\n</script>\n` +
+    `<script>\n${cyDagreLib}\n</script>\n` +
     `<script>\n${direct}\n${demodule(sha)}\n${demodule(sandbox)}\n` +
     `${demodule(dicts)}\n${demodule(i18n)}\n${demodule(patterns)}\n` +
     `${demodule(engine)}\n${demodule(app)}\n${boot}\n</script>`)

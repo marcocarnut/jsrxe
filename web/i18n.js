@@ -118,6 +118,15 @@ export const STRINGS = {
     searchReasonVar:  "it is infinite with a variable-length repeated part.",
     searchReasonDiag: "a backreference makes it infinite in diagonal order.",
     searchReasonGen:  "rank does not handle this shape yet.",
+    treeTab:          "Tree",
+    treeHint:         "The parse tree. Each box shows its cardinality; a "
+                    + "concatenation multiplies, an alternation sums. Click a "
+                    + "box to fold its subtree. Drag to pan, wheel to zoom.",
+    treeFit:          "Fit",
+    treeDir:          "Rotate",           // toggles top-down / left-right
+    treeExpandSubs:   "Expand subroutines",
+    treeEmpty:        "Enter a valid expression to see its tree.",
+    treeLoading:      "Loading the tree view…",
     fromIndex:        "From index",
     perPage:          "Per page",
     zeroBased:        "Count from zero",
@@ -300,6 +309,16 @@ export const STRINGS = {
     searchReasonVar:  "é infinito com uma parte repetida de comprimento variável.",
     searchReasonDiag: "uma retrorreferência o torna infinito em ordem diagonal.",
     searchReasonGen:  "o ranqueamento ainda não trata esta forma.",
+    treeTab:          "Árvore",
+    treeHint:         "A árvore de análise. Cada caixa mostra sua "
+                    + "cardinalidade; uma concatenação multiplica, uma "
+                    + "alternação soma. Clique numa caixa para dobrar sua "
+                    + "subárvore. Arraste para mover, role para ampliar.",
+    treeFit:          "Ajustar",
+    treeDir:          "Girar",
+    treeExpandSubs:   "Expandir sub-rotinas",
+    treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
+    treeLoading:      "Carregando a árvore…",
     fromIndex:        "A partir do índice",
     perPage:          "Por página",
     zeroBased:        "Contar a partir de zero",

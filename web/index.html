@@ -142,6 +142,7 @@
       <div class="etabs">
         <button class="etab on" data-etab="elements" data-t="elements"></button>
         <button class="etab" data-etab="search" data-t="searchTab"></button>
+        <button class="etab" data-etab="tree" data-t="treeTab"></button>
       </div>
 
       <div id="elements-view">
@@ -188,6 +189,27 @@
           <span id="copied2" class="copiedtip" hidden></span>
         </div>
         <div id="searchstatus" class="dim"></div>
+      </div>
+
+      <!-- The parse tree, drawn with Cytoscape. Unlike the other two tabs it
+           does not use the results table below; it hides it and fills the space
+           with an interactive canvas. -->
+      <div id="tree-view" hidden>
+        <div class="controls treectl">
+          <button id="treefit" type="button" data-t="treeFit"></button>
+          <button id="treedir" type="button" data-t="treeDir"></button>
+          <label class="ctl treechk"><input id="treesubs" type="checkbox">
+            <span data-t="treeExpandSubs"></span></label>
+          <button id="share3" class="iconbtn" aria-label="share">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+          </button>
+          <span id="copied3" class="copiedtip" hidden></span>
+        </div>
+        <div id="treehint" class="dim" data-t="treeHint"></div>
+        <div id="cywrap">
+          <div id="cy"></div>
+          <div id="treemsg" class="dim"></div>
+        </div>
       </div>
 
       <table id="results">
