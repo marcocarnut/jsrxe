@@ -54,7 +54,8 @@ export function makeEngine(Module, {
     rankAll:      c("rxe_js_rank_all",            "number", ["number","number","number","number"]),
     rankCount:    c("rxe_js_rank_count",          "number", ["number","number","number"]),
     rankReason:   c("rxe_js_rank_reason",         "number", []),
-    permUnmap:    c("rxe_js_permutation_unmap",   "number", ["number","string"])
+    permUnmap:    c("rxe_js_permutation_unmap",   "number", ["number","string"]),
+    graph:        c("rxe_js_graph",               "number", ["number","number","number","number","string"])
   };
 
   let rxe = 0;        // the parsed expression
@@ -212,6 +213,22 @@ export function makeEngine(Module, {
         return withTransform(shown, text);
       });
       return { rows, count, shown: indices.length };
+    },
+
+    // The parse tree, as the Tree tab draws it. The library's one traversal
+    // (the same rxedot prints DOT from) builds a { nodes, edges } graph; here it
+    // crosses as JSON and is handed back parsed. collapse/unroll/fold match
+    // rxedot's -c/-u/-w; a non-empty 'path' is a decimal index the walk lights
+    // the route to, so seeking to a member and drawing its path is one call.
+    // The seek it does is harmless to the row view, which re-seeks per row.
+    tree({ collapse = true, unroll = 0, fold = true, path = "" } = {}) {
+      if (!rxe) return { nodes: [], edges: [] };
+      const ptr = api.graph(rxe, collapse ? 1 : 0, unroll | 0, fold ? 1 : 0,
+                            path || "");
+      const json = takeString(ptr);
+      if (!json) return { nodes: [], edges: [] };
+      try { return JSON.parse(json); }
+      catch (e) { return { nodes: [], edges: [], error: String(e) }; }
     },
 
     // Set the per-member byte cap. Below it members render whole; above it

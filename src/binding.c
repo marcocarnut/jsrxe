@@ -28,11 +28,13 @@
 // belongs to rxenum, which is compiled separately and whole, so that the test
 // suite has something to check this build against.
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <emscripten.h>
 #include "rxe.h"
 #include "lens.h"
+#include "rxe_graph.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -264,6 +266,171 @@ EMSCRIPTEN_KEEPALIVE
 int rxe_js_check_overflow(void)
 {
     return rxe_check_overflow();
+}
+
+/* ------------------------------ Parse tree ------------------------------ */
+
+// The parse tree as JSON, for the Tree tab. The library's rxe_graph_walk is the
+// one traversal rxedot draws with; here the same walk builds a JSON object
+// { nodes: [...], edges: [...] } that Cytoscape renders in the browser. Nothing
+// about the drawing lives in the library, only the shape of the tree.
+
+// A string that grows as it is appended to. Doubling keeps the whole build
+// linear; a failed realloc leaves cap at zero and every further append a no-op,
+// so the caller checks buf once at the end rather than at every step.
+struct jbuf { char *buf; size_t len, cap; };
+static void jput(struct jbuf *b, const char *s, size_t n)
+{
+    if (b->len + n + 1 > b->cap) {
+        size_t want = (b->len + n + 1) * 2;
+        char *p = realloc(b->buf, want);
+        if (!p) { free(b->buf); b->buf = NULL; b->cap = 0; return; }
+        b->buf = p; b->cap = want;
+    }
+    if (!b->buf) return;
+    memcpy(b->buf + b->len, s, n);
+    b->len += n;
+    b->buf[b->len] = 0;
+}
+static void jputs(struct jbuf *b, const char *s) { if (s) jput(b, s, strlen(s)); }
+static void jputi(struct jbuf *b, int v)
+{
+    char t[16];
+    jput(b, t, snprintf(t, sizeof t, "%d", v));
+}
+// A JSON string literal: the quotes, and the escapes JSON insists on inside.
+static void jputq(struct jbuf *b, const char *s)
+{
+    jput(b, "\"", 1);
+    for (; s && *s; s++) {
+        unsigned char c = *s;
+        if      (c == '"')  jput(b, "\\\"", 2);
+        else if (c == '\\') jput(b, "\\\\", 2);
+        else if (c == '\n') jput(b, "\\n", 2);
+        else if (c == '\r') jput(b, "\\r", 2);
+        else if (c == '\t') jput(b, "\\t", 2);
+        else if (c < 32)    { char u[8]; jput(b, u, snprintf(u, sizeof u, "\\u%04x", c)); }
+        else jput(b, (char *)&c, 1);
+    }
+    jput(b, "\"", 1);
+}
+// A member that may be absent: the JSON string, or the literal null.
+static void jputopt(struct jbuf *b, const char *s)
+{
+    if (s) jputq(b, s); else jputs(b, "null");
+}
+
+static const char *gkind_name(enum rxe_gkind k)
+{
+    switch (k) {
+        case RXE_G_ROOT:       return "root";
+        case RXE_G_LEAF:       return "leaf";
+        case RXE_G_LITERAL:    return "literal";
+        case RXE_G_GROUP:      return "group";
+        case RXE_G_ALT:        return "alt";
+        case RXE_G_REPEAT:     return "repeat";
+        case RXE_G_COMB:       return "comb";
+        case RXE_G_SHUFFLE:    return "shuffle";
+        case RXE_G_DICT:       return "dict";
+        case RXE_G_SUBROUTINE: return "subroutine";
+        case RXE_G_BACKREF:    return "backref";
+    }
+    return "leaf";
+}
+
+// The two arrays are built side by side and joined at the end, since the walk
+// hands nodes and edges over interleaved. nn/ne carry the comma state.
+struct jgraph { struct jbuf nodes, edges; int nn, ne; };
+
+static void jg_node(void *cx, const struct rxe_gnode_ev *n)
+{
+    struct jgraph *g = cx;
+    struct jbuf *b = &g->nodes;
+    if (g->nn++) jput(b, ",", 1);
+    jputs(b, "{\"id\":");     jputi(b, n->id);
+    jputs(b, ",\"kind\":");   jputq(b, gkind_name(n->kind));
+    jputs(b, ",\"line1\":");  jputq(b, n->line1);
+    jputs(b, ",\"card\":");   jputq(b, n->card);
+    jputs(b, ",\"inf\":");    jputs(b, n->is_inf ? "true" : "false");
+    jputs(b, ",\"place\":");  jputopt(b, n->place);
+    jputs(b, ",\"choices\":");jputopt(b, n->choices);
+    jputs(b, ",\"onPath\":"); jputs(b, n->on_path ? "true" : "false");
+    jputs(b, ",\"refTo\":");  jputi(b, n->ref_to);
+    if (n->kind == RXE_G_REPEAT || n->kind == RXE_G_COMB) {
+        jputs(b, ",\"repMin\":"); jputi(b, n->rep_min);
+        jputs(b, ",\"repMax\":"); jputi(b, n->rep_max);
+    }
+    if (n->kind == RXE_G_COMB) {
+        jputs(b, ",\"perm\":"); jputs(b, n->comb_perm ? "true" : "false");
+    }
+    jput(b, "}", 1);
+}
+
+static void jg_alt(void *cx, const struct rxe_galt_ev *a)
+{
+    struct jgraph *g = cx;
+    struct jbuf *b = &g->nodes;
+    if (g->nn++) jput(b, ",", 1);
+    jputs(b, "{\"id\":");     jputi(b, a->id);
+    jputs(b, ",\"kind\":\"alt\",\"onPath\":");
+    jputs(b, a->on_path ? "true" : "false");
+    jputs(b, ",\"subs\":[");
+    for (int k = 0; k < a->nsub; k++) {
+        if (k) jput(b, ",", 1);
+        jputs(b, "{\"start\":"); jputq(b, a->subs[k].start);
+        jputs(b, ",\"card\":");  jputq(b, a->subs[k].card);
+        jputs(b, ",\"inf\":");   jputs(b, a->subs[k].is_inf ? "true" : "false");
+        jput(b, "}", 1);
+    }
+    jputs(b, "]}");
+}
+
+static void jg_edge(void *cx, const struct rxe_gedge_ev *e)
+{
+    struct jgraph *g = cx;
+    struct jbuf *b = &g->edges;
+    if (g->ne++) jput(b, ",", 1);
+    jputs(b, "{\"from\":");     jputi(b, e->from);
+    jputs(b, ",\"fromPort\":"); jputi(b, e->from_port);
+    jputs(b, ",\"to\":");       jputi(b, e->to);
+    jputs(b, ",\"onPath\":");   jputs(b, e->on_path ? "true" : "false");
+    jputs(b, ",\"isRef\":");    jputs(b, e->is_ref ? "true" : "false");
+    jputs(b, ",\"label\":");    jputopt(b, e->label);
+    jput(b, "}", 1);
+}
+
+// The tree of 'rxe' as JSON. collapse/unroll/fold match rxedot's -c/-u/-w; a
+// non-empty 'path' is a decimal index that is seeked to first, so the returned
+// graph lights the route to that member (its nodes' onPath set). Freshly
+// allocated; release with rxe_js_free. NULL only on allocation failure.
+EMSCRIPTEN_KEEPALIVE
+char *rxe_js_graph(struct rxe *rxe, int collapse, int unroll, int fold,
+                   const char *path)
+{
+    if (!rxe) return NULL;
+    int onpath = 0;
+    if (path && path[0]) {
+        mpz_t idx;
+        mpz_init(idx);
+        if (mpz_set_str(idx, path, 10) == 0 && mpz_sgn(idx) >= 0
+                && rxe_seek(rxe, idx) == 0)
+            onpath = 1;
+        mpz_clear(idx);
+    }
+    struct jgraph g = { { NULL, 0, 0 }, { NULL, 0, 0 }, 0, 0 };
+    struct rxe_graph_opts opts = { collapse, unroll, fold, onpath };
+    struct rxe_graph_visitor vis = { jg_node, jg_alt, jg_edge };
+    rxe_graph_walk(rxe, &opts, &vis, &g);
+
+    struct jbuf out = { NULL, 0, 0 };
+    jputs(&out, "{\"nodes\":[");
+    if (g.nodes.buf) jput(&out, g.nodes.buf, g.nodes.len);
+    jputs(&out, "],\"edges\":[");
+    if (g.edges.buf) jput(&out, g.edges.buf, g.edges.len);
+    jputs(&out, "]}");
+    free(g.nodes.buf);
+    free(g.edges.buf);
+    return out.buf;
 }
 
 /* ---------------------------- Dictionaries ------------------------------ */

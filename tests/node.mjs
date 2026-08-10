@@ -200,6 +200,43 @@ r = e.random({ count: "9", n: 40 });
 check("random choices are all members", true,
       r.rows.length === 40 && r.rows.every((x) => /^[a-c][x-z]$/.test(x.value)));
 
+// --- the parse tree, as the Tree tab draws it. The same walk rxedot prints
+// DOT from; here it must arrive as a { nodes, edges } graph with the tree's
+// arithmetic intact. The shapes below are the ones rxedot draws.
+e.parse({ pattern: "(cat|dog|fish)", flags: "" });
+let g = e.tree();
+const alt = g.nodes.find((n) => n.kind === "alt");
+check("tree: an alternation node appears", true, !!alt);
+check("  with a subsection per branch", 3, alt && alt.subs.length);
+check("  cardinalities across its branches", "1,1,1",
+      alt && alt.subs.map((s) => s.card).join(","));
+check("  the words are folded to literal leaves", "cat,dog,fish",
+      g.nodes.filter((n) => n.kind === "literal").map((n) => n.line1).join(","));
+
+// a subroutine's edge points back at the group it copies
+e.parse({ pattern: "(\\d{3})(?1)", flags: "" });
+g = e.tree();
+const sub = g.nodes.find((n) => n.kind === "subroutine");
+const grp = g.nodes.find((n) => n.kind === "group");
+check("tree: a subroutine refers back to its group", true,
+      !!sub && !!grp && sub.refTo === grp.id);
+check("  and a ref edge joins them", true,
+      g.edges.some((x) => x.isRef && x.from === sub.id && x.to === grp.id));
+
+// an infinite set is marked infinite at the nodes that are
+e.parse({ pattern: "a*b*", flags: "" });
+g = e.tree();
+check("tree: infinite repeats are flagged", 2,
+      g.nodes.filter((n) => n.kind === "repeat" && n.inf).length);
+
+// a path lights the route to a member: [a-z]{4} index 17 is 'aaar'
+e.parse({ pattern: "[a-z]{4}", flags: "" });
+g = e.tree({ path: "17" });
+check("tree: a path lights every node on it", true,
+      g.nodes.length > 0 && g.nodes.every((n) => n.onPath));
+check("  and reports what each repeat iteration chose", "→ a a a r",
+      g.nodes.find((n) => n.kind === "repeat").choices);
+
 console.log(fail ? `\nnode: ${fail} FAILED, ${pass} passed`
                  : `\nnode: all ${pass} binding checks passed`);
 process.exit(fail ? 1 : 0);
