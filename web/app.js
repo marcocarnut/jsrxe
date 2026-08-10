@@ -19,6 +19,18 @@ function showFatal(msg) {
   el.hidden = false;
 }
 
+// A parse error, with the pattern echoed beneath and a caret at the offending
+// character. Byte offset equals character index for the ASCII a pattern almost
+// always is; a stray multibyte literal would nudge the caret, never break it.
+function showParseError(msg, pattern, pos) {
+  const p = Math.max(0, Math.min(pos | 0, pattern.length));
+  const caret = " ".repeat(p) + "^";
+  $("err").innerHTML =
+    `<span>${escapeAttr(msg)}</span>` +
+    `<pre class="errcaret">${escapeAttr(pattern)}\n${caret}</pre>`;
+  show($("err"), true);
+}
+
 /* ------------------------------------------------------------------- state */
 
 const $ = (id) => document.getElementById(id);
@@ -670,8 +682,8 @@ async function reparse() {
   const r = await call("parse", { pattern, flags: currentFlags() });
   state.ok = r.ok;
   if (!r.ok) {
-    $("err").textContent = t("parseError") + ": " + translateError(r.error, lang);
-    show($("err"), true);
+    showParseError(t("parseError") + ": " + translateError(r.error, lang),
+                   pattern, r.errorPos);
     state.count = null;
     renderAll();
     return;

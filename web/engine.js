@@ -37,6 +37,7 @@ export function makeEngine(Module, {
     free:         c("rxe_js_free",                null,     ["number"]),
     error:        c("rxe_js_error",               "number", ["number"]),
     errorMessage: c("rxe_js_error_message",       "number", ["number"]),
+    errorPos:     c("rxe_js_error_pos",           "number", ["number"]),
     isInfinite:   c("rxe_js_is_infinite",         "number", ["number"]),
     isShortlex:   c("rxe_js_is_shortlex",         "number", ["number"]),
     count:        c("rxe_js_count",               "number", ["number"]),
@@ -115,8 +116,9 @@ export function makeEngine(Module, {
       if (!rxe) return { ok: false, error: "out of memory" };
       if (api.error(rxe)) {
         const error = takeString(api.errorMessage(rxe));
+        const errorPos = api.errorPos(rxe);   // read before rxe is released
         clearRxe();
-        return { ok: false, error };
+        return { ok: false, error, errorPos };
       }
       const infinite = !!api.isInfinite(rxe);
       return {

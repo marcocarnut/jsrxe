@@ -226,8 +226,9 @@ main {
 .panelhead { display: flex; align-items: baseline; justify-content: space-between;
              gap: .5rem; }
 #timebtn { background: none; border: 1px solid var(--line); border-radius: 6px;
-           color: var(--dim); cursor: pointer; font-size: 1rem; line-height: 1;
-           padding: .2rem .45rem; }
+           color: var(--dim); cursor: pointer; line-height: 1;
+           display: inline-flex; align-items: center; padding: .3rem .45rem; }
+#timebtn svg { width: 18px; height: 18px; display: block; }
 #timebtn:hover, #timebtn.on { border-color: var(--accent); color: var(--accent); }
 #timebox { margin-top: .75rem; border-top: 1px solid var(--line);
            padding-top: .65rem; }
@@ -240,6 +241,9 @@ main {
 #orderlabel.tip-host { border-bottom: 1px dotted var(--dim); }
 .err { color: var(--err); font-size: .9rem; margin-top: .4rem;
        font-family: var(--mono); }
+/* The pattern echoed under a parse error with a caret at the fault. */
+.errcaret { font-family: var(--mono); white-space: pre; overflow-x: auto;
+            margin: .25rem 0 0; line-height: 1.15; }
 
 .flags { display: flex; flex-wrap: wrap; gap: .1rem 1.2rem;
          margin-top: .6rem; align-items: baseline; }

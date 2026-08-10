@@ -77,6 +77,15 @@ char *rxe_js_error_message(struct rxe *rxe)
     return out;
 }
 
+// Where a parse error was found, as a byte offset into the pattern; the page
+// points a caret at it. Only meaningful when rxe_js_error is non-zero.
+
+EMSCRIPTEN_KEEPALIVE
+int rxe_js_error_pos(struct rxe *rxe)
+{
+    return rxe_error_pos(rxe);
+}
+
 EMSCRIPTEN_KEEPALIVE
 int rxe_js_is_infinite(struct rxe *rxe)
 {
