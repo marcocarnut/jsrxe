@@ -758,8 +758,13 @@ function renderAll() {
     show($("coarse"), true);
     syncSlider();
   } else if (state.ok && state.infinite) {
+    // A continuous slider over the lengths (not one notch per length), running
+    // from the set's own shortest member to the longest length we counted, and
+    // interpolating the index within each length band -- so it moves from the
+    // very first drag rather than sitting dead until the minimum length, and
+    // shows what lies between the length boundaries.
     state.slider = "length";
-    $("slider").max = String(Math.max(1, lengthStarts.length - 1));
+    $("slider").max = "10000";
     $("slider").value = "0";
     state.sliderTip = t("sliderHintLength");
     show($("coarse"), lengthStarts.length > 1);
@@ -778,6 +783,36 @@ async function loadLengthStarts() {
   const r = await call("lengthStarts", { max: 96 });
   lengthStarts = r.starts || [];
   renderAll();
+}
+
+// The span the length slider covers: from the set's shortest member (the first
+// length that actually holds any -- lengthStarts is zero for every shorter one)
+// to the longest length counted. Below minL nothing exists, so starting the
+// slider there is what stops it looking broken on a set whose members are all,
+// say, seven characters or longer.
+function lengthSpan() {
+  let firstPos = lengthStarts.findIndex((s) => s && s !== "0");
+  if (firstPos < 0) firstPos = lengthStarts.length;
+  return { minL: Math.max(0, firstPos - 1), maxL: lengthStarts.length - 1 };
+}
+
+// The index a slider position p (0..10000) points at: p maps linearly onto the
+// length axis, and the fractional part interpolates through that length's band,
+// so the whole travel is live rather than a staircase of length boundaries.
+function lengthSliderAt(p) {
+  const STEPS = 10000;
+  const { minL, maxL } = lengthSpan();
+  const span = maxL - minL;
+  if (span <= 0) return { index: BigInt(lengthStarts[minL] || "0"), L: minL };
+  const posNum = span * p;                     // pos in lengths = posNum / STEPS
+  const off = Math.floor(posNum / STEPS);
+  const L = Math.min(minL + off, maxL);
+  if (L >= maxL || L + 1 >= lengthStarts.length)
+    return { index: BigInt(lengthStarts[maxL] || "0"), L: maxL };
+  const start = BigInt(lengthStarts[L]);
+  const count = BigInt(lengthStarts[L + 1]) - start;
+  const fracNum = BigInt(posNum - off * STEPS);   // in [0, STEPS)
+  return { index: start + count * fracNum / BigInt(STEPS), L };
 }
 
 function renderCount() {
@@ -1058,7 +1093,7 @@ function treeStyle() {
     { selector: 'node[kind="root"]', style: { "color": "#ffffff", "border-color": "#333a44" } },
     { selector: 'node[kind="subroutine"], node[kind="backref"]', style: {
         "border-style": "dashed", "border-color": "#a8641e", "border-width": 2 } },
-    { selector: "node[?inf]", style: { "border-color": "#2f60c0", "border-width": 2 } },
+    { selector: "node[?inf]", style: { "border-color": "#c026d3", "border-width": 2.5 } },
     { selector: "node.collapsed", style: { "border-style": "double", "border-width": 3 } },
     { selector: "node[?onPath]", style: { "border-color": TREE_HL, "border-width": 3 } },
     { selector: "edge", style: {
@@ -1725,11 +1760,10 @@ function wire() {
 
   $("slider").oninput = () => {
     if (state.slider === "length") {
-      const L = Number($("slider").value);
-      if (!lengthStarts[L]) { setFrom(0n); return; }
+      const { index, L } = lengthSliderAt(Number($("slider").value));
       state.sliderTip =
-        `${t("sliderAt")} ${L} — ${t("indexCol")} ${group(lengthStarts[L])}`;
-      setFrom(BigInt(lengthStarts[L]));
+        `${t("sliderAt")} ${L} — ${t("indexCol")} ${group(index.toString())}`;
+      setFrom(index);
       return;
     }
     if (!state.count) return;

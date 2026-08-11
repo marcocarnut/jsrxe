@@ -334,7 +334,7 @@ export const STRINGS = {
     fromIndex:        "A partir do índice",
     perPage:          "Por página",
     zeroBased:        "Contar a partir de zero",
-    zeroOffset:       "Deslocamento zero",
+    zeroOffset:       "Iniciar em 0",
     zeroHint:         "-z",
     key:              "Chave de embaralhamento",
     keyPlace:         "vazio para ordem de índice",

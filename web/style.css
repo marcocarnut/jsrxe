@@ -265,8 +265,11 @@ main {
 .zerotgl:hover { border-color: var(--accent); color: var(--accent); }
 .zerotgl.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* when it is on (accent fill), hover must not repaint the text in the accent
-   colour too -- that is the fill colour, so the label would vanish */
-.zerotgl.on:hover { color: #fff; }
+   colour too -- that is the fill colour, so the label would vanish. In a .nav
+   the general '.nav button:hover' rule outweighs a plain '.zerotgl.on:hover',
+   so this needs the extra .nav to win (the Search tab's toggle is not in a .nav
+   and so was never affected, which is why only Elements and Tree showed it). */
+.zerotgl.on:hover, .nav .zerotgl.on:hover { color: #fff; }
 #search-view .controls { align-items: end; }
 /* the search tab's share icon matches the nav one, which is scoped to .nav */
 #search-view .iconbtn { padding: .3rem .5rem; display: inline-flex;
