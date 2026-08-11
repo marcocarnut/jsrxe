@@ -68,8 +68,8 @@ export const STRINGS = {
     dupInfo:          "about this count",
     dupCaveat:        "This counts every way the expression can spell a member. "
                     + "A set that can write the same string more than one way "
-                    + "(the classic a?a?…a?aaaa… is one) has fewer distinct "
-                    + "members than shown — rxe multiplies and sums subset sizes; "
+                    + "(the classic <tt>a?a?</tt> is one) has fewer distinct "
+                    + "members than shown — the engine multiplies and sums subset sizes; "
                     + "it does not detect or remove duplicates.",
     timeBtn:          "How long to visit them all?",
     visitAll:         "To visit every element, we would need:",
@@ -269,11 +269,11 @@ export const STRINGS = {
 
     size:             "Tamanho do conjunto",
     dupInfo:          "sobre esta contagem",
-    dupCaveat:        "Isto conta cada forma de a expressão soletrar um membro. "
+    dupCaveat:        "Isto conta quantos <i>caminhos distintos</i> a expressão pode seguir para soletrar um membro. "
                     + "Um conjunto que pode escrever a mesma string de mais de "
-                    + "uma maneira (o clássico a?a?…a?aaaa… é um) tem menos "
-                    + "membros distintos que o mostrado — o rxe multiplica e soma "
-                    + "os tamanhos dos subconjuntos; não detecta nem remove duplicatas.",
+                    + "uma maneira (o clássico <tt>a?a?</tt> é um) tem menos "
+                    + "membros distintos que o mostrado — o engenho multiplica e soma "
+                    + "os tamanhos dos subconjuntos, mas nem detecta, nem remove, duplicatas.",
     timeBtn:          "Quanto tempo para visitar todos?",
     visitAll:         "Para visitar cada elemento, precisaríamos de:",
     perSecond:        "por segundo",

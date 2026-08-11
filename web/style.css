@@ -232,6 +232,16 @@ main {
            padding: 0; display: inline-flex; align-items: center; }
 .infobtn svg { width: 15px; height: 15px; display: block; }
 .infobtn:hover { color: var(--accent); }
+/* Until the reader has clicked it once, the caveat icon pulses to catch the
+   eye -- colour and a gentle swell, so it reads as "look here". */
+.infobtn.pulse { animation: duppulse 1.15s ease-in-out infinite; }
+@keyframes duppulse {
+  0%, 100% { color: var(--dim);    transform: scale(1); }
+  50%      { color: var(--accent); transform: scale(1.3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .infobtn.pulse { animation: none; color: var(--accent); }
+}
 #timebtn { background: none; border: 1px solid var(--line); border-radius: 6px;
            color: var(--dim); cursor: pointer; line-height: 1;
            display: inline-flex; align-items: center; padding: .3rem .45rem; }

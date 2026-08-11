@@ -39,6 +39,7 @@ const STORE_MINE = "jsrxe.examples";
 const STORE_MARKS = "jsrxe.bookmarks";
 const STORE_DICTS = "jsrxe.dicts";
 const STORE_ORIENT = "jsrxe.orient";
+const STORE_DUPSEEN = "jsrxe.dupseen";
 
 // A member is trimmed on the page past this many bytes -- the DOM is happy
 // with a few kilobytes a row, not megabytes. The library could show far more;
@@ -312,12 +313,14 @@ function refreshCodeToggle() {
 // The text comes from a getter so it tracks the current example and language
 // rather than being fixed when the handler was attached; an empty string
 // means there is nothing to say and nothing is shown.
-function attachTip(el, getter) {
+function attachTip(el, getter, html) {
   const tip = $("tooltip");
   const place = () => {
     const text = getter();
     if (!text) { tip.hidden = true; return; }
-    tip.textContent = text;
+    // Only the callers that pass html:true carry markup, and their text is our
+    // own translated strings, never user input -- so this is safe to render.
+    if (html) tip.innerHTML = text; else tip.textContent = text;
     tip.hidden = false;
     const r = el.getBoundingClientRect();
     const top = r.bottom + window.scrollY + 6;
@@ -1955,10 +1958,15 @@ attachTip($("count"), () => state.countSpoken);
 attachTip($("timebig"), () => state.timeTip);
 attachTip($("orderlabel"), () => state.orderTip);
 attachTip($("slider"), () => state.sliderTip);
-// The set-size caveat: hover shows it (attachTip), and a tap toggles it, so it
-// is reachable on a touch screen with no hover.
-attachTip($("dupinfo"), () => t("dupCaveat"));
+// The set-size caveat: hover shows it (attachTip, rendered as HTML so its
+// markup takes), and a tap toggles it, so it is reachable on a touch screen
+// with no hover. It pulses to catch the eye until the reader clicks it once,
+// which is then remembered so it stays quiet on later visits.
+attachTip($("dupinfo"), () => t("dupCaveat"), true);
+if (!localStorage.getItem(STORE_DUPSEEN)) $("dupinfo").classList.add("pulse");
 $("dupinfo").addEventListener("click", () => {
+  $("dupinfo").classList.remove("pulse");
+  try { localStorage.setItem(STORE_DUPSEEN, "1"); } catch { /* private mode */ }
   const tip = $("tooltip");
   if (!tip.hidden) tip.hidden = true;
   else $("dupinfo").dispatchEvent(new Event("mouseenter"));
