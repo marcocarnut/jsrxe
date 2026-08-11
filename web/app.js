@@ -1955,4 +1955,12 @@ attachTip($("count"), () => state.countSpoken);
 attachTip($("timebig"), () => state.timeTip);
 attachTip($("orderlabel"), () => state.orderTip);
 attachTip($("slider"), () => state.sliderTip);
+// The set-size caveat: hover shows it (attachTip), and a tap toggles it, so it
+// is reachable on a touch screen with no hover.
+attachTip($("dupinfo"), () => t("dupCaveat"));
+$("dupinfo").addEventListener("click", () => {
+  const tip = $("tooltip");
+  if (!tip.hidden) tip.hidden = true;
+  else $("dupinfo").dispatchEvent(new Event("mouseenter"));
+});
 applyLanguage();

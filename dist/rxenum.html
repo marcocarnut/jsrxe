@@ -232,6 +232,13 @@ main {
 /* The size box header carries the "how long to visit them all" button. */
 .panelhead { display: flex; align-items: baseline; justify-content: space-between;
              gap: .5rem; }
+/* The heading keeps its caveat icon at its side, so space-between only pushes
+   the hourglass to the far end. */
+.sizehead { display: flex; align-items: center; gap: .3rem; }
+.infobtn { background: none; border: 0; color: var(--dim); cursor: pointer;
+           padding: 0; display: inline-flex; align-items: center; }
+.infobtn svg { width: 15px; height: 15px; display: block; }
+.infobtn:hover { color: var(--accent); }
 #timebtn { background: none; border: 1px solid var(--line); border-radius: 6px;
            color: var(--dim); cursor: pointer; line-height: 1;
            display: inline-flex; align-items: center; padding: .3rem .45rem; }
@@ -540,7 +547,12 @@ dialog menu button { background: var(--bg); color: var(--fg);
 
     <div class="panel">
       <div class="panelhead">
-        <h2 data-t="size"></h2>
+        <div class="sizehead">
+          <h2 data-t="size"></h2>
+          <button id="dupinfo" type="button" class="infobtn" aria-label="about this count">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          </button>
+        </div>
         <button id="timebtn" type="button" data-ttip="timeBtn" aria-label="time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12"/><path d="M6 20h12"/><path d="M7 4c0 4 3.5 5.5 5 8 1.5-2.5 5-4 5-8"/><path d="M7 20c0-4 3.5-5.5 5-8 1.5 2.5 5 4 5 8"/></svg></button>
       </div>
       <div id="count" class="big tip-host"></div>
@@ -5285,7 +5297,13 @@ const STRINGS = {
     deleteConfirm:    "Delete this example?",
     savedHere:        "Saved in this browser only.",
 
-    size:             "Size of the set",
+    size:             "Set size",
+    dupInfo:          "about this count",
+    dupCaveat:        "This counts every way the expression can spell a member. "
+                    + "A set that can write the same string more than one way "
+                    + "(the classic a?a?…a?aaaa… is one) has fewer distinct "
+                    + "members than shown — rxe multiplies and sums subset sizes; "
+                    + "it does not detect or remove duplicates.",
     timeBtn:          "How long to visit them all?",
     visitAll:         "To visit every element, we would need:",
     perSecond:        "per second",
@@ -5483,6 +5501,12 @@ const STRINGS = {
     savedHere:        "Guardado apenas neste navegador.",
 
     size:             "Tamanho do conjunto",
+    dupInfo:          "sobre esta contagem",
+    dupCaveat:        "Isto conta cada forma de a expressão soletrar um membro. "
+                    + "Um conjunto que pode escrever a mesma string de mais de "
+                    + "uma maneira (o clássico a?a?…a?aaaa… é um) tem menos "
+                    + "membros distintos que o mostrado — o rxe multiplica e soma "
+                    + "os tamanhos dos subconjuntos; não detecta nem remove duplicatas.",
     timeBtn:          "Quanto tempo para visitar todos?",
     visitAll:         "Para visitar cada elemento, precisaríamos de:",
     perSecond:        "por segundo",
@@ -9076,6 +9100,14 @@ attachTip($("count"), () => state.countSpoken);
 attachTip($("timebig"), () => state.timeTip);
 attachTip($("orderlabel"), () => state.orderTip);
 attachTip($("slider"), () => state.sliderTip);
+// The set-size caveat: hover shows it (attachTip), and a tap toggles it, so it
+// is reachable on a touch screen with no hover.
+attachTip($("dupinfo"), () => t("dupCaveat"));
+$("dupinfo").addEventListener("click", () => {
+  const tip = $("tooltip");
+  if (!tip.hidden) tip.hidden = true;
+  else $("dupinfo").dispatchEvent(new Event("mouseenter"));
+});
 applyLanguage();
 
 

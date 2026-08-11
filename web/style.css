@@ -225,6 +225,13 @@ main {
 /* The size box header carries the "how long to visit them all" button. */
 .panelhead { display: flex; align-items: baseline; justify-content: space-between;
              gap: .5rem; }
+/* The heading keeps its caveat icon at its side, so space-between only pushes
+   the hourglass to the far end. */
+.sizehead { display: flex; align-items: center; gap: .3rem; }
+.infobtn { background: none; border: 0; color: var(--dim); cursor: pointer;
+           padding: 0; display: inline-flex; align-items: center; }
+.infobtn svg { width: 15px; height: 15px; display: block; }
+.infobtn:hover { color: var(--accent); }
 #timebtn { background: none; border: 1px solid var(--line); border-radius: 6px;
            color: var(--dim); cursor: pointer; line-height: 1;
            display: inline-flex; align-items: center; padding: .3rem .45rem; }
