@@ -404,8 +404,12 @@ main {
 #results td { padding: .12rem .5rem; border-bottom: 1px solid var(--line); }
 #results .ix { text-align: right; color: var(--dim); white-space: nowrap;
                width: 1%; }
-#results .val { word-break: break-all; }
-#results .out { word-break: break-all; color: var(--accent);
+/* Preserve every space -- leading, trailing, and runs -- so a member reads
+   exactly as it is and copies verbatim into the search box; some sets really
+   do begin with a space, and collapsing it made the search look broken when
+   the pasted text no longer matched. pre-wrap still wraps long values. */
+#results .val { word-break: break-all; white-space: pre-wrap; }
+#results .out { word-break: break-all; white-space: pre-wrap; color: var(--accent);
                 font-family: var(--mono); }
 #results .err-cell { color: var(--err); text-align: center; cursor: help;
                      font-weight: bold; }

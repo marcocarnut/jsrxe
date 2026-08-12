@@ -774,8 +774,8 @@ export const BUILTIN = [
     id: "megasena",
     family: { en: "Combinatorics", pt: "Combinatória" },
     pattern: {
-      en: "( 0[1-9]| [1-5][0-9]| 6[0-9]){{5}} \\+( 0[1-9]| 1[0-9]| 2[0-6])",
-      pt: "( 0[1-9]| [1-5][0-9]| 60){{6}}"
+      en: "\\[( 0[1-9]| [1-5][0-9]| 6[0-9]){{5}} \\+( 0[1-9]| 1[0-9]| 2[0-6]) \\]",
+      pt: "\\[( 0[1-9]| [1-5][0-9]| 60){{6}} \\]"
     },
     flags: "",
     name: { en: "Powerball Tickets", pt: "Jogos da Mega-Sena" },
@@ -784,12 +784,12 @@ export const BUILTIN = [
           "from 1 to 26 -- set off with a <tt>+</tt> because it is drawn separately " +
           "and may repeat a white number. C(69,5) x 26 = 292,201,338 plays, " +
           "every possible Powerball ticket. Each number is two digits wide with " +
-          "its own space (there's a harmless leading one). Open the time reveal " +
+          "its own space, and the whole draw sits in brackets. Open the time reveal " +
           "on the size box to see how long buying them all would take.",
       pt: "Seis números de 1 a 60, sem ordem: C(60,6) = 50.063.860 -- todo " +
           "jogo possível da Mega-Sena. Cada número traz seu próprio espaço, " +
-          "então os jogos se leem com clareza, dois dígitos de largura (sobra " +
-          "um espaço inofensivo no início). Abra a revelação de tempo na caixa " +
+          "então os jogos se leem com clareza, dois dígitos de largura, com o " +
+          "sorteio todo entre colchetes. Abra a revelação de tempo na caixa " +
           "do tamanho para ver quanto levaria comprar todos."
     }
   },
