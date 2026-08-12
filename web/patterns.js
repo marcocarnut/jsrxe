@@ -17,8 +17,8 @@ export const BUILTIN = [
     highlight: true,
     pattern: "[0-9A-Za-z]{8}",
     flags: "",
-    name: { en: "Eight-character passwords",
-            pt: "Senhas de oito caracteres" },
+    name: { en: "Eight-Character Passwords",
+            pt: "Senhas de Oito Caracteres" },
     note: {
       en: "Every string of eight letters and digits: 218,340,105,584,896 of " +
           "them, about 2^47.6. Counting them is instant, which is the first " +
@@ -43,30 +43,28 @@ export const BUILTIN = [
     tutorial: true,
     pattern: "a",
     flags: "",
-    name: { en: "A single character", pt: "Um único caractere" },
+    name: { en: "A Single Character", pt: "Um Único Caractere" },
     note: {
-      en: "The smallest set there is: one member, the letter a. A regular " +
-          "expression is really a set specification, and this is the set {a}. " +
-          "Everything else here is a way of describing a bigger set.",
-      pt: "O menor conjunto que existe: um membro, a letra a. Uma expressão " +
-          "regular é, no fundo, a especificação de um conjunto, e este é o " +
-          "conjunto {a}. Todo o resto aqui é um modo de descrever um conjunto " +
-          "maior."
+      en: "A single character represents itself -- the set with that single " +
+          "character, so the set size is 1 and only one line is generated " +
+          "with that single lone character.",
+      pt: "Um caractere isolado representa ele mesmo -- o conjunto com apenas " +
+          "esse caractere, de forma que o tamanho do conjunto é 1 e só uma linha " +
+          "é gerada com só esse caractere."
     }
   },
   {
     id: "one-word",
     tutorial: true,
-    pattern: { en: "hello", pt: "olá" },
+    pattern: { en: "Hello!", pt: "Olá!" },
     flags: "",
-    name: { en: "A single word", pt: "Uma única palavra" },
+    name: { en: "A Single Word", pt: "Uma Única Palavra" },
     note: {
-      en: "Ordinary characters stand for themselves and sit side by side, so " +
-          "this whole set is still just one string: hello. Length is not the " +
-          "same as size -- five characters, one member.",
-      pt: "Caracteres comuns representam a si mesmos e ficam lado a lado, " +
-          "então este conjunto ainda é uma só cadeia: olá. Comprimento não é o " +
-          "mesmo que tamanho -- várias letras, um único membro."
+      en: "Adjacent symbols generate cartesian products, but since characters are single-item " +
+          "sets, words become themselves. The result is a set of size 1 that generates that word.",
+      pt: "Itens adjacentes geram produtos cartesianos, mas como caracteres são conjuntos de " +
+          "um caractere só, palavras também se tornam elas mesmas. O resultado é um conjunto " +
+          "de tamanho 1 que gera aquela palavra."
     }
   },
   {
@@ -74,12 +72,47 @@ export const BUILTIN = [
     tutorial: true,
     pattern: { en: "cat|dog|fish", pt: "gato|cachorro|peixe" },
     flags: "",
-    name: { en: "A choice", pt: "Uma escolha" },
+    name: { en: "A Choice", pt: "Uma Escolha" },
     note: {
-      en: "The bar | means 'or'. Three alternatives, three members. Step the " +
-          "index through 0, 1, 2 and watch each one come up.",
-      pt: "A barra | significa 'ou'. Três alternativas, três membros. Avance " +
-          "o índice por 0, 1, 2 e veja cada um aparecer."
+      en: "The vertical bar <tt>|</tt> is typically read as 'or' because it expresses \"alternatives\". "+
+          "It actually represents set union, so the resulting set size is the sum of all "+
+          "its component sets. Here, <tt>cat</tt> is a set of size 1, and so is <tt>dog</tt> and <tt>fish</tt>, " +
+          "resulting in a set of size three.",
+      pt: "Lê-se a barra vertical <tt>|</tt> como 'ou' porque ela exprime \"alternativas\". Na verdade, " +
+          "ela representa a união de conjuntos: o tamanho do conjunto resultante é a soma de " +
+          "todos os conjuntos. Aqui, <tt>gato</tt> é um conjunto de um elemento só, assim como <tt>cachorro</tt> " + 
+          "e <tt>peixe</tt>, resultando em um conjunto de três elementos."
+    }
+  },
+  {
+    id: "vowels",
+    tutorial: true,
+    pattern: "[abcdef]",
+    flags: "",
+    name: { en: "Character Classes", pt: "Classes de Caracteres" },
+    note: {
+      en: "This is an abbreviated way to write <tt>(a|e|i|o|u)</tt>, so it counts as a " +
+          "single character. It can be abbreviated further using ranges: <tt>[a-f]</tt>.",
+      pt: "Essa é uma maneira abreviada de escrever <tt>(a|e|i|o|u)</tt>, então conta como " +
+          "um único caractere. Pode ser abreviada mais ainda usando intervalos: <tt>[a-f]</tt>."
+    }
+  },
+  {
+    id: "chess",
+    tutorial: true,
+    highlight: true,
+    pattern: "[a-h][1-8]",
+    flags: "",
+    name: { en: "Chessboard Squares", pt: "Casas do Tabuleiro de Xadrez" },
+    note: {
+      en: "Adjacent sets make cartesian products, so it is easy to generate " +
+          "every combination of each element of the first set with every " +
+          "element of the other set. We use this here to generate all 64 names " +
+          "of chessboard squares under the algebraic notation.",
+      pt: "Conjuntos adjacentes geram produtos cartesianos, então é fácil " +
+          "gerar todas as combinações de cada elemento do primeiro conjunto com " +
+          "todos os elementos do segundo. Valemo-nos disso aqui para gerar todos " +
+          "os 64 nomes das casas de tabuleiro de xadrez segundo a notação algébrica." 
     }
   },
   {
@@ -90,49 +123,18 @@ export const BUILTIN = [
       pt: "(segunda|terça|quarta|quinta|sexta)-feira"
     },
     flags: "",
-    name: { en: "A subexpression", pt: "Uma subexpressão" },
+    name: { en: "Groups/Subexpressions", pt: "Grupos/Subexpressões" },
     note: {
-      en: "Parentheses group a piece of the pattern so an operator applies to " +
-          "the whole of it. Here the choice of seven prefixes is grouped, and " +
-          "the shared 'day' is written once: seven weekdays, not seven copies " +
-          "of the word.",
-      pt: "Os parênteses agrupam um pedaço do padrão para que um operador se " +
-          "aplique a ele inteiro. Aqui a escolha de cinco prefixos é agrupada " +
-          "e o '-feira' comum é escrito uma vez só: os cinco dias úteis, não " +
-          "cinco cópias da palavra."
-    }
-  },
-  {
-    id: "vowels",
-    tutorial: true,
-    pattern: "[aeiou]",
-    flags: "",
-    name: { en: "One of several characters", pt: "Um entre vários caracteres" },
-    note: {
-      en: "Square brackets choose a single character from a set -- the five " +
-          "vowels here. A class is just a choice written compactly: [aeiou] " +
-          "says the same as (a|e|i|o|u).",
-      pt: "Colchetes escolhem um único caractere de um conjunto -- as cinco " +
-          "vogais aqui. Uma classe é apenas uma escolha escrita de forma " +
-          "compacta: [aeiou] diz o mesmo que (a|e|i|o|u)."
-    }
-  },
-  {
-    id: "chess",
-    tutorial: true,
-    highlight: true,
-    pattern: "[a-h][1-8]",
-    flags: "",
-    name: { en: "Chessboard squares", pt: "Casas do tabuleiro de xadrez" },
-    note: {
-      en: "Two classes side by side multiply: eight files times eight ranks, " +
-          "sixty-four squares. The whole set fits on screen, so you can watch " +
-          "the index line up with the board -- the first real glimpse of a " +
-          "product.",
-      pt: "Duas classes lado a lado se multiplicam: oito colunas vezes oito " +
-          "linhas, sessenta e quatro casas. O conjunto inteiro cabe na tela, " +
-          "então dá para ver o índice acompanhar o tabuleiro -- o primeiro " +
-          "vislumbre de um produto."
+      en: "Everything within parentheses is considered an independent subset that " +
+          "can be combined with everything outside the parentheses. Here, the part inside " +
+          "the parentheses is an alternation that generates the seven weekday name prefixes. " + 
+          "The <tt>day</tt> is a single element set. One next to the other means cartesian product. " +
+          "So the result is a set of 7 x 1 = 7 elements with all full weekday names.",
+      pt: "Tudo dentro de parênteses é considerado um subconjunto independente que " +
+          "pode ser combinado com tudo fora dos parênteses. Aqui, a parte entre parênteses " +
+          "é uma alternação que gera os nomes dos cinco dias úteis. O <tt>feira</tt> é um conjunto "+
+          "de um elemento só. Um ao lado do outro significa produto cartesiano, então o " +
+          "resultado é um conjunto de 5 x 1 = 5 nomes completos de dias úteis."
     }
   },
   {
@@ -140,46 +142,43 @@ export const BUILTIN = [
     tutorial: true,
     pattern: "\\d{4}",
     flags: "",
-    name: { en: "Every PIN", pt: "Todo PIN" },
+    name: { en: "Four Digit PINs", pt: "PINs de Quatro Dígitos" },
     note: {
-      en: "A brace repeats what comes before it, so \\d four times is every " +
-          "four-digit PIN: all 10,000 of them, 0000 to 9999. The index is the " +
-          "PIN -- element 1,234 is 1234.",
-      pt: "A chave repete o que vem antes, então \\d quatro vezes é todo PIN " +
-          "de quatro dígitos: os 10.000, de 0000 a 9999. O índice é o próprio " +
-          "PIN -- o elemento 1.234 é 1234."
+      en: "<tt>\\d</tt> means \"a decimal digit\"; it's an abbreviated form of <tt>[0-9]</tt> (the ten "+
+          "characters from zero to nine). <tt>{n}</tt> means \"repeated <i>n</i> times\" -- four "+
+          "in this case.",
+      pt: "<tt>\\d</tt> significa \"um dígito decimal\"; é uma forma abreviada de <tt>[0-9]</tt> (os dez "+
+          "caracteres de zero a nove). <tt>{n}</tt> significa \"repetidos <i>i</i> vezes\" -- quatro, "+
+          "nesse caso."
     }
   },
   {
     id: "ranged",
     tutorial: true,
-    pattern: "[a-z]{1,3}",
+    pattern: "[a-c]{1,3}",
     flags: "",
-    name: { en: "A range of lengths", pt: "Um intervalo de comprimentos" },
+    name: { en: "A Range of Lengths", pt: "Intervalos de Repetições" },
     note: {
-      en: "A brace can give a range: {1,3} means one to three letters, so the " +
-          "set is every short lowercase string, 26 + 26^2 + 26^3 = 18,278 of " +
-          "them. They come out shortest first, all the one-letter strings, " +
-          "then the two-letter ones, then the three.",
-      pt: "A chave pode dar um intervalo: {1,3} significa de uma a três " +
-          "letras, então o conjunto é toda cadeia minúscula curta, 26 + 26^2 " +
-          "+ 26^3 = 18.278 delas. Saem do mais curto ao mais longo: primeiro " +
-          "as de uma letra, depois as de duas, depois as de três."
+      en: "<tt>{n,m}</tt> means repeat <i>n</i> times, then <i>n+1</i> times, and so on "+
+          "up to <i>m</i> times.",
+      pt: "<tt>{n,m}</tt> significa repetir <i>n</i> vezes, depois <i>n+1</i> vezes, e "+
+          "assim sucessivamente até <i>m</i> vezes."
     }
   },
   {
     id: "optional",
     tutorial: true,
-    pattern: "colou?r",
+    pattern: {
+      en: "colou?r",
+      pt: "corrup?ção"
+    },
     flags: "",
-    name: { en: "An optional letter", pt: "Uma letra opcional" },
+    name: { en: "An Optional Item", pt: "Um Item Opcional" },
     note: {
-      en: "The ? makes the letter before it optional -- zero or one u. So the " +
-          "set is exactly {color, colour}, the American and British spellings, " +
-          "and nothing else.",
-      pt: "O ? torna opcional a letra anterior -- zero ou um u. Então o " +
-          "conjunto é exatamente {color, colour}, as grafias americana e " +
-          "britânica, e nada mais."
+      en: "The question mark <tt>?</tt> means that the character or subexpression before it is "+
+          "\"optional\". It is equivalent to <tt>{0,1}</tt> (repeat zero to one times).",
+      pt: "O ponto de interrogação <tt>?</tt> significa que o caractere ou subexpressão que o precede "+
+          "é \"opcional\". É equivalente a <tt>{0,1}</tt> (repita de zero a uma vez)."
     }
   },
   {
@@ -187,17 +186,16 @@ export const BUILTIN = [
     tutorial: true,
     pattern: { en: "[HT]{10}", pt: "[Cc]{10}" },
     flags: "",
-    name: { en: "Ten coin flips", pt: "Dez lançamentos de moeda" },
+    name: { en: "Ten Coin Flips", pt: "Dez Lançamentos de Moeda" },
     note: {
-      en: "Heads or tails, ten times over (H and T): 2^10 = 1,024 sequences. " +
-          "Every extra flip doubles the set -- the very same doubling that " +
-          "makes the eight-character password set enormous. You have arrived " +
-          "at real keyspaces.",
-      pt: "Cara ou coroa, dez vezes seguidas (c de cara, C de Coroa, que a " +
-          "expressão distingue por serem maiúscula e minúscula): 2^10 = 1.024 " +
-          "sequências. Cada lançamento a mais dobra o conjunto -- a mesmíssima " +
-          "duplicação que torna enorme o conjunto de senhas de oito " +
-          "caracteres. Você chegou aos espaços de chaves de verdade."
+      en: "Heads (<tt>H</tt>) or tails (<tt>T</tt>), ten times over: Two possibilities repeated " +
+          "ten times (raised to the tenth power) yields 1,024 variations -- our " +
+          "first example with a considerable size. You can scroll through them " +
+          "using the slider and the navigation controls below.",
+      pt: "Cara (<tt>C</tt> maiúsculo) ou coroa (<tt>c</tt> minúsculo), dez vezes seguidas. Duas " +
+          "possibilidades repetidas dez vezes (elevadas à décima potência) dão " +
+          "1.024 variações -- nosso primeiro exemplo de tamanho considerável. Você " +
+          "pode navegar por todas elas mexendo no deslizador e nos demais controles abaixo."
     }
   },
   {
@@ -205,13 +203,13 @@ export const BUILTIN = [
     tutorial: true,
     pattern: "\\d+",
     flags: "",
-    name: { en: "One or more (+)", pt: "Um ou mais (+)" },
+    name: { en: "One or More (+)", pt: "Um ou Mais (+)" },
     note: {
-      en: "The + means 'one or more', so it is shorthand for {1,}: every " +
+      en: "The <tt>+</tt> means 'one or more', so it is shorthand for <tt>{1,}</tt>: every " +
           "non-empty run of digits. There is no largest one, so the set is " +
           "infinite -- yet every member still has an exact index, and they " +
           "come out shortest first, the index reading as the number itself.",
-      pt: "O + significa 'um ou mais', então é abreviação de {1,}: toda " +
+      pt: "O <tt>+</tt> significa 'um ou mais', então é abreviação de <tt>{1,}</tt>: toda " +
           "sequência não vazia de algarismos. Não há maior elemento, então o " +
           "conjunto é infinito -- mas todo membro ainda tem um índice exato, e " +
           "eles saem do mais curto primeiro, o índice se lendo como o próprio " +
@@ -223,16 +221,16 @@ export const BUILTIN = [
     tutorial: true,
     pattern: "[ab]*",
     flags: "",
-    name: { en: "Zero or more (*)", pt: "Zero ou mais (*)" },
+    name: { en: "Zero or More (*)", pt: "Zero ou Mais (*)" },
     note: {
-      en: "The * means 'zero or more', shorthand for {0,}. The only difference " +
-          "from + is that zero is allowed, so the very first member is the " +
-          "empty string, before a, b, aa, ab and the rest. Still infinite, " +
+      en: "The <tt>*</tt> (star) means 'zero or more', shorthand for <tt>{0,}</tt>. The only difference " +
+          "from <tt>+</tt> is that zero is allowed, so the very first member is the " +
+          "empty string, before <tt>a</tt>, <tt>b</tt>, <tt>aa</tt>, <tt>ab</tt> and the rest. Still infinite, " +
           "still fully walkable.",
-      pt: "O * significa 'zero ou mais', abreviação de {0,}. A única diferença " +
-          "para o + é que zero é permitido, então o primeiro membro é a cadeia " +
-          "vazia, antes de a, b, aa, ab e o resto. Ainda infinito, ainda " +
-          "totalmente percorrível."
+      pt: "O <tt>*</tt> (asterisco) significa 'zero ou mais', abreviação de <tt>{0,}</tt>. A única diferença " +
+          "para o <tt>+</tt> é que zero é permitido, então o primeiro membro é a cadeia " +
+          "vazia, antes de <tt>a</tt>, <tt>b</tt>, <tt>aa</tt>, <tt>ab</tt> e o resto. Mesmo sendo infinito, esse conjunto " +
+          "pode ser percorrido perfeitamente."
     }
   },
   {
@@ -240,14 +238,14 @@ export const BUILTIN = [
     tutorial: true,
     pattern: "([0-9]{2})/(\\1)",
     flags: "",
-    name: { en: "A backreference (\\1)", pt: "Uma retrorreferência (\\1)" },
+    name: { en: "A Backreference (\\1)", pt: "Uma Retrorreferência (\\1)" },
     note: {
-      en: "A hundred, not ten thousand: \\1 does not choose again, it copies " +
+      en: "A hundred elements, not ten thousand: <tt>\\1</tt> does not choose again, it copies " +
           "the exact text the group already chose, so the second pair always " +
           "equals the first. Backreferences are the one thing here a plain " +
           "product of independent positions cannot express. Compare the " +
           "subroutine below, which reuses the rule rather than the text.",
-      pt: "Cem, e não dez mil: \\1 não escolhe de novo, copia o texto exato " +
+      pt: "Cem elementos, e não dez mil: <tt>\\1</tt> não escolhe de novo, copia o texto exato " +
           "que o grupo já escolheu, então o segundo par é sempre igual ao " +
           "primeiro. Retrorreferências são a única coisa aqui que um produto " +
           "de posições independentes não expressa. Compare com a sub-rotina " +
@@ -259,35 +257,41 @@ export const BUILTIN = [
     tutorial: true,
     pattern: "([0-9]{2}):(?1):(?1)",
     flags: "",
-    name: { en: "A subroutine call (?1)", pt: "Uma chamada de sub-rotina (?1)" },
+    name: { en: "A Subroutine Call (?1)", pt: "Uma Chamada a Sub-Rotina (?1)" },
     note: {
-      en: "A million, not a hundred. (?1) looks like a backreference but is " +
+      en: "A million, not a hundred. <tt>(?1)</tt> looks like a backreference but is " +
           "not: it re-runs group 1's rule -- 'two digits' -- from scratch, so " +
-          "each field varies on its own, where \\1 would have forced them " +
+          "each field varies on its own, where <tt>\\1</tt> would have forced them " +
           "equal. It is the subroutine call that lets the IPv4 example write " +
-          "one octet once and reuse it with (?2).",
-      pt: "Um milhão, e não cem. (?1) parece uma retrorreferência, mas não é: " +
+          "one octet once and reuse it with <tt>(?2)</tt>.",
+      pt: "Um milhão, e não cem. <tt>(?1)</tt> parece uma retrorreferência, mas não é: " +
           "ele reexecuta a regra do grupo 1 -- 'dois algarismos' -- do zero, " +
-          "então cada campo varia por conta própria, onde \\1 os teria forçado " +
+          "então cada campo varia por conta própria, onde <tt>\\1</tt> os teria forçado " +
           "iguais. É a chamada de sub-rotina que deixa o exemplo de IPv4 " +
-          "escrever um octeto uma vez e reaproveitá-lo com (?2)."
+          "escrever um octeto uma vez e reaproveitá-lo com <tt>(?2)</tt>."
     }
   },
 
   // ------------------------------------------------------ place value and bases
   {
     id: "hex-plain",
-    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
+    family: { en: "Fixed-Width Numerals", pt: "Numerais de Largura Fixa" },
     pattern: "[0-9A-F]{8}",
     flags: "",
-    name: { en: "eight hex digits", pt: "oito dígitos hex" },
+    name: { en: "Eight Hexadecimal Digits", pt: "Oito Dígitos Hexadecimais" },
     note: {
-      en: "Every eight-digit hexadecimal number: 16^8 = 4,294,967,296, one " +
-          "for each 32-bit value. The index is the number itself, so seeking " +
-          "to 3,735,928,559 lands on DEADBEEF.",
-      pt: "Todo número hexadecimal de oito dígitos: 16^8 = 4.294.967.296, um " +
-          "para cada valor de 32 bits. O índice é o próprio número, então ir " +
-          "para 3.735.928.559 cai em DEADBEEF."
+      en: "<tt>[0-9A-F]</tt> generates the 16 possible hexadecimal digits " +
+          "and <tt>{8}</tt> repeats them eight times, yielding a set with 4,294,967,296 " +
+          "items. By default, repetitions and associativity run right-to-left " +
+          "(the same order numbers increase when counting). We can use this to " +
+          "do base conversions -- accessing element 3,735,928,559 lands on " +
+          "<tt>DEADBEEF</tt>, which is precisely its hexadecimal representation.",
+      pt: "<tt>[0-9A-F]</tt> gera os 16 dígitos hexadecimais possíveis e <tt>{8}</tt> " +
+          "os repete 8 vezes, resultando em um conjunto com 4.294.967.296 elementos. " +
+          "Por padrão, as repetições e associatividade vão da direita para a esquerda " +
+          "(a mesma ordem em que os números vão aumentando ao contar). Podemos usar isso " +
+          "para fazer conversões de base -- acessar o elemento 3.735.928.559 resulta em " +
+          "<tt>DEADBEEF</tt>, que é exatamente sua representação em hexadecimal."
     },
     bookmarks: [
       { name: { en: "DEADBEEF", pt: "DEADBEEF" }, index: "3735928559" }
@@ -296,32 +300,32 @@ export const BUILTIN = [
   {
     id: "hex",
     highlight: true,
-    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
-    pattern: "[0-9A-F]{4} [0-9A-F]{4}",
+    family: { en: "Fixed-Width Numerals", pt: "Numerais de Largura Fixa" },
+    pattern: "[0-9A-F]{4} [0-9A-F]{4} [0-9A-F]{4}",
     flags: "",
-    name: { en: "grouped by a space", pt: "agrupado por um espaço" },
+    name: { en: "Grouped by a Space", pt: "Agrupado por um Espaço" },
     note: {
-      en: "The same 4,294,967,296 numbers, now with a space down the middle. " +
-          "The space is a single fixed character, so it multiplies the count " +
-          "by one: grouping changes how the number reads, not how many there " +
-          "are. Element 3,735,928,559 is DEAD BEEF; turn on (?L) and the order " +
-          "reverses to FEEB DAED.",
-      pt: "Os mesmos 4.294.967.296 números, agora com um espaço no meio. O " +
-          "espaço é um único caractere fixo, então multiplica a contagem por " +
-          "um: agrupar muda como o número se lê, não quantos são. O elemento " +
-          "3.735.928.559 é DEAD BEEF; ligue (?L) e a ordem inverte para FEEB " +
-          "DAED."
+      en: "Single-set elements don't mess up the count, so we can add " +
+          "spaces between digits for readability: element 280,297,596,648,142 " +
+          "is <tt>FEED DEAD FACE</tt>, its hexadecimal representation. Again, this works because " +
+          "associativity defaults to right-to-left. Adding <tt>(?L)</tt> to the beginning " +
+          "inverts it and the result will be backwards.",
+      pt: "Conjuntos de um elemento só não interferem na contagem, então podemos " +
+          "adicionar espaços pra facilitar a leitura: o elemento 280.297.596.648.142 " +
+          "é <tt>FEED DEAD FACE</tt>, sua representação em hexadecimal. Novamente, isso funciona " +
+          "porque a associatividade vai da direita para a esquerda por padrão. Adicionar " +
+          "<tt>(?L)</tt> no começo a inverte e o resultado sai ao contrário."
     },
     bookmarks: [
-      { name: { en: "DEAD BEEF", pt: "DEAD BEEF" }, index: "3735928559" }
+      { name: { en: "FEED DEAD FACE", pt: "FEED DEAD FACE" }, index: "280297596648142" }
     ]
   },
   {
     id: "octal",
-    family: { en: "Fixed-width numerals", pt: "Numerais de largura fixa" },
+    family: { en: "Fixed-Width Numerals", pt: "Numerais de Largura Fixa" },
     pattern: "[0-7]{8}",
     flags: "",
-    name: { en: "eight octal digits", pt: "oito dígitos octais" },
+    name: { en: "Eight Octal Digits", pt: "Oito Dígitos Octais" },
     note: {
       en: "Change the base and the count changes with it: eight octal digits " +
           "are 8^8 = 16,777,216, far fewer than the hexadecimal 16^8. Same " +
@@ -337,16 +341,16 @@ export const BUILTIN = [
     pattern: "M{0,3}(C{0,3}|CD|DC{0,3}|CM)(X{0,3}|XL|LX{0,3}|XC)" +
              "(I{0,3}|IV|VI{0,3}|IX)",
     flags: "",
-    name: { en: "Roman numerals", pt: "Algarismos romanos" },
+    name: { en: "Roman Numerals", pt: "Algarismos Romanos" },
     note: {
-      en: "All 4,000 Roman numerals from the empty string to MMMCMXCIX. The " +
-          "index happens to be the value: element 3,999 really is MMMCMXCIX, " +
+      en: "All 4,000 Roman numerals. The index happens " +
+          "to be the value: element 3,999 really is <tt>MMMCMXCIX</tt>, " +
           "because the expression is written so that the thousands, " +
-          "hundreds, tens and units are separate positions in that order.",
-      pt: "Os 4.000 algarismos romanos, da cadeia vazia até MMMCMXCIX. O " +
-          "índice coincide com o valor: o elemento 3.999 é de fato " +
-          "MMMCMXCIX, porque a expressão está escrita de modo que milhares, " +
-          "centenas, dezenas e unidades sejam posições separadas nessa ordem."
+          "hundreds, tens and units are in the same order as decimal digits.",
+      pt: "Todos os 4.000 algarismos romanos. O índice coincide " +
+          "com o valor: o elemento 3.999 é de fato " +
+          "<tt>MMMCMXCIX</tt>, porque a expressão está escrita de forma que os milhares, " +
+          "centenas, dezenas e unidades ocorram na mesma ordem que os dígitos decimais."
     },
     // Since the index is the value, element 42 is XLII: the Answer to Life,
     // the Universe, and Everything, in Roman.
@@ -359,14 +363,14 @@ export const BUILTIN = [
     id: "ipv4",
     pattern: "((\\d|[1-9]\\d|1\\d\\d|2[0-4]\\d|25[0-5])\\.){3}(?2)",
     flags: "",
-    name: { en: "IPv4 addresses", pt: "Endereços IPv4" },
+    name: { en: "IPv4 Addresses", pt: "Endereços IPv4" },
     note: {
       en: "All 4,294,967,296 of them, and exactly them: the alternation " +
-          "rules out 256 and above. Note (?2), which reuses the second " +
+          "only includes valid numbers. Note <tt>(?2)</tt>, which reuses the second " +
           "parenthesised group as a subroutine rather than writing it out a " +
           "fourth time.",
-      pt: "Todos os 4.294.967.296, e exatamente eles: a alternação exclui " +
-          "256 e acima. Repare no (?2), que reaproveita o segundo grupo " +
+      pt: "Todos os 4.294.967.296, e exatamente eles: a alternação só inclui " +
+          "números válidos. Repare no <tt>(?2)</tt>, que reaproveita o segundo grupo " +
           "entre parênteses como sub-rotina em vez de escrevê-lo uma quarta " +
           "vez."
     }
@@ -374,25 +378,25 @@ export const BUILTIN = [
   {
     id: "placa-antiga",
     highlight: true,
-    family: { en: "Brazilian licence plates", pt: "Placas brasileiras" },
-    pattern: "[A-Z]{3}-\\d{4}",
+    family: { en: "Brazilian License Plates", pt: "Placas de Carro Brasileiras" },
+    pattern: "[A-Z]{3}\\d{4}",
     flags: "",
-    name: { en: "old standard", pt: "padrão antigo" },
+    name: { en: "Old Standard (pre-2018)", pt: "Padrão Antigo (pré-2018)" },
     note: {
-      en: "The pre-2018 Brazilian format: three letters, a hyphen, four " +
-          "digits. 175,760,000 plates. Compare the count with the Mercosul " +
+      en: "The pre-2018 Brazilian format: three letters followed by four " +
+          "digits: 175,760,000 plates. Compare the count with the Mercosul " +
           "format below -- the new one is larger, which was the point of " +
           "changing it.",
-      pt: "O padrão brasileiro anterior a 2018: três letras, hífen, quatro " +
-          "algarismos. 175.760.000 placas. Compare a contagem com o padrão " +
-          "Mercosul abaixo: o novo é maior, que era justamente a razão da " +
+      pt: "O padrão brasileiro anterior a 2018: três letras seguidas de quatro " +
+          "dígitos: 175.760.000 placas. Compare a contagem com o padrão " +
+          "Mercosul abaixo: o novo é maior, que foi justamente a razão da " +
           "mudança."
     }
   },
   {
     id: "placa-mercosul",
     highlight: true,
-    family: { en: "Brazilian licence plates", pt: "Placas brasileiras" },
+    family: { en: "Brazilian License Plates", pt: "Placas de Carro Brasileiras" },
     pattern: "[A-Z]{3}\\d[A-Z]\\d{2}",
     flags: "",
     name: { en: "Mercosul", pt: "Mercosul" },
@@ -407,39 +411,30 @@ export const BUILTIN = [
   },
   {
     id: "cnpj-num-all",
-    family: { en: "CNPJ, numeric (pre-2026)", pt: "CNPJ numérico (pré-2026)" },
+    family: { en: "Brazilian Legal Person ID", pt: "CNPJs Brasileiros" },
     pattern: "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}",
     flags: "",
-    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
+    name: { en: "Pre-2026: Valid plus Invalid", pt: "Pré-2026: Válidos e Inválidos" },
     note: {
       en: "The Brazilian company number as it stood before 2026: fourteen " +
           "digits, punctuation and all, 10^14 of them. The last two range " +
-          "freely over 00 to 99, so only a hundredth carry the mod-11 checksum " +
-          "a regular expression cannot express. Switch to the valid variant to " +
-          "have the code compute it instead.",
+          "freely over 00 to 99, so only a hundredth carry a valid mod-11 checksum.",
       pt: "O CNPJ como era antes de 2026: catorze algarismos, pontuação e " +
           "tudo, 10^14 deles. Os dois últimos variam livremente de 00 a 99, " +
-          "então só um centésimo carrega o verificador mod 11 que uma " +
-          "expressão regular não expressa. Troque para a variante válida para " +
-          "que o código o calcule."
+          "então só um centésimo deles tem o verificador mod 11 válido."
     }
   },
   {
     id: "cnpj-num-valid",
-    family: { en: "CNPJ, numeric (pre-2026)", pt: "CNPJ numérico (pré-2026)" },
+    family: { en: "Brazilian Legal Person ID", pt: "CNPJs Brasileiros" },
     pattern: "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}",
     flags: "",
-    name: { en: "valid digits only", pt: "somente válidos" },
+    name: { en: "Pre-2026: Valid Digits Only", pt: "Pré-2026: Somente Válidos" },
     note: {
-      en: "The regex stops before the checksum and the code appends it, so " +
-          "every row is a genuinely valid CNPJ rather than one in a hundred " +
-          "-- 10^12 of them. It is the same mod-11 over each digit that the " +
-          "2026 alphanumeric form carries on unchanged, a digit worth itself.",
-      pt: "A expressão para antes do verificador e o código o acrescenta, " +
-          "então cada linha é um CNPJ de fato válido, e não um em cem -- 10^12 " +
-          "deles. É o mesmo mod 11 sobre cada algarismo que a forma " +
-          "alfanumérica de 2026 mantém sem mudança, um algarismo valendo ele " +
-          "mesmo."
+      en: "The regex stops before the checksum and the code computes and appends it, so " +
+          "every row is a genuinely valid CNPJ (the Brazilian Legal Person Taxpayer ID).",
+      pt: "A expressão termina antes do dígito verificador, que é calculado e acrescido " +
+          "no final pelo código auxiliar. Portanto, cada linha é um CNPJ de fato válido."
     },
     code:
       "// Strip the punctuation to the twelve-digit base, then append the two\n" +
@@ -451,50 +446,35 @@ export const BUILTIN = [
   },
   {
     id: "cnpj-all",
-    family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
+    family: { en: "Brazilian Legal Person ID", pt: "CNPJs Brasileiros" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}-\\d{2}",
     flags: "",
-    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
+    name: { en: "Post-2026: Valid plus Invalid", pt: "Pós-2026: Válidos e Inválidos" },
     note: {
-      en: "From 2026 the Brazilian company number admits letters. This is " +
-          "the set of well-formed ones, punctuation and all: the two final " +
+      en: "From 2026 the Brazilian company number admits letters as well. The two final " +
           "digits range freely over 00 to 99, so a hundredth of these carry " +
-          "the correct checksum. Root and branch both vary " +
-          "small; the branch varies over all four characters here. Some 4.7 " +
-          "times 10^20 of them (36^12 times 100). Switch to the valid " +
-          "variant to see the checksum computed instead of enumerated.",
-      pt: "A partir de 2026 o CNPJ admite letras. Este é o conjunto dos bem " +
-          "formados, pontuação e tudo: os dois algarismos finais variam " +
-          "livremente de 00 a 99, então um centésimo destes carrega o " +
-          "verificador correto. Raiz e filial variam " +
-          "conjunto pequeno; aqui a filial varia nos quatro caracteres. " +
-          "Cerca de 4,7 vezes 10^20 (36^12 vezes 100). Troque para a " +
-          "variante válida para ver o verificador calculado em vez de " +
-          "válida para ver o verificador calculado em vez de enumerado."
+          "the correct checksum.",
+      pt: "A partir de 2026 o CNPJ admite letras também. Os dois algarismos finais variam " +
+          "livremente de 00 a 99, então só um centésimo destes carrega o " +
+          "verificador correto."
     }
   },
   {
     id: "cnpj-valid",
     highlight: true,
-    family: { en: "CNPJ, alphanumeric (2026)", pt: "CNPJ alfanumérico (2026)" },
+    family: { en: "Brazilian Legal Person ID", pt: "CNPJs Brasileiros" },
     pattern: "[0-9A-Z]{2}\\.[0-9A-Z]{3}\\.[0-9A-Z]{3}/[0-9A-Z]{4}",
     flags: "",
-    name: { en: "valid digits only", pt: "somente válidos" },
+    name: { en: "Post-2026: Valid Digits Only", pt: "Pós-2026: Somente Válidos" },
     note: {
       en: "Now the regex stops before the checksum and the code computes it, " +
-          "so every row is a genuinely valid CNPJ rather than one in a " +
-          "hundred. The check digit still uses mod 11 over each character's " +
-          "code point minus 48, which is exactly why it survived the letters " +
-          "unchanged -- a digit is worth itself, a letter carries on from " +
-          "A = 17. The bookmark lands on 12.ABC.345/01DE, whose digits are " +
-          "35, the example in Receita Federal's own note.",
-      pt: "Agora a expressão para antes do verificador e o código o calcula, " +
-          "então cada linha é um CNPJ de fato válido, e não um em cem. O " +
-          "dígito continua usando mod 11 sobre o código de cada caractere " +
-          "menos 48, e é por isso que sobreviveu às letras sem mudança — um " +
-          "algarismo vale ele mesmo, uma letra segue a partir de A = 17. O " +
-          "marcador cai em 12.ABC.345/01DE, cujos dígitos são 35, o exemplo " +
-          "da nota da Receita Federal."
+          "so every row is a genuinely valid CNPJ. The check digit still uses mod 11 " + 
+          "over each character's ASCII code point minus 48, which is exactly why it " +
+          "survived the letters unchanged.",
+      pt: "Agora a expressão termina antes do verificador e o código o calcula, " +
+          "então cada linha é um CNPJ de fato válido. O " +
+          "dígito continua usando mod 11 sobre o código ASCII de cada caractere " +
+          "menos 48 e, por isso, não quebra compatibilidade com o formato pré-2026."
     },
     code:
       "// Strip the punctuation to the twelve-character base, then append\n" +
@@ -512,34 +492,28 @@ export const BUILTIN = [
   },
   {
     id: "cpf-all",
-    family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
+    family: { en: "CPF (Brazilian Taxpayer Number)", pt: "CPFs Brasileiros" },
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}",
     flags: "",
-    name: { en: "valid plus invalid", pt: "válidos e inválidos" },
+    name: { en: "Valid plus Invalid", pt: "Válidos e Inválidos" },
     note: {
       en: "All 10^11 well-formed CPFs. The last two digits range over 00 to " +
-          "99, so only a hundredth carry the mod-11 checksum a regular " +
-          "expression cannot express. Switch to the valid variant to have " +
-          "the code compute it instead.",
+          "99, so only a hundredth carry the correct mod-11 checksum.",
       pt: "Todos os 10^11 CPFs bem formados. Os dois últimos algarismos " +
-          "variam de 00 a 99, então só um centésimo carrega o verificador " +
-          "mod 11 que uma expressão regular não expressa. Troque para a " +
-          "variante válida para que o código o calcule."
+          "variam de 00 a 99, então só um centésimo tem os dígitos verificadores corretos."
     }
   },
   {
     id: "cpf-valid",
-    family: { en: "CPF (Brazilian taxpayer number)", pt: "CPF" },
+    family: { en: "CPF (Brazilian Taxpayer Number)", pt: "CPFs Brasileiros" },
     pattern: "\\d{3}\\.\\d{3}\\.\\d{3}",
     flags: "",
-    name: { en: "valid digits only", pt: "somente válidos" },
+    name: { en: "Valid Digits Only", pt: "Somente Válidos" },
     note: {
       en: "The regex stops before the checksum and the code appends it, so " +
-          "every row is a valid CPF rather than one in a hundred. This is " +
-          "the pattern that prompted the whole code feature.",
-      pt: "A expressão para antes do verificador e o código o acrescenta, " +
-          "então cada linha é um CPF válido, e não um em cem. Foi este " +
-          "padrão que originou todo o recurso de código."
+          "every row is a valid CPF with the correct check digits.",
+      pt: "A expressão termina antes do verificador e o código o acrescenta, " +
+          "então cada linha é um CPF válido com dígitos verificadores corretos."
     },
     code:
       "// Strip the dots to the nine-digit base, append the two check\n" +
@@ -553,25 +527,28 @@ export const BUILTIN = [
     id: "cep",
     pattern: "\\d{5}-\\d{3}",
     flags: "",
-    name: { en: "CEP (Brazilian postcode)", pt: "CEP" },
+    name: { en: "CEP (Brazilian Postcode)", pt: "CEP" },
     note: {
       en: "A hundred million of them. Small enough that the whole set could " +
-          "be written out, big enough that you would not want to.",
+          "be written out, big enough that you would not want to. It is said that " +
+          "less than a million of them are actually in use.",
       pt: "Cem milhões deles. Pequeno o bastante para que o conjunto inteiro " +
-          "pudesse ser escrito, grande o bastante para que você não queira."
+          "pudesse ser escrito, grande o bastante para que você não queira. " +
+          "Menos de um milhão deles estão realmente sendo usados."
     }
   },
   {
     id: "mac",
     pattern: "([0-9A-F]{2}:){5}[0-9A-F]{2}",
     flags: "",
-    name: { en: "MAC addresses", pt: "Endereços MAC" },
+    name: { en: "MAC Addresses", pt: "Endereços MAC" },
     note: {
       en: "281,474,976,710,656 -- 2^48 exactly, which the count panel shows " +
           "with an equals sign rather than a tilde because the power is " +
-          "exact.",
+          "exact. These IDs are used by WiFi, Ethernet and Bluetooth devices.",
       pt: "281.474.976.710.656 — exatamente 2^48, o que o painel de contagem " +
-          "mostra com sinal de igual em vez de til, porque a potência é exata."
+          "mostra com sinal de igual em vez de til, porque a potência é exata. " +
+          "Esses identificadores são usados por dispositivos WiFi, Ethernet e Bluetooth."
     }
   },
   {
@@ -580,7 +557,7 @@ export const BUILTIN = [
     pattern: "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-" +
              "[0-9a-f]{12}",
     flags: "",
-    name: { en: "UUID version 4", pt: "UUID versão 4" },
+    name: { en: "UUID Version 4", pt: "UUID Versão 4" },
     note: {
       en: "The shape of a random UUID, with the version nibble pinned to 4 " +
           "and the variant to one of 8, 9, a, b. That leaves 2^122 of them, " +
@@ -596,7 +573,8 @@ export const BUILTIN = [
     id: "koremutake",
     pattern: "(([bdfghjklmnprstv]|[bdfgp]r|st)[aeiouy]|tra|tre){4}",
     flags: "",
-    name: { en: "Pronounceable passwords", pt: "Senhas pronunciáveis" },
+    name: { en: "Koremutake System", pt: "Sistema Koremutake" },
+    family: { en: "Pronounceable Passwords", pt: "Senhas Pronunciáveis" },
     note: {
       en: "Four syllables, each a consonant or cluster followed by a vowel. " +
           "268,435,456 of them, which is exactly 2^28, so one of these " +
@@ -624,7 +602,7 @@ export const BUILTIN = [
     id: "dates",
     pattern: "(19|20)\\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])",
     flags: "",
-    name: { en: "ISO dates, 1900 to 2099", pt: "Datas ISO, 1900 a 2099" },
+    name: { en: "ISO Dates, 1900 to 2099", pt: "Datas ISO, 1900 a 2099" },
     note: {
       en: "74,400 of them: 200 years times 12 months times 31 days. That is " +
           "more than there are real dates, because a regular expression " +
@@ -633,8 +611,8 @@ export const BUILTIN = [
           "wider than the one you meant.",
       pt: "74.400: 200 anos vezes 12 meses vezes 31 dias. É mais do que o " +
           "número de datas reais, porque uma expressão regular não sabe que " +
-          "fevereiro é curto nem que existem anos bissextos. Vale ver: o " +
-          "conjunto que um padrão descreve costuma ser um pouco mais largo " +
+          "fevereiro é mais curto nem que existem anos bissextos. Vale ver: o " +
+          "conjunto que um padrão descreve costuma ser um pouco maior " +
           "que o pretendido."
     }
   },
@@ -642,14 +620,14 @@ export const BUILTIN = [
     id: "webcolor",
     pattern: "#[0-9a-f]{6}",
     flags: "",
-    name: { en: "Web colours", pt: "Cores da web" },
+    name: { en: "Web Colours", pt: "Cores da Web" },
     note: {
-      en: "Every CSS hex colour, #000000 to #ffffff: 16^6 = 16,777,216 of " +
+      en: "Every CSS hex colour, <tt>#000000</tt> to <tt>#ffffff</tt>: 16^6 = 16,777,216 of " +
           "them. The index is the colour's 24-bit value, so seeking to " +
-          "16,711,680 lands on #ff0000, pure red.",
-      pt: "Toda cor hexadecimal de CSS, de #000000 a #ffffff: 16^6 = " +
+          "16,711,680 lands on <tt>#ff0000</tt>, pure red.",
+      pt: "Toda cor hexadecimal de CSS, de <tt>#000000</tt> a <tt>#ffffff</tt>: 16^6 = " +
           "16.777.216 delas. O índice é o valor de 24 bits da cor, então ir " +
-          "para 16.711.680 cai em #ff0000, o vermelho puro."
+          "para 16.711.680 cai em <tt>#ff0000</tt>, o vermelho puro."
     },
     bookmarks: [
       { name: { en: "#ff0000 (red)", pt: "#ff0000 (vermelho)" },
@@ -660,38 +638,31 @@ export const BUILTIN = [
     id: "clock",
     pattern: "([01]\\d|2[0-3]):[0-5]\\d",
     flags: "",
-    name: { en: "Every minute of the day", pt: "Todo minuto do dia" },
+    name: { en: "Every Minute of a Day", pt: "Todos os Minutos de um Dia" },
     note: {
       en: "1,440 of them: 24 hours times 60 minutes. The alternation in the " +
           "hours earns its keep -- it admits 00 through 23 and nothing higher, " +
-          "which a bare \\d\\d could not.",
+          "which a bare <tt>\\d\\d</tt> could not.",
       pt: "1.440 deles: 24 horas vezes 60 minutos. A alternação nas horas faz " +
           "por merecer -- admite de 00 a 23 e nada acima, o que um simples " +
-          "\\d\\d não conseguiria."
+          "<tt>\\d\\d</tt> não conseguiria."
     }
   },
   {
     id: "cards",
     pattern: {
       en: "(Ace|[2-9]|10|Jack|Queen|King) of (Spades|Clubs|Hearts|Diamonds)",
-      pt: "(Ás|[2-9]|10|Valete|Dama|Rei) de (Espadas|Paus|Copas|Ouros)"
+      pt: "(Ás|[2-9]|10|Valete|Dama|Rei) de (Espadas|Paus|Copas|Ouro)"
     },
     flags: "",
-    name: { en: "A deck of cards", pt: "Um baralho" },
+    name: { en: "A Deck of Cards", pt: "Um Baralho" },
     note: {
       en: "Fifty-two, written out in full: thirteen ranks by four suits. In " +
           "plain index order it comes out sorted, the Ace of Spades first. " +
-          "Each bookmark carries a shuffle key -- a keyed permutation reorders " +
-          "the whole deck without ever repeating or losing a card, and returns " +
-          "to the top, so you can deal from a shuffle you can name and come " +
-          "back to. That is what a key does that picking at random cannot.",
+          "Add <tt>(?~something)</tt> at the beginning to shuffle, or click on some of the bookmarks.",
       pt: "Cinquenta e duas, escritas por extenso: treze valores por quatro " +
           "naipes. Em ordem de índice sai ordenado, o Ás de Espadas primeiro. " +
-          "Cada marcador leva uma chave de embaralhamento -- uma permutação " +
-          "com chave reordena o baralho inteiro sem nunca repetir nem perder " +
-          "uma carta, e volta ao topo, para você dar as cartas de um embaralho " +
-          "que pode nomear e ao qual pode voltar. É o que uma chave faz e que " +
-          "escolher ao acaso não faz."
+          "Acrescente <tt>(?~algumacoisa)</tt> no começo para embaralhar, ou clique em algum dos favoritos."
     },
     bookmarks: [
       { name: { en: "in order", pt: "em ordem" }, index: "0" },
@@ -707,12 +678,12 @@ export const BUILTIN = [
     id: "tictactoe",
     pattern: "[XO.]{9}",
     flags: "",
-    name: { en: "Tic-tac-toe boards", pt: "Tabuleiros de jogo da velha" },
+    name: { en: "Tic-Tac-Toe Boards", pt: "Tabuleiros de Jogo da Velha" },
     note: {
-      en: "Every board of nine cells, each empty, X or O: 3^9 = 19,683. Most " +
+      en: "Every board of nine cells, each empty, <tt>X</tt> or <tt>O</tt>: 3^9 = 19,683. Most " +
           "are unreachable in a real game -- the set a pattern describes is " +
           "the whole space of positions, not the ones the rules allow.",
-      pt: "Todo tabuleiro de nove casas, cada uma vazia, X ou O: 3^9 = " +
+      pt: "Todo tabuleiro de nove casas, cada uma vazia, <tt>X</tt> ou <tt>O</tt>: 3^9 = " +
           "19.683. A maioria é inatingível num jogo real -- o conjunto que um " +
           "padrão descreve é todo o espaço de posições, não as que as regras " +
           "permitem."
@@ -722,12 +693,12 @@ export const BUILTIN = [
     id: "codons",
     pattern: "[ACGT]{3}",
     flags: "",
-    name: { en: "Genetic codons", pt: "Códons genéticos" },
+    name: { en: "Genetic Codons", pt: "Códons Genéticos" },
     note: {
-      en: "The 64 codons of the genetic code: three bases from {A,C,G,T}. " +
+      en: "The 64 codons of the genetic code: three bases from <tt>{A,C,G,T}</tt>. " +
           "Exactly as many as the chessboard has squares, and for the same " +
           "reason -- 4^3 and 8^2 are both 64.",
-      pt: "Os 64 códons do código genético: três bases de {A,C,G,T}. " +
+      pt: "Os 64 códons do código genético: três bases de <tt>{A,C,G,T}</tt>. " +
           "Exatamente tantos quantos o tabuleiro de xadrez tem casas, e pela " +
           "mesma razão -- 4^3 e 8^2 são ambos 64."
     }
@@ -738,32 +709,37 @@ export const BUILTIN = [
     family: { en: "Combinatorics", pt: "Combinatória" },
     pattern: "[a-z]{{3}}",
     flags: "",
-    name: { en: "Three distinct letters", pt: "Três letras distintas" },
+    name: { en: "Three Distinct Letters", pt: "Três Letras Distintas" },
     note: {
-      en: "The nonstandard {{ }} quantifier chooses from a set rather than " +
-          "repeating it. '[a-z]{{3}}' is every unordered set of three distinct " +
-          "letters -- C(26,3) = 2,600. Compare '[a-z]{3}', which is 17,576: " +
+      en: "The nonstandard <tt>{{ }}</tt> quantifier chooses from a set rather than " +
+          "repeating it. <tt>[a-z]{{3}}</tt> is every unordered set of three distinct " +
+          "letters -- C(26,3) = 2,600. Compare <tt>[a-z]{3}</tt>, which is 17,576: " +
           "ordinary repetition allows repeats and counts order.",
-      pt: "O quantificador não padrão {{ }} escolhe de um conjunto em vez de " +
-          "repeti-lo. '[a-z]{{3}}' é todo conjunto não ordenado de três letras " +
-          "distintas -- C(26,3) = 2.600. Compare com '[a-z]{3}', que dá 17.576: " +
+      pt: "O quantificador não padrão <tt>{{ }}</tt> escolhe de um conjunto em vez de " +
+          "repeti-lo. <tt>[a-z]{{3}}</tt> é todo conjunto não ordenado de três letras " +
+          "distintas -- C(26,3) = 2.600. Compare com <tt>[a-z]{3}</tt>, que dá 17.576: " +
           "a repetição comum permite repetições e conta a ordem."
     }
   },
   {
     id: "handshakes",
     family: { en: "Combinatorics", pt: "Combinatória" },
-    pattern: "(A|B|C|D|E){{2}}",
+    pattern: "[A-E]{{2}}",
     flags: "",
-    name: { en: "Handshakes", pt: "Apertos de mão" },
+    name: { en: "Polygons and Their Diagonals", pt: "Polígonos e Suas Diagonais" },
     note: {
-      en: "Five people, every pair that can shake hands: C(5,2) = 10, small " +
-          "enough to see whole. Each pair is written once and in order, so it " +
-          "is A with B, never also B with A.",
-      pt: "Cinco pessoas, todo par que pode se cumprimentar: C(5,2) = 10, " +
-          "pequeno o bastante para ver inteiro. Cada par aparece uma vez e em " +
-          "ordem, então é A com B, nunca também B com A."
-    }
+      en: "Assigning letters to each vertex of a polygon lists all its edges and diagonals. " +
+          "This also numbers all handshakes that would happen in a group of " +
+          "people when everyone shakes everyone else's hands.",
+      pt: "Atribuindo letras a cada vértice de um polígono, lista todas as suas arestas e diagonais. "+
+          "Isso também são todos os apertos de mão que aconteceriam se todos em um grupo cumprimentassem uns aos outros."
+    },
+    code: {
+      pt: "var p = { \"A\": \"Aldo\", \"B\": \"Beto\", \"C\": \"Caio\", \"D\": \"Duda\", \"E\": \"Enio\" }\n"+
+          "return p[value[0]] + \" cumprimenta \" + p[value[1]];",
+      en: "var p = { \"A\": \"Ariel\", \"B\": \"Bella\", \"C\": \"Cheng\", \"D\": \"Daisy\", \"E\": \"Ellen\" }\n"+
+          "return p[value[0]] + \" shakes hands with \" + p[value[1]];"
+   }
   },
   {
     id: "anagrams",
@@ -772,10 +748,10 @@ export const BUILTIN = [
     flags: "",
     name: { en: "Anagrams of STOP", pt: "Anagramas de AMOR" },
     note: {
-      en: "'{{*}}' is every ordering of the members: 4! = 24 rearrangements " +
-          "of S, T, O, P, with real words among them -- POTS, TOPS, OPTS, SPOT.",
-      pt: "'{{*}}' é toda ordenação dos membros: 4! = 24 rearranjos de A, M, " +
-          "O, R, com palavras reais entre eles -- ROMA, RAMO, MORA, AMOR."
+      en: "<tt>{{*}}</tt> is every ordering of the members: 4! = 24 rearrangements " +
+          "of <tt>S</tt>, <tt>T</tt>, <tt>O</tt>, <tt>P</tt>, with real words among them -- <tt>POTS</tt>, <tt>TOPS</tt>, <tt>OPTS</tt>, <tt>SPOT</tt>.",
+      pt: "<tt>{{*}}</tt> é toda ordenação dos membros: 4! = 24 rearranjos de <tt>A</tt>, <tt>M</tt>, " +
+          "<tt>O</tt>, <tt>R</tt>, com palavras reais entre eles -- <tt>ROMA</tt>, <tt>RAMO</tt>, <tt>MORA</tt>, <tt>AMOR</tt>."
     }
   },
   {
@@ -784,7 +760,7 @@ export const BUILTIN = [
     family: { en: "Combinatorics", pt: "Combinatória" },
     pattern: "([2-9TJQKA][SHDC]){{5}}",
     flags: "",
-    name: { en: "Poker hands", pt: "Mãos de pôquer" },
+    name: { en: "Poker Hands", pt: "Mãos de Pôquer" },
     note: {
       en: "Every five-card hand from a 52-card deck: C(52,5) = 2,598,960. " +
           "Seek to any of them instantly, or ask for a random one -- the whole " +
@@ -802,10 +778,10 @@ export const BUILTIN = [
       pt: "( 0[1-9]| [1-5][0-9]| 60){{6}}"
     },
     flags: "",
-    name: { en: "Powerball tickets", pt: "Jogos da Mega-Sena" },
+    name: { en: "Powerball Tickets", pt: "Jogos da Mega-Sena" },
     note: {
       en: "Five white balls from 1 to 69, unordered, then one red Powerball " +
-          "from 1 to 26 -- set off with a '+' because it is drawn separately " +
+          "from 1 to 26 -- set off with a <tt>+</tt> because it is drawn separately " +
           "and may repeat a white number. C(69,5) x 26 = 292,201,338 plays, " +
           "every possible Powerball ticket. Each number is two digits wide with " +
           "its own space (there's a harmless leading one). Open the time reveal " +
@@ -823,19 +799,19 @@ export const BUILTIN = [
     family: { en: "Combinatorics", pt: "Combinatória" },
     pattern: "(?~secret:\\d{2})-\\d{2}",
     flags: "",
-    name: { en: "Keyed shuffle of a field", pt: "Embaralhamento com chave" },
+    name: { en: "Keyed Shuffle of a Field", pt: "Embaralhamento com Chave" },
     note: {
-      en: "'(?~key:...)' reorders a subexpression's set by a key. The left " +
-          "field visits all of 00-99 in a scrambled but reproducible order, " +
+      en: "<tt>(?~key:...)</tt> reorders a subexpression's set by a key. The left " +
+          "field visits all of <tt>00-99</tt> in a scrambled but reproducible order, " +
           "while the right one counts up plainly beside it -- same 10,000 " +
-          "members, one field shuffled. Change 'secret' to any word and the " +
+          "members, one field shuffled. Change <tt>secret</tt> to any word and the " +
           "left field reshuffles; it is format-preserving encryption in " +
           "miniature. Only finite sets can be shuffled.",
-      pt: "'(?~chave:...)' reordena o conjunto de uma subexpressão por uma " +
-          "chave. O campo da esquerda percorre todos os 00-99 numa ordem " +
+      pt: "<tt>(?~chave:...)</tt> reordena o conjunto de uma subexpressão por uma " +
+          "chave. O campo da esquerda percorre todos os <tt>00-99</tt> numa ordem " +
           "embaralhada mas reproduzível, enquanto o da direita conta normalmente " +
           "ao lado -- os mesmos 10.000 membros, um campo embaralhado. Troque " +
-          "'secret' por qualquer palavra e a esquerda se reembaralha; é cifra " +
+          "<tt>secret</tt> por qualquer palavra e a esquerda se reembaralha; é cifra " +
           "que preserva formato em miniatura. Só conjuntos finitos podem ser " +
           "embaralhados."
     }
@@ -844,7 +820,7 @@ export const BUILTIN = [
     id: "celular",
     pattern: "\\+55 \\d{2} 9\\d{4}-\\d{4}",
     flags: "",
-    name: { en: "Brazilian mobile numbers", pt: "Celulares brasileiros" },
+    name: { en: "Brazilian Mobile Numbers", pt: "Celulares Brasileiros" },
     note: {
       en: "Ten billion, though most area codes do not exist. Set the page " +
           "size to a few hundred and jump around with the index box to see " +
@@ -858,7 +834,7 @@ export const BUILTIN = [
     id: "chords",
     pattern: "[A-G][#b]?(maj|min|dim|aug)?(/[A-G][#b]?)?",
     flags: "",
-    name: { en: "Chord names", pt: "Nomes de acordes" },
+    name: { en: "Chord Names", pt: "Nomes de Acordes" },
     note: {
       en: "A root, an optional accidental, an optional quality and an " +
           "optional bass note: 2,310 names. This is the shape that used to " +
@@ -877,7 +853,7 @@ export const BUILTIN = [
     family: { en: "Passphrases", pt: "Frases-senha" },
     pattern: "[:bip39en:]( [:bip39en:]){11}",
     flags: "",
-    name: { en: "BIP-39 seed, 12 words", pt: "Semente BIP-39, 12 palavras" },
+    name: { en: "BIP-39 Seed, 12 Words", pt: "Semente BIP-39, 12 Palavras" },
     note: {
       en: "Twelve words from the 2048-word Bitcoin list, which is 2048^12 -- " +
           "about 5.4 times 10^39, or 2^132. This is the shape the dictionary " +
@@ -897,13 +873,13 @@ export const BUILTIN = [
     family: { en: "Passphrases", pt: "Frases-senha" },
     pattern: "[:diceware4en:]( [:diceware4en:]){5}",
     flags: "",
-    name: { en: "Diceware, 6 words", pt: "Diceware, 6 palavras" },
+    name: { en: "Diceware, 6 Words", pt: "Diceware, 6 Palavras" },
     note: {
       en: "Six words from the 1296-word Diceware list, 1296^6, about 4.7 " +
-          "times 10^18 or 2^62. Switch the pattern to [:diceware4ptbr:] for " +
+          "times 10^18 or 2^62. Switch the pattern to <tt>[:diceware4ptbr:]</tt> for " +
           "the Brazilian Portuguese list of the same size.",
       pt: "Seis palavras da lista Diceware de 1296, 1296^6, cerca de 4,7 " +
-          "vezes 10^18 ou 2^62. Troque o padrão por [:diceware4ptbr:] para a " +
+          "vezes 10^18 ou 2^62. Troque o padrão por <tt>[:diceware4ptbr:]</tt> para a " +
           "lista em português brasileiro do mesmo tamanho."
     }
   },
@@ -912,7 +888,7 @@ export const BUILTIN = [
     family: { en: "Passphrases", pt: "Frases-senha" },
     pattern: "[:efflarge:]( [:efflarge:]){5}",
     flags: "",
-    name: { en: "EFF, 6 words", pt: "EFF, 6 palavras" },
+    name: { en: "EFF, 6 Words", pt: "EFF, 6 Palavras" },
     note: {
       en: "The EFF's own recommendation: six words from its 7776-word list, " +
           "7776^6, about 2^77. Open the time reveal on the size box to see " +
@@ -927,19 +903,19 @@ export const BUILTIN = [
     pattern: "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) " +
              "(0[1-9]|[12]\\d|3[01])",
     flags: "",
-    name: { en: "Abbreviated month and day",
-            pt: "Mês abreviado e dia" },
+    name: { en: "Abbreviated Month and Day",
+            pt: "Mês Abreviado e Dia" },
     note: {
       en: "An alternation of twelve names against a two-digit day: 372 " +
           "combinations, because a regular expression has no idea that " +
-          "February is short. Swap the names for Jan|Fev|Mar|Abr|Mai|Jun|" +
-          "Jul|Ago|Set|Out|Nov|Dez and the count does not move -- the " +
+          "February is short. Swap the names for <tt>Jan|Fev|Mar|Abr|Mai|Jun|" +
+          "Jul|Ago|Set|Out|Nov|Dez</tt> and the count does not move -- the " +
           "expression is the specification, and twelve alternatives are " +
           "twelve alternatives whatever language they are in.",
       pt: "Uma alternação de doze nomes contra um dia de dois algarismos: " +
           "372 combinações, porque uma expressão regular não faz ideia de " +
-          "que fevereiro é curto. Troque os nomes por Jan|Fev|Mar|Abr|Mai|" +
-          "Jun|Jul|Ago|Set|Out|Nov|Dez e a contagem não muda — a expressão " +
+          "que fevereiro é curto. Troque os nomes por <tt>Jan|Fev|Mar|Abr|Mai|" +
+          "Jun|Jul|Ago|Set|Out|Nov|Dez</tt> e a contagem não muda — a expressão " +
           "é a especificação, e doze alternativas são doze alternativas em " +
           "qualquer idioma."
     }
@@ -950,17 +926,17 @@ export const BUILTIN = [
     id: "naturals",
     pattern: "[1-9][0-9]*",
     flags: "",
-    name: { en: "Every positive integer", pt: "Todo inteiro positivo" },
+    name: { en: "Every Positive Integer", pt: "Todo Inteiro Positivo" },
     note: {
       en: "The set has no largest member, so there is no count -- but there " +
           "is still an exact address for every one. Because members come out " +
           "shortest first, the index is the number itself: element 999,999 " +
-          "is 1000000. The clearest demonstration there is that an infinite " +
+          "is <tt>1000000</tt>. The clearest demonstration there is that an infinite " +
           "set can still be walked.",
       pt: "O conjunto não tem maior elemento, então não há contagem — mas " +
           "ainda há um endereço exato para cada um. Como os membros saem do " +
           "mais curto para o mais longo, o índice é o próprio número: o " +
-          "elemento 999.999 é 1000000. É a demonstração mais clara de que um " +
+          "elemento 999.999 é <tt>1000000</tt>. É a demonstração mais clara de que um " +
           "conjunto infinito ainda pode ser percorrido."
     }
   },
@@ -968,22 +944,22 @@ export const BUILTIN = [
     id: "binary",
     pattern: "0|1[01]*",
     flags: "",
-    name: { en: "Binary numerals", pt: "Numerais binários" },
+    name: { en: "Binary Numerals", pt: "Numerais Binários" },
     note: {
       en: "The same trick in base two: no leading zeros, so each number is " +
           "written exactly one way, and the enumeration is counting. Element " +
-          "255 is 11111111.",
+          "255 is <tt>11111111</tt>.",
       pt: "O mesmo truque na base dois: sem zeros à esquerda, então cada " +
           "número se escreve de exatamente um jeito, e a enumeração é a " +
-          "própria contagem. O elemento 255 é 11111111."
+          "própria contagem. O elemento 255 é <tt>11111111</tt>."
     }
   },
   {
     id: "csv",
     pattern: "(\\d+,)*",
     flags: "",
-    name: { en: "Comma-separated numbers",
-            pt: "Números separados por vírgula" },
+    name: { en: "Comma-Separated Numbers",
+            pt: "Números Separados por Vírgula" },
     note: {
       en: "A list of any length, of numbers of any length: two unbounded " +
           "quantifiers, one inside the other. Counting the members of each " +
@@ -1002,8 +978,8 @@ export const BUILTIN = [
     id: "emails",
     pattern: "[a-z]+@[a-z]+\\.(com|org|br)",
     flags: "",
-    name: { en: "Simple e-mail addresses",
-            pt: "Endereços de e-mail simples" },
+    name: { en: "Simple E-mail Addresses",
+            pt: "Endereços de E-mail Simples" },
     note: {
       en: "Two unbounded quantifiers side by side. Watch the length panel: " +
           "the shortest is five characters, and the number of addresses of " +
@@ -1018,7 +994,7 @@ export const BUILTIN = [
     id: "slugs",
     pattern: "[a-z]+(-[a-z]+)*",
     flags: "",
-    name: { en: "Hyphenated words", pt: "Palavras hifenizadas" },
+    name: { en: "Hyphenated Words", pt: "Palavras Hifenizadas" },
     note: {
       en: "A word, or several joined by hyphens -- the shape of a URL slug. " +
           "A repetition whose body is itself unbounded, which is the hardest " +
@@ -1033,8 +1009,8 @@ export const BUILTIN = [
     id: "dna",
     pattern: "[ACGT]+",
     flags: "",
-    name: { en: "DNA sequences of any length",
-            pt: "Sequências de DNA de qualquer comprimento" },
+    name: { en: "DNA Sequences of Any Length",
+            pt: "Sequências de DNA de Qualquer Comprimento" },
     note: {
       en: "Every sequence there is. There are 4^n of length n, so the index " +
           "grows fast: element one million is only ten bases long. A good " +
@@ -1049,20 +1025,20 @@ export const BUILTIN = [
     highlight: true,
     pattern: "[a-z]{1,6}",
     flags: "",
-    name: { en: "Brute-force a hash", pt: "Quebra de hash por força bruta" },
+    name: { en: "Brute-Force a Hash", pt: "Quebra de Hash por Força Bruta" },
     note: {
       en: "Every lower-case word up to six letters, in order, with its " +
           "SHA-256 in the code column -- a brute-force search laid out as a " +
-          "set. The word whose hash is d0cc4101c015609d3e6e9bff2cfcf643ec4b" +
-          "05330949c658472516e2220afae1 is somewhere in here; the code " +
+          "set. The word whose hash is <tt>d0cc4101c015609d3e6e9bff2cfcf643ec4b" +
+          "05330949c658472516e2220afae1</tt> is somewhere in here; the code " +
           "flags it. Because the seek is per index, you could hand each of a " +
           "thousand machines a range and none would repeat another's work -- " +
           "which is what the -k key and, in a real tool, a GPU kernel are " +
           "for.",
       pt: "Toda palavra minúscula de até seis letras, em ordem, com seu " +
           "SHA-256 na coluna de código — uma busca por força bruta disposta " +
-          "como um conjunto. A palavra cujo hash é d0cc4101c015609d3e6e9bff2" +
-          "cfcf643ec4b05330949c658472516e2220afae1 está em algum lugar aqui; " +
+          "como um conjunto. A palavra cujo hash é <tt>d0cc4101c015609d3e6e9bff2" +
+          "cfcf643ec4b05330949c658472516e2220afae1</tt> está em algum lugar aqui; " +
           "o código a assinala. Como a busca é por índice, dava para entregar " +
           "a cada uma de mil máquinas uma faixa e nenhuma repetiria o " +
           "trabalho da outra — que é para o que servem a chave -k e, numa " +

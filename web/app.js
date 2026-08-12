@@ -408,13 +408,16 @@ function applyLanguage() {
   renderCount();
   renderOrder();
   renderRows(lastRows);
-  // A selected example whose regex has a language variant follows the language:
-  // swap the pattern text and re-read from the top.
+  // A selected example whose regex or helper code has a language variant
+  // follows the language: swap the text and re-read from the top. Code alone
+  // can vary (the pattern stays the same but the members map to translated
+  // names), so check both.
   const sel = state.selected &&
               allExamples().find((e) => e.id === state.selected);
-  if (sel && typeof sel.pattern !== "string") {
+  if (sel && (typeof sel.pattern !== "string" || typeof sel.code === "object")) {
     const inline = sel.flags ? "(?" + sel.flags + ")" : "";
     $("pattern").value = inline + examplePattern(sel);
+    $("code").value = exampleCode(sel);
     $("from").value = "0"; state.from = 0n;
     reparse();
   }
@@ -450,6 +453,15 @@ function examplePattern(ex) {
                                         : (ex.pattern[lang] || ex.pattern.en);
 }
 
+// The helper code can carry language variants too, like the pattern and note:
+// an example whose members are letters standing for people wants the names
+// spelled in the reader's language. Missing or a plain string, it is returned
+// as-is; an object is resolved for the current language.
+function exampleCode(ex) {
+  if (!ex.code) return "";
+  return typeof ex.code === "string" ? ex.code : (ex.code[lang] || ex.code.en || "");
+}
+
 // Which bucket an example goes in. The library is asked rather than the text
 // inspected, because the text lies: '\\+55 \\d{2} 9\\d{4}-\\d{4}' is a Brazilian
 // mobile number and perfectly finite, but the escaped plus in it looks exactly
@@ -469,7 +481,7 @@ function matchesFilter(ex) {
   switch (state.filter) {
     case "tutorial":   return !!ex.tutorial;
     case "highlights": return !!ex.highlight;
-    case "code":       return !!(ex.code && ex.code.trim());
+    case "code":       return !!exampleCode(ex).trim();
     case "finite":     return !looksInfinite(ex);
     case "infinite":   return looksInfinite(ex);
     case "mine":       return !!ex.own;
@@ -561,7 +573,7 @@ function renderLibrary() {
     if (looksInfinite(ex))
       badges.insertAdjacentHTML("beforeend",
         `<span class="badge" title="${t("badgeInfinite")}">∞</span>`);
-    if (ex.code && ex.code.trim())
+    if (exampleCode(ex).trim())
       badges.insertAdjacentHTML("beforeend",
         `<span class="badge" title="${t("badgeCode")}">&lt;/&gt;</span>`);
     li.querySelector(".pick").onclick = () => { selectExample(ex); collapseOnMobile(); };
@@ -654,8 +666,8 @@ function selectExample(ex) {
   $("pattern").value = inline + examplePattern(ex);
   $("from").value = "0";
   state.key = "";
-  $("code").value = ex.code || "";
-  setCodeVisible(!!ex.code);
+  $("code").value = exampleCode(ex);
+  setCodeVisible(!!exampleCode(ex));
   refreshCodeToggle();
   state.from = 0n;
   renderLibrary();
@@ -668,6 +680,16 @@ function selectExample(ex) {
 function renderNote() {
   const ex = allExamples().find((e) => e.id === state.selected);
   state.note = ex ? exampleNote(ex) : "";
+}
+
+// Notes carry a little typographic markup and nothing else: <tt> around the
+// literal regex fragments they mention, <i> for the odd emphasis. Render just
+// those two tags and escape everything else, so the markup shows as intended
+// while a stray '<' -- or anything a user typed into their own example's note
+// -- appears as itself rather than vanishing or injecting HTML.
+function noteHtml(s) {
+  const esc = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return esc.replace(/&lt;(\/?(?:tt|i))&gt;/g, "<$1>");
 }
 
 /* ---------------------------------------------------------------- parsing */
@@ -1445,7 +1467,7 @@ function applyShareState(s) {
     if (typeof s.lang === "string" && LANGS[s.lang] && s.lang !== lang)
       setLang(s.lang);
     $("pattern").value = (ex.flags ? "(?" + ex.flags + ")" : "") + examplePattern(ex);
-    $("code").value = ex.code || "";
+    $("code").value = exampleCode(ex);
   } else {
     state.selected = null;
     if (typeof s.p === "string") $("pattern").value = s.p;
@@ -1953,7 +1975,7 @@ transport.ready(async () => {
 });
 
 wire();
-attachTip($("pattern"), () => state.note);
+attachTip($("pattern"), () => noteHtml(state.note), true);
 attachTip($("count"), () => state.countSpoken);
 attachTip($("timebig"), () => state.timeTip);
 attachTip($("orderlabel"), () => state.orderTip);
