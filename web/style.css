@@ -414,7 +414,12 @@ main {
 #results .err-cell { color: var(--err); text-align: center; cursor: help;
                      font-weight: bold; }
 .ctrl { color: var(--err); font-size: .8em; opacity: .8; }
-.sp { background: var(--line); border-radius: 2px; }
+/* Space chips are a hover aid: invisible until you point at the row they
+   are in, so a quiet list does not look speckled, but every space in the
+   member you are on -- leading, trailing, or a run -- lights up. The space
+   itself is always there and always copies; only the shading toggles. */
+.sp { border-radius: 2px; }
+#results tbody tr:hover .sp { background: var(--line); }
 
 a { color: var(--accent); }
 
