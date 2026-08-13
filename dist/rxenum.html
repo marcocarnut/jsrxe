@@ -5137,13 +5137,22 @@ function sha256(str) {
 
 // The built-in word lists, keyed by the same id a pattern uses as [:id:], so an
 // example's code can reach the words behind a dictionary it enumerates -- e.g.
-// lib.dict["diceware4en"][0].
-const dict = {};
-for (const d of BUILTIN_DICTS) dict[d.id] = d.words;
+// lib.dict["diceware4en"][0]. Built on first access rather than at load: the
+// single-file bundle concatenates this module ahead of dicts.js and strips the
+// import, so reading the BUILTIN_DICTS const now would hit its temporal dead
+// zone. By the time an example's code touches lib.dict every module has run.
+let dictCache = null;
 
 const HELPERS = {
   sha256,
-  dict,
+
+  get dict() {
+    if (!dictCache) {
+      dictCache = {};
+      for (const d of BUILTIN_DICTS) dictCache[d.id] = d.words;
+    }
+    return dictCache;
+  },
 
   // Brazilian mod-11 check digits over the value's digits and letters, ignoring
   // any separators. Each character counts as its code point minus 48, so a
