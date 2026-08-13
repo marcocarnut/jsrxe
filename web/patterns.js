@@ -1100,6 +1100,34 @@ export const BUILTIN = [
     }
   },
   {
+    id: "haystack",
+    highlight: true,
+    pattern: "[a-z]{4}",
+    flags: "",
+    name: { en: "Needles in a Haystack", pt: "Agulhas no Palheiro" },
+    note: {
+      en: "Four lowercase letters -- 26^4 = 456,976 strings. The code keeps " +
+          "only the ones that are real words, checking each against the " +
+          "1296-word Diceware list, so scrolling the slider is mostly " +
+          "<tt>-</tt> with a genuine word surfacing here and there. It makes " +
+          "the sparseness of a dictionary visible: barely one string in 353 is " +
+          "a word. Real language is a thin scattering inside the space of all " +
+          "strings.",
+      pt: "Quatro letras minúsculas -- 26^4 = 456.976 cadeias. O código mantém " +
+          "só as que são palavras reais, conferindo cada uma na lista Diceware " +
+          "de 1296, então rolar o deslizador é quase tudo <tt>-</tt>, com uma " +
+          "palavra de verdade surgindo de vez em quando. Torna visível como um " +
+          "dicionário é esparso: mal uma cadeia em 353 é palavra. A língua real " +
+          "é um respingo fino dentro do espaço de todas as cadeias."
+    },
+    code: {
+      en: "// Keep the value only when it is a real Diceware word; else \"-\".\n" +
+          "return lib.dict[\"diceware4en\"].includes(value) ? value : \"-\";",
+      pt: "// Mantém o valor só quando é uma palavra Diceware de verdade; senão \"-\".\n" +
+          "return lib.dict[\"diceware4ptbr\"].includes(value) ? value : \"-\";"
+    }
+  },
+  {
     id: "months",
     pattern: "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) " +
              "(0[1-9]|[12]\\d|3[01])",
