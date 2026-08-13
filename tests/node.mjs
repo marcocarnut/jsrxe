@@ -132,17 +132,14 @@ check("a two-member set yields two rows", 2,
 
 // --- the code column: a transform applied to each element
 e.parse({ pattern: "[0-9]{9}", flags: "" });
-e.code({ source:
-  'var b = value.slice(0,9);' +
-  'return b + lib.checkDigits(b, [10,9,8,7,6,5,4,3,2], [11,10,9,8,7,6,5,4,3,2]);' });
+e.code({ source: 'return value + lib.mod11(value);' });
 r = e.rows({ from: "111444777", n: 1 });
 check("CPF check digits are computed", "11144477735", r.rows[0].output);
 
-// the alphanumeric CNPJ, against Receita Federal's published example
+// the alphanumeric CNPJ, against Receita Federal's published example; the
+// weights cycle 2..9, so mod11 takes a cap of 9.
 e.parse({ pattern: "[0-9A-Z]{12}", flags: "" });
-e.code({ source:
-  'return value + lib.checkDigits(value,' +
-  ' [5,4,3,2,9,8,7,6,5,4,3,2], [6,5,4,3,2,9,8,7,6,5,4,3,2]);' });
+e.code({ source: 'return value + lib.mod11(value, 2, 9);' });
 // 12ABC34501DE seeks to a specific index; check the digits directly instead.
 check("CNPJ 12ABC34501DE check digits are 35", "12ABC34501DE35",
       e.rows({ from: (() => {
@@ -152,6 +149,18 @@ check("CNPJ 12ABC34501DE check digits are 35", "12ABC34501DE35",
         for (const ch of "12ABC34501DE") n = n * 36n + BigInt(alpha.indexOf(ch));
         return n.toString();
       })(), n: 1 }).rows[0].output);
+
+// the Luhn helper completes a card number, reading past any separators
+e.parse({ pattern: "[0-9]{15}", flags: "" });
+e.code({ source: 'return value + lib.luhn(value);' });
+check("Luhn check digit completes a card", "4111111111111111",
+      e.rows({ from: "411111111111111", n: 1 }).rows[0].output);
+
+// lib.dict exposes the built-in word lists ("able" is diceware4en index 966)
+e.parse({ pattern: "[a-z]{4}", flags: "" });
+e.code({ source: 'return lib.dict["diceware4en"].includes(value) ? "yes" : "no";' });
+check("lib.dict exposes the word lists", "yes",
+      e.rows({ from: "966", n: 1 }).rows[0].output);
 
 // clearing the code drops the output again
 e.code({ source: "" });
