@@ -1113,12 +1113,10 @@ export const BUILTIN = [
           "the sparseness of a dictionary visible: barely one string in 353 is " +
           "a word. Real language is a thin scattering inside the space of all " +
           "strings.",
-      pt: "Quatro letras minúsculas -- 26^4 = 456.976 cadeias. O código mantém " +
-          "só as que são palavras reais, conferindo cada uma na lista Diceware " +
-          "de 1296, então rolar o deslizador é quase tudo <tt>-</tt>, com uma " +
-          "palavra de verdade surgindo de vez em quando. Torna visível como um " +
-          "dicionário é esparso: mal uma cadeia em 353 é palavra. A língua real " +
-          "é um respingo fino dentro do espaço de todas as cadeias."
+      pt: "Esse exemplo gera todas as possíveis \"palavras\" de 4 letras (456.976 " +
+          "delas no total) e as compara com as meras 1.296 do dicionário Diceware. " +
+          "Usando o deslizador dá pra ver como as palavras do dicionário ficam perdidas " +
+          "entre as milhares de combinações que não formam palavra nenhuma."
     },
     code: {
       en: "// Keep the value only when it is a real Diceware word; else \"-\".\n" +
