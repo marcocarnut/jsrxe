@@ -784,13 +784,12 @@ export const BUILTIN = [
           "from 1 to 26 -- set off with a <tt>+</tt> because it is drawn separately " +
           "and may repeat a white number. C(69,5) x 26 = 292,201,338 plays, " +
           "every possible Powerball ticket. Each number is two digits wide with " +
-          "its own space, and the whole draw sits in brackets. Open the time reveal " +
-          "on the size box to see how long buying them all would take.",
-      pt: "Seis números de 1 a 60, sem ordem: C(60,6) = 50.063.860 -- todo " +
-          "jogo possível da Mega-Sena. Cada número traz seu próprio espaço, " +
-          "então os jogos se leem com clareza, dois dígitos de largura, com o " +
-          "sorteio todo entre colchetes. Abra a revelação de tempo na caixa " +
-          "do tamanho para ver quanto levaria comprar todos."
+          "its own space, and the whole draw sits in brackets.",
+      pt: "Seis números de 1 a 60, sem ordem: C(60,6) = 50.063.860 -- todos os " +
+          "jogos possíveis da Mega-Sena. Faça seu bolão: troque o 60 por 10, " +
+          "jogue os 210 bilhetes listados e se o bilhete premiado tiver quaisquer " +
+          "seis dentre esses dez números, o prêmio é seu! Aumente 10 para o quanto " +
+          "puder pagar em bilhetes e boa sorte!"
     }
   },
   {
