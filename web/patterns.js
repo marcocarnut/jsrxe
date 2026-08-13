@@ -524,6 +524,106 @@ export const BUILTIN = [
       "  [11,10,9,8,7,6,5,4,3,2]);"
   },
   {
+    id: "card-all",
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "\\d{4} \\d{4} \\d{4} \\d{4}",
+    flags: "",
+    name: { en: "Valid plus Invalid", pt: "Válidos e Inválidos" },
+    note: {
+      en: "Every sixteen-digit card number, spaces and all: 10^16 of them, " +
+          "grouped in fours. The last digit is a Luhn check over the first " +
+          "fifteen, so only one in ten of these is valid. Switch to the valid " +
+          "variant to have the code compute that digit instead.",
+      pt: "Todo número de cartão de dezesseis dígitos, espaços e tudo: 10^16 " +
+          "deles, agrupados de quatro em quatro. O último dígito é um " +
+          "verificador de Luhn sobre os quinze primeiros, então só um em cada " +
+          "dez é válido. Troque para a variante válida para que o código " +
+          "calcule esse dígito."
+    }
+  },
+  {
+    id: "card-valid",
+    highlight: true,
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "\\d{4} \\d{4} \\d{4} \\d{3}",
+    flags: "",
+    name: { en: "Valid Only (Luhn)", pt: "Somente Válidos (Luhn)" },
+    note: {
+      en: "The regex stops one digit short and the code appends the Luhn check " +
+          "digit, so every row is a genuinely valid card number rather than one " +
+          "in ten -- 10^15 of them. It is the same mod-10 every payment terminal " +
+          "runs before the network ever sees the card.",
+      pt: "A expressão para um dígito antes do fim e o código acrescenta o " +
+          "dígito verificador de Luhn, então cada linha é um número de cartão de " +
+          "fato válido, e não um em dez -- 10^15 deles. É o mesmo mod 10 que toda " +
+          "maquininha roda antes de a rede ver o cartão."
+    },
+    code:
+      "// Strip the spaces to the base digits, then append the Luhn\n" +
+      "// check digit that makes the whole number valid.\n" +
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + lib.luhn(base);"
+  },
+  {
+    id: "card-visa",
+    highlight: true,
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "4\\d{3} \\d{4} \\d{4} \\d{3}",
+    flags: "",
+    name: { en: "Visa", pt: "Visa" },
+    note: {
+      en: "Visa numbers begin with <tt>4</tt> and run sixteen digits. Pinning " +
+          "that first digit shrinks the space tenfold to 10^14, each with its " +
+          "Luhn digit computed. The leading digit is why a card's issuer can be " +
+          "read off the front.",
+      pt: "Números Visa começam com <tt>4</tt> e têm dezesseis dígitos. Fixar " +
+          "esse primeiro dígito reduz o espaço em dez vezes, para 10^14, cada um " +
+          "com seu dígito de Luhn calculado. É pelo dígito inicial que se " +
+          "reconhece a bandeira do cartão."
+    },
+    code:
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + lib.luhn(base);"
+  },
+  {
+    id: "card-mc",
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "5[1-5]\\d{2} \\d{4} \\d{4} \\d{3}",
+    flags: "",
+    name: { en: "Mastercard", pt: "Mastercard" },
+    note: {
+      en: "Mastercard takes <tt>51</tt> through <tt>55</tt> as its first two " +
+          "digits (the newer <tt>2221-2720</tt> range is left out here for " +
+          "simplicity): 5 x 10^13 valid sixteen-digit numbers, Luhn and all.",
+      pt: "A Mastercard usa <tt>51</tt> a <tt>55</tt> como os dois primeiros " +
+          "dígitos (a faixa mais nova, <tt>2221-2720</tt>, fica de fora aqui " +
+          "para simplificar): 5 x 10^13 números válidos de dezesseis dígitos, " +
+          "com Luhn e tudo."
+    },
+    code:
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + lib.luhn(base);"
+  },
+  {
+    id: "card-amex",
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "3[47]\\d{2} \\d{6} \\d{4}",
+    flags: "",
+    name: { en: "American Express", pt: "American Express" },
+    note: {
+      en: "American Express is the odd one out: fifteen digits, not sixteen, " +
+          "starting <tt>34</tt> or <tt>37</tt> and written 4-6-5 rather than " +
+          "four fours. 2 x 10^12 of them, the Luhn digit appended as ever.",
+      pt: "A American Express é a exceção: quinze dígitos, não dezesseis, " +
+          "começando com <tt>34</tt> ou <tt>37</tt> e escritos em 4-6-5 em vez " +
+          "de quatro grupos de quatro. 2 x 10^12 deles, com o dígito de Luhn " +
+          "acrescentado como sempre."
+    },
+    code:
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + lib.luhn(base);"
+  },
+  {
     id: "cep",
     pattern: "\\d{5}-\\d{3}",
     flags: "",

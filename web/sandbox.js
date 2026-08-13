@@ -39,6 +39,21 @@ const HELPERS = {
     return "" + d1 + d2;
   },
 
+  // The Luhn (mod 10) check digit that makes a card number valid: from the
+  // rightmost base digit, double every other one and cast a result over nine
+  // down by nine, sum, and return the digit that brings the total to a
+  // multiple of ten. The same check every payment terminal runs.
+  luhn(base) {
+    let sum = 0, dbl = true;               // the rightmost base digit doubles
+    for (let i = base.length - 1; i >= 0; i--) {
+      let d = base.charCodeAt(i) - 48;
+      if (dbl) { d *= 2; if (d > 9) d -= 9; }
+      sum += d;
+      dbl = !dbl;
+    }
+    return String((10 - (sum % 10)) % 10);
+  },
+
   // Keep only the characters matching a class, e.g. digitsOf("12.345") ==
   // "12345". Handy for stripping a formatted number back to its payload.
   keep(s, re) { return s.replace(new RegExp("[^" + re + "]", "g"), ""); },
@@ -63,6 +78,9 @@ export const HELPER_DOCS = [
   { sig: "lib.checkDigits(base, w1, w2)",
     en: "Both check digits as a two-character string, the second computed over the base plus the first.",
     pt: "Os dois dígitos como texto de dois caracteres, o segundo calculado sobre a base mais o primeiro." },
+  { sig: "lib.luhn(base)",
+    en: "The Luhn (mod-10) check digit that makes a card number valid, computed over the base digits.",
+    pt: "O dígito verificador de Luhn (mod 10) que torna um número de cartão válido, calculado sobre os dígitos da base." },
   { sig: 'lib.keep(s, "0-9A-Z")',
     en: "Keep only the characters in the class, e.g. stripping punctuation back to a payload.",
     pt: "Mantém só os caracteres da classe, p.ex. removendo pontuação para voltar à carga útil." },
