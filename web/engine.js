@@ -88,15 +88,26 @@ export function makeEngine(Module, {
     return out;
   };
 
-  // A search string crosses the boundary as raw bytes, one per character's low
-  // eight bits, the same latin1 mapping the page renders members with -- so a
-  // member holding any byte, valid UTF-8 or not, is searched for exactly as it
-  // is shown. The caller frees the buffer.
+  const enc = new TextEncoder();
+  // A search string crosses the boundary as its UTF-8 bytes -- the same
+  // encoding decodeMember reads a member back from (see app.js), so a member
+  // copied from a row and pasted into the search box is looked up by exactly
+  // the bytes it was shown as: suit glyphs, accented letters and all. Writing
+  // the code point's low byte instead, as this once did, split a multi-byte
+  // character like the two-byte 'a' in 'Olá' or the three-byte '♦' into
+  // the wrong bytes, and the lookup missed. The caller frees the buffer.
   const putBytes = (str) => {
-    const len = str.length;
+    const bytes = enc.encode(str);
+    const len = bytes.length;
     const ptr = Module._malloc(len || 1);
-    for (let i = 0; i < len; i++) Module.HEAPU8[ptr + i] = str.charCodeAt(i) & 0xff;
-    return { ptr, len };
+    Module.HEAPU8.set(bytes, ptr);
+    // The same bytes as a byte-per-char string -- the form a row renderer
+    // decodes back for display (see decodeMember). A found search row shows
+    // this rather than the raw search text, which is real Unicode and would be
+    // mis-decoded, turning '2♠' into '2`'.
+    let disp = "";
+    for (let i = 0; i < len; i++) disp += String.fromCharCode(bytes[i]);
+    return { ptr, len, disp };
   };
 
   const clearPerm = () => { if (perm) { api.permRelease(perm); perm = 0; } permCount = null; };
@@ -198,7 +209,7 @@ export function makeEngine(Module, {
     search({ text, cap }) {
       if (!rxe) return { rows: [], count: "0", shown: 0 };
       const limit = Math.max(1, cap | 0);
-      const { ptr, len } = putBytes(text);
+      const { ptr, len, disp } = putBytes(text);
       const listPtr = api.rankAll(rxe, ptr, len, limit);
       if (!listPtr) {                       // the set cannot be ranked
         Module._free(ptr);
@@ -210,7 +221,7 @@ export function makeEngine(Module, {
       const indices = list ? list.split("\n") : [];
       const rows = indices.map((i) => {
         const shown = perm ? (takeString(api.permUnmap(perm, i)) || i) : i;
-        return withTransform(shown, text);
+        return withTransform(shown, disp);
       });
       return { rows, count, shown: indices.length };
     },

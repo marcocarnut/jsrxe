@@ -761,16 +761,22 @@ export const BUILTIN = [
     id: "poker",
     highlight: true,
     family: { en: "Combinatorics", pt: "Combinatória" },
-    pattern: "([2-9TJQKA][SHDC]){{5}}",
+    pattern: "\\[ ([2-9TJQKA](♠|♥|♦|♣) ){{5}}\\]",
     flags: "",
     name: { en: "Poker Hands", pt: "Mãos de Pôquer" },
     note: {
       en: "Every five-card hand from a 52-card deck: C(52,5) = 2,598,960. " +
           "Seek to any of them instantly, or ask for a random one -- the whole " +
-          "space of hands, indexed, without dealing a single card.",
+          "space of hands, indexed, without dealing a single card. The suits are " +
+          "Unicode glyphs picked by an alternation <tt>(♠|♥|♦|♣)</tt> rather than " +
+          "a class: the engine works in bytes, so a class cannot hold a multi-byte " +
+          "glyph, but an alternation of them works fine.",
       pt: "Toda mão de cinco cartas de um baralho de 52: C(52,5) = 2.598.960. " +
           "Vá a qualquer uma na hora, ou peça uma aleatória -- todo o espaço " +
-          "de mãos, indexado, sem distribuir uma única carta."
+          "de mãos, indexado, sem distribuir uma única carta. Os naipes são " +
+          "glifos Unicode escolhidos por uma alternação <tt>(♠|♥|♦|♣)</tt> em vez " +
+          "de uma classe: o motor trabalha em bytes, então uma classe não comporta " +
+          "um glifo de vários bytes, mas uma alternação deles funciona."
     }
   },
   {
