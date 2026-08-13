@@ -315,6 +315,12 @@ try {
     console.log(ok ? "bundle: dist/rxenum.html works from a file:// URL"
                    : "bundle: FAILED " + JSON.stringify(bundle));
     if (!ok) code = 1;
+  } else if (app && existsSync(dist)) {
+    // The bundle never rendered a row at all -- a load-time throw, such as a
+    // module reading another's const before the concatenation defines it. A
+    // silent skip here once shipped exactly that, so treat it as a failure.
+    console.log("bundle: FAILED -- dist/rxenum.html rendered no rows (load-time error?)");
+    code = 1;
   }
 
   if (app) {
