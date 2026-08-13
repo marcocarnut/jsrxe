@@ -376,6 +376,96 @@ export const BUILTIN = [
     }
   },
   {
+    id: "ipv6-short",
+    family: { en: "IPv6 Addresses", pt: "Endereços IPv6" },
+    pattern: "((([0-9A-Fa-f]{1,4}:){1,6}:)|(([0-9A-Fa-f]{1,4}:){7}))([0-9A-Fa-f]{1,4})",
+    flags: "",
+    name: { en: "The Short One", pt: "A Curta" },
+    note: {
+      en:
+          "The compact end of the genre -- the sort of IPv6 pattern that fits on " +
+          "one line and gets pasted everywhere. About 1.3 x 10^43 strings, near " +
+          "enough 2^143. Pin that number: the longer one below lands almost exactly " +
+          "on top of it, and yet the two sets are not the same.",
+      pt:
+          "A ponta compacta do gênero -- o tipo de padrão de IPv6 que cabe numa " +
+          "linha e é colado em todo canto. Cerca de 1,3 x 10^43 cadeias, quase " +
+          "2^143. Fixe esse número: a versão mais longa abaixo cai quase exatamente " +
+          "sobre ele, e mesmo assim os dois conjuntos não são o mesmo."
+    }
+  },
+  {
+    id: "ipv6-long",
+    family: { en: "IPv6 Addresses", pt: "Endereços IPv6" },
+    pattern: "(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?::[0-9a-fA-F]{1,4}){1,7}|::|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])",
+    flags: "",
+    name: { en: "The Long One", pt: "A Longa" },
+    note: {
+      en:
+          "The maximal-looking version, an alternative for every way an address " +
+          "can be spelled -- compressed zeros, an IPv4 tail, the lot. Its count " +
+          "sits within a whisker of the short one's: both round to 2^143 and to " +
+          "10^43, so by the usual eyeball they are 'the same size'. Put the exact " +
+          "figures side by side and they differ. The approximation hides what the " +
+          "exact count shows.",
+      pt:
+          "A versão de aparência máxima, uma alternativa para cada jeito de " +
+          "escrever um endereço -- zeros comprimidos, final IPv4, o pacote todo. " +
+          "Sua contagem fica a um fio da curta: ambas arredondam para 2^143 e para " +
+          "10^43, então, no olhômetro de sempre, têm 'o mesmo tamanho'. Ponha os " +
+          "números exatos lado a lado e são diferentes. A aproximação esconde o " +
+          "que a contagem exata mostra."
+    }
+  },
+  {
+    id: "ipv6-longer",
+    family: { en: "IPv6 Addresses", pt: "Endereços IPv6" },
+    pattern: "(?:(?:(?:[0-9A-Fa-f]{0,4}:){7}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){6}:[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){5}:(?:[0-9A-Fa-f]{0,4}:)?[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){4}:(?:[0-9A-Fa-f]{0,4}:){0,2}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){3}:(?:[0-9A-Fa-f]{0,4}:){0,3}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){2}:(?:[0-9A-Fa-f]{0,4}:){0,4}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){6}(?:(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2}))\\.){3}(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2})))|(?:(?:[0-9A-Fa-f]{0,4}:){0,5}:(?:(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2}))\\.){3}(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2})))|(?:::(?:[0-9A-Fa-f]{0,4}:){0,5}(?:(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2}))\\.){3}(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2})))|(?:[0-9A-Fa-f]{0,4}::(?:[0-9A-Fa-f]{0,4}:){0,5}[0-9A-Fa-f]{0,4})|(?:::(?:[0-9A-Fa-f]{0,4}:){0,6}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){1,7}:))",
+    flags: "",
+    name: { en: "The Longer One", pt: "A Mais Longa" },
+    note: {
+      en:
+          "Longer still, and this time the gap shows even in the approximation: " +
+          "about 1.4 x 10^43, a clear step above the other two. More ways to write " +
+          "the same addresses makes a bigger set of strings, not a bigger set of " +
+          "addresses -- a regex counts spellings, not the things spelled, which is " +
+          "why all three run far past the 2^128 addresses that actually exist.",
+      pt:
+          "Mais longa ainda, e desta vez a diferença aparece até na aproximação: " +
+          "cerca de 1,4 x 10^43, um degrau nítido acima das outras duas. Mais " +
+          "formas de escrever os mesmos endereços faz um conjunto maior de cadeias, " +
+          "não de endereços -- uma expressão regular conta grafias, não as coisas " +
+          "grafadas, e por isso as três passam muito além dos 2^128 endereços que " +
+          "de fato existem."
+    }
+  },
+  {
+    id: "ipv6-infinite",
+    highlight: true,
+    family: { en: "IPv6 Addresses", pt: "Endereços IPv6" },
+    pattern: "(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))",
+    flags: "",
+    name: { en: "Spot the Infinite", pt: "Ache o Infinito" },
+    note: {
+      en:
+          "Every other pattern here is a finite pile of strings -- this one's " +
+          "count comes back infinite. An IPv6 address cannot be endless, so " +
+          "somewhere a quantifier was left open where it ought to be bounded. Can " +
+          "you find it? Open the Tree tab and look for the one node drawn in " +
+          "magenta, the colour this page keeps for an unbounded repetition. (A " +
+          "nudge: it is not the address that runs on forever, but the thing tacked " +
+          "on after it.)",
+      pt:
+          "Todos os outros padrões aqui são um monte finito de cadeias -- a " +
+          "contagem deste volta infinita. Um endereço IPv6 não pode ser " +
+          "interminável, então em algum lugar um quantificador ficou aberto onde " +
+          "deveria ser limitado. Consegue achar? Abra a aba Árvore e procure o " +
+          "único nó desenhado em magenta, a cor que esta página reserva para uma " +
+          "repetição ilimitada. (Uma dica: não é o endereço que segue para sempre, " +
+          "mas aquilo que vem grudado depois dele.)"
+    }
+  },
+  {
     id: "placa-antiga",
     highlight: true,
     family: { en: "Brazilian License Plates", pt: "Placas de Carro Brasileiras" },
