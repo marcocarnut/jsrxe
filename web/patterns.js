@@ -651,10 +651,14 @@ export const BUILTIN = [
           "fato válido, e não um em dez -- 10^15 deles. É o mesmo mod 10 que toda " +
           "maquininha roda antes de a rede ver o cartão."
     },
-    code:
-      "// Append the Luhn check digit that makes the whole number valid --\n" +
-      "// lib.luhn reads past the spaces on its own.\n" +
-      "return value + lib.luhn(value);"
+    code: {
+      en: "// Append the Luhn check digit that makes the whole number valid --\n" +
+          "// lib.luhn reads past the spaces on its own.\n" +
+          "return value + lib.luhn(value);",
+      pt: "// Acrescenta o dígito verificador de Luhn que torna o número válido --\n" +
+          "// lib.luhn ignora os espaços por conta própria.\n" +
+          "return value + lib.luhn(value);"
+    }
   },
   {
     id: "card-visa",
@@ -1241,12 +1245,18 @@ export const BUILTIN = [
           "trabalho da outra — que é para o que servem a chave -k e, numa " +
           "ferramenta real, um núcleo de GPU."
     },
-    code:
-      "// Flag the row whose hash matches the target.\n" +
-      "var target = \"d0cc4101c015609d3e6e9bff2cfcf643\" +\n" +
-      "             \"ec4b05330949c658472516e2220afae1\";\n" +
-      "var h = lib.sha256(value);\n" +
-      "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);",
+    code: {
+      en: "// Flag the row whose hash matches the target.\n" +
+          "var target = \"d0cc4101c015609d3e6e9bff2cfcf643\" +\n" +
+          "             \"ec4b05330949c658472516e2220afae1\";\n" +
+          "var h = lib.sha256(value);\n" +
+          "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);",
+      pt: "// Marca a linha cujo hash coincide com o alvo.\n" +
+          "var target = \"d0cc4101c015609d3e6e9bff2cfcf643\" +\n" +
+          "             \"ec4b05330949c658472516e2220afae1\";\n" +
+          "var h = lib.sha256(value);\n" +
+          "return h === target ? \"*** \" + value + \" ***\" : h.slice(0, 16);"
+    },
     bookmarks: [
       { name: { en: "the hit: kiko", pt: "o acerto: kiko" }, index: "199720" }
     ]
