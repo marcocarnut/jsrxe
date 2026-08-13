@@ -14,9 +14,17 @@
 // sha256.js, not the browser's.
 
 import { sha256 } from "./sha256.js";
+import { BUILTIN_DICTS } from "./dicts.js";
+
+// The built-in word lists, keyed by the same id a pattern uses as [:id:], so an
+// example's code can reach the words behind a dictionary it enumerates -- e.g.
+// lib.dict["diceware4en"][0].
+const dict = {};
+for (const d of BUILTIN_DICTS) dict[d.id] = d.words;
 
 const HELPERS = {
   sha256,
+  dict,
 
   // Brazilian mod-11 check digits over the value's digits and letters, ignoring
   // any separators. Each character counts as its code point minus 48, so a
@@ -79,6 +87,9 @@ export const HELPER_DOCS = [
   { sig: "lib.sha256(s)",
     en: "SHA-256 of the string's bytes, as 64 hex characters.",
     pt: "SHA-256 dos bytes da cadeia, em 64 caracteres hexadecimais." },
+  { sig: 'lib.dict["diceware4en"]',
+    en: "A built-in word list as an array, keyed by its [:id:] name (bip39en, diceware4en, efflarge, …).",
+    pt: "Uma lista de palavras embutida como vetor, indexada pelo nome [:id:] (bip39en, diceware4en, efflarge, …)." },
   { sig: "lib.mod11(value, count, cap)",
     en: "Brazilian mod-11 check digits (count, default 2), ignoring separators. Weights climb 2,3,4,… from the right; cap>0 cycles them back to 2 above it (CNPJ 9, CPF 0).",
     pt: "Dígitos verificadores mod 11 (count, padrão 2), ignorando separadores. Os pesos sobem 2,3,4,… da direita; cap>0 os recicla a 2 acima dele (CNPJ 9, CPF 0)." },
