@@ -659,10 +659,13 @@ export const BUILTIN = [
     note: {
       en: "Fifty-two, written out in full: thirteen ranks by four suits. In " +
           "plain index order it comes out sorted, the Ace of Spades first. " +
-          "Add <tt>(?~something)</tt> at the beginning to shuffle, or click on some of the bookmarks.",
+          "Click a shuffle bookmark below and its key rides onto the regex as a " +
+          "<tt>(?~key:...)</tt> wrapper -- visible, and yours to edit or clear.",
       pt: "Cinquenta e duas, escritas por extenso: treze valores por quatro " +
           "naipes. Em ordem de índice sai ordenado, o Ás de Espadas primeiro. " +
-          "Acrescente <tt>(?~algumacoisa)</tt> no começo para embaralhar, ou clique em algum dos favoritos."
+          "Clique em um dos favoritos de embaralhamento abaixo e a chave aparece " +
+          "na regex como um invólucro <tt>(?~chave:...)</tt> -- visível, e que " +
+          "você pode editar ou remover."
     },
     bookmarks: [
       { name: { en: "in order", pt: "em ordem" }, index: "0" },

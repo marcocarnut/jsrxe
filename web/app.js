@@ -1378,15 +1378,52 @@ function jumpToIndex(index) {
   setFrom(v < 0n ? 0n : v);
 }
 
-// A bookmark is a position in an ordering, and the ordering is the shuffle key,
-// so applying one sets the key first and then jumps. With no key it lands in
-// plain index order -- the way back from any shuffle.
-async function applyBookmark(bm) {
-  const want = bm.key || "";
-  if (state.key !== want) {
-    state.key = want;
-    await applyKey();
+// A whole-set shuffle shows up in the pattern as (?~key:...) wrapping the whole
+// expression -- the same order the -k key gives, but out in the open where the
+// reader can see and edit it. These helpers read and write that wrapper while
+// leaving an inner (?~key:...) that shuffles only part of a pattern alone: its
+// closing paren is not the last character, so shuffleWrap returns null for it.
+
+// The index of the paren that closes the group opening at position 0, or -1.
+// Skips escapes and character classes, where parens stand for themselves.
+function matchClose(pat) {
+  let depth = 0, inClass = false;
+  for (let i = 0; i < pat.length; i++) {
+    const c = pat[i];
+    if (c === "\\") { i++; continue; }
+    if (inClass) { if (c === "]") inClass = false; continue; }
+    if (c === "[") inClass = true;
+    else if (c === "(") depth++;
+    else if (c === ")" && --depth === 0) return i;
   }
+  return -1;
+}
+
+// If the whole pattern is (?~key:body), return { key, base: body }; else null.
+// The key runs to the first ':' and may not cross a paren, matching the parser.
+function shuffleWrap(pat) {
+  if (!pat.startsWith("(?~")) return null;
+  let k = 3;
+  while (k < pat.length && pat[k] !== ":" && pat[k] !== "(" && pat[k] !== ")") k++;
+  if (pat[k] !== ":") return null;
+  if (matchClose(pat) !== pat.length - 1) return null;   // an inner shuffle, not a wrap
+  return { key: pat.slice(3, k), base: pat.slice(k + 1, -1) };
+}
+function patternBase(pat) { const w = shuffleWrap(pat); return w ? w.base : pat; }
+function patternKey(pat) { const w = shuffleWrap(pat); return w ? w.key : ""; }
+function wrapShuffle(base, key) { return "(?~" + key + ":" + base + ")"; }
+
+// A bookmark is a position in an ordering, and the ordering is its shuffle key.
+// Applying one writes that key into the pattern as a (?~key:...) wrapper -- so
+// the shuffle is visible -- then jumps to the index. A keyless bookmark strips
+// any wrapper back to plain order, the way back from any shuffle. (An empty key
+// is technically its own shuffle, but here it reads as "no key" and unwraps.)
+async function applyBookmark(bm) {
+  const base = patternBase($("pattern").value);
+  const key = (bm.key || "").trim();
+  $("pattern").value = key ? wrapShuffle(base, key) : base;
+  state.key = "";
+  await reparse();
   jumpToIndex(bm.index);
 }
 
@@ -1406,7 +1443,7 @@ function openBookmarkBox() {
   $("bmindex").textContent =
     group((state.from + (state.zeroBased ? 0n : 1n)).toString());
   // A bookmark remembers the shuffle key in force, so show which one it keeps.
-  const key = (state.key || "").trim();
+  const key = patternKey($("pattern").value);
   show($("bmkeyline"), !!key);
   $("bmkey").textContent = key;
   $("bmbox").showModal();
@@ -1434,9 +1471,12 @@ function setFrom(v) {
 // as a short link. 'from' is a decimal string because it can be a bignum.
 function currentShareState() {
   const s = { p: $("pattern").value };
-  const code = $("code").value.trim(), key = (state.key || "").trim();
+  const code = $("code").value.trim(), key = patternKey($("pattern").value);
   if (code) s.c = code;
-  if (key) s.k = key;
+  // Only an example link needs the key carried apart: it rebuilds the regex
+  // from the example definition, dropping any wrapper, so the key rides along
+  // and is re-wrapped on arrival. A custom link keeps the wrapper in s.p.
+  if (key && state.selected) s.k = key;
   if (state.from !== 0n) s.f = state.from.toString();
   if (state.per !== 50) s.n = state.per;
   if (!state.zeroBased) s.z = false;
@@ -1467,14 +1507,22 @@ function applyShareState(s) {
     if (typeof s.lang === "string" && LANGS[s.lang] && s.lang !== lang)
       setLang(s.lang);
     $("pattern").value = (ex.flags ? "(?" + ex.flags + ")" : "") + examplePattern(ex);
+    if (typeof s.k === "string" && s.k)
+      $("pattern").value = wrapShuffle($("pattern").value, s.k);
     $("code").value = exampleCode(ex);
   } else {
     state.selected = null;
     if (typeof s.p === "string") $("pattern").value = s.p;
+    // A legacy link carried the shuffle as a bare key; fold it into the visible
+    // wrapper so old links still open on the same order.
+    if (typeof s.k === "string" && s.k)
+      $("pattern").value = wrapShuffle(patternBase($("pattern").value), s.k);
     $("code").value = typeof s.c === "string" ? s.c : "";
   }
   setCodeVisible(!!$("code").value); refreshCodeToggle();
-  state.key = typeof s.k === "string" ? s.k : "";
+  // The shuffle now lives in the pattern (its (?~key:...) wrapper), so the
+  // separate global key stays empty.
+  state.key = "";
   state.per = (typeof s.n === "number" && s.n >= 1 && s.n <= 1000) ? s.n : 50;
   $("per").value = String(state.per);
   state.zeroBased = s.z !== false;
@@ -1891,7 +1939,7 @@ function wire() {
     // Stored as a zero-based index, whatever numbering was on screen, together
     // with the shuffle key it belongs to so the same element comes back.
     const idx = (state.from).toString();
-    const bkey = (state.key || "").trim();
+    const bkey = patternKey($("pattern").value);
     (marks[state.selected] = marks[state.selected] || [])
       .push({ name, index: idx, key: bkey });
     localStorage.setItem(STORE_MARKS, JSON.stringify(marks));
