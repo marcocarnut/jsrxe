@@ -5158,6 +5158,21 @@ const HELPERS = {
     return "" + d1 + d2;
   },
 
+  // The Luhn (mod 10) check digit that makes a card number valid: from the
+  // rightmost base digit, double every other one and cast a result over nine
+  // down by nine, sum, and return the digit that brings the total to a
+  // multiple of ten. The same check every payment terminal runs.
+  luhn(base) {
+    let sum = 0, dbl = true;               // the rightmost base digit doubles
+    for (let i = base.length - 1; i >= 0; i--) {
+      let d = base.charCodeAt(i) - 48;
+      if (dbl) { d *= 2; if (d > 9) d -= 9; }
+      sum += d;
+      dbl = !dbl;
+    }
+    return String((10 - (sum % 10)) % 10);
+  },
+
   // Keep only the characters matching a class, e.g. digitsOf("12.345") ==
   // "12345". Handy for stripping a formatted number back to its payload.
   keep(s, re) { return s.replace(new RegExp("[^" + re + "]", "g"), ""); },
@@ -5182,6 +5197,9 @@ const HELPER_DOCS = [
   { sig: "lib.checkDigits(base, w1, w2)",
     en: "Both check digits as a two-character string, the second computed over the base plus the first.",
     pt: "Os dois dígitos como texto de dois caracteres, o segundo calculado sobre a base mais o primeiro." },
+  { sig: "lib.luhn(base)",
+    en: "The Luhn (mod-10) check digit that makes a card number valid, computed over the base digits.",
+    pt: "O dígito verificador de Luhn (mod 10) que torna um número de cartão válido, calculado sobre os dígitos da base." },
   { sig: 'lib.keep(s, "0-9A-Z")',
     en: "Keep only the characters in the class, e.g. stripping punctuation back to a payload.",
     pt: "Mantém só os caracteres da classe, p.ex. removendo pontuação para voltar à carga útil." },
@@ -6107,6 +6125,96 @@ const BUILTIN = [
     }
   },
   {
+    id: "ipv6-short",
+    family: { en: "IPv6 Addresses", pt: "Endereços IPv6" },
+    pattern: "((([0-9A-Fa-f]{1,4}:){1,6}:)|(([0-9A-Fa-f]{1,4}:){7}))([0-9A-Fa-f]{1,4})",
+    flags: "",
+    name: { en: "The Short One", pt: "A Curta" },
+    note: {
+      en:
+          "The compact end of the genre -- the sort of IPv6 pattern that fits on " +
+          "one line and gets pasted everywhere. About 1.3 x 10^43 strings, near " +
+          "enough 2^143. Pin that number: the longer one below lands almost exactly " +
+          "on top of it, and yet the two sets are not the same.",
+      pt:
+          "A ponta compacta do gênero -- o tipo de padrão de IPv6 que cabe numa " +
+          "linha e é colado em todo canto. Cerca de 1,3 x 10^43 cadeias, quase " +
+          "2^143. Fixe esse número: a versão mais longa abaixo cai quase exatamente " +
+          "sobre ele, e mesmo assim os dois conjuntos não são o mesmo."
+    }
+  },
+  {
+    id: "ipv6-long",
+    family: { en: "IPv6 Addresses", pt: "Endereços IPv6" },
+    pattern: "(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?::[0-9a-fA-F]{1,4}){1,7}|::|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])",
+    flags: "",
+    name: { en: "The Long One", pt: "A Longa" },
+    note: {
+      en:
+          "The maximal-looking version, an alternative for every way an address " +
+          "can be spelled -- compressed zeros, an IPv4 tail, the lot. Its count " +
+          "sits within a whisker of the short one's: both round to 2^143 and to " +
+          "10^43, so by the usual eyeball they are 'the same size'. Put the exact " +
+          "figures side by side and they differ. The approximation hides what the " +
+          "exact count shows.",
+      pt:
+          "A versão de aparência máxima, uma alternativa para cada jeito de " +
+          "escrever um endereço -- zeros comprimidos, final IPv4, o pacote todo. " +
+          "Sua contagem fica a um fio da curta: ambas arredondam para 2^143 e para " +
+          "10^43, então, no olhômetro de sempre, têm 'o mesmo tamanho'. Ponha os " +
+          "números exatos lado a lado e são diferentes. A aproximação esconde o " +
+          "que a contagem exata mostra."
+    }
+  },
+  {
+    id: "ipv6-longer",
+    family: { en: "IPv6 Addresses", pt: "Endereços IPv6" },
+    pattern: "(?:(?:(?:[0-9A-Fa-f]{0,4}:){7}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){6}:[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){5}:(?:[0-9A-Fa-f]{0,4}:)?[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){4}:(?:[0-9A-Fa-f]{0,4}:){0,2}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){3}:(?:[0-9A-Fa-f]{0,4}:){0,3}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){2}:(?:[0-9A-Fa-f]{0,4}:){0,4}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){6}(?:(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2}))\\.){3}(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2})))|(?:(?:[0-9A-Fa-f]{0,4}:){0,5}:(?:(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2}))\\.){3}(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2})))|(?:::(?:[0-9A-Fa-f]{0,4}:){0,5}(?:(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2}))\\.){3}(?:(?:25[0-5])|(?:2[0-4]\\d)|(?:1\\d{2})|(?:\\d{1,2})))|(?:[0-9A-Fa-f]{0,4}::(?:[0-9A-Fa-f]{0,4}:){0,5}[0-9A-Fa-f]{0,4})|(?:::(?:[0-9A-Fa-f]{0,4}:){0,6}[0-9A-Fa-f]{0,4})|(?:(?:[0-9A-Fa-f]{0,4}:){1,7}:))",
+    flags: "",
+    name: { en: "The Longer One", pt: "A Mais Longa" },
+    note: {
+      en:
+          "Longer still, and this time the gap shows even in the approximation: " +
+          "about 1.4 x 10^43, a clear step above the other two. More ways to write " +
+          "the same addresses makes a bigger set of strings, not a bigger set of " +
+          "addresses -- a regex counts spellings, not the things spelled, which is " +
+          "why all three run far past the 2^128 addresses that actually exist.",
+      pt:
+          "Mais longa ainda, e desta vez a diferença aparece até na aproximação: " +
+          "cerca de 1,4 x 10^43, um degrau nítido acima das outras duas. Mais " +
+          "formas de escrever os mesmos endereços faz um conjunto maior de cadeias, " +
+          "não de endereços -- uma expressão regular conta grafias, não as coisas " +
+          "grafadas, e por isso as três passam muito além dos 2^128 endereços que " +
+          "de fato existem."
+    }
+  },
+  {
+    id: "ipv6-infinite",
+    highlight: true,
+    family: { en: "IPv6 Addresses", pt: "Endereços IPv6" },
+    pattern: "(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))",
+    flags: "",
+    name: { en: "Spot the Infinite", pt: "Ache o Infinito" },
+    note: {
+      en:
+          "Every other pattern here is a finite pile of strings -- this one's " +
+          "count comes back infinite. An IPv6 address cannot be endless, so " +
+          "somewhere a quantifier was left open where it ought to be bounded. Can " +
+          "you find it? Open the Tree tab and look for the one node drawn in " +
+          "magenta, the colour this page keeps for an unbounded repetition. (A " +
+          "nudge: it is not the address that runs on forever, but the thing tacked " +
+          "on after it.)",
+      pt:
+          "Todos os outros padrões aqui são um monte finito de cadeias -- a " +
+          "contagem deste volta infinita. Um endereço IPv6 não pode ser " +
+          "interminável, então em algum lugar um quantificador ficou aberto onde " +
+          "deveria ser limitado. Consegue achar? Abra a aba Árvore e procure o " +
+          "único nó desenhado em magenta, a cor que esta página reserva para uma " +
+          "repetição ilimitada. (Uma dica: não é o endereço que segue para sempre, " +
+          "mas aquilo que vem grudado depois dele.)"
+    }
+  },
+  {
     id: "placa-antiga",
     highlight: true,
     family: { en: "Brazilian License Plates", pt: "Placas de Carro Brasileiras" },
@@ -6253,6 +6361,106 @@ const BUILTIN = [
       "return value + \"-\" + lib.checkDigits(base,\n" +
       "  [10,9,8,7,6,5,4,3,2],\n" +
       "  [11,10,9,8,7,6,5,4,3,2]);"
+  },
+  {
+    id: "card-all",
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "\\d{4} \\d{4} \\d{4} \\d{4}",
+    flags: "",
+    name: { en: "Valid plus Invalid", pt: "Válidos e Inválidos" },
+    note: {
+      en: "Every sixteen-digit card number, spaces and all: 10^16 of them, " +
+          "grouped in fours. The last digit is a Luhn check over the first " +
+          "fifteen, so only one in ten of these is valid. Switch to the valid " +
+          "variant to have the code compute that digit instead.",
+      pt: "Todo número de cartão de dezesseis dígitos, espaços e tudo: 10^16 " +
+          "deles, agrupados de quatro em quatro. O último dígito é um " +
+          "verificador de Luhn sobre os quinze primeiros, então só um em cada " +
+          "dez é válido. Troque para a variante válida para que o código " +
+          "calcule esse dígito."
+    }
+  },
+  {
+    id: "card-valid",
+    highlight: true,
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "\\d{4} \\d{4} \\d{4} \\d{3}",
+    flags: "",
+    name: { en: "Valid Only (Luhn)", pt: "Somente Válidos (Luhn)" },
+    note: {
+      en: "The regex stops one digit short and the code appends the Luhn check " +
+          "digit, so every row is a genuinely valid card number rather than one " +
+          "in ten -- 10^15 of them. It is the same mod-10 every payment terminal " +
+          "runs before the network ever sees the card.",
+      pt: "A expressão para um dígito antes do fim e o código acrescenta o " +
+          "dígito verificador de Luhn, então cada linha é um número de cartão de " +
+          "fato válido, e não um em dez -- 10^15 deles. É o mesmo mod 10 que toda " +
+          "maquininha roda antes de a rede ver o cartão."
+    },
+    code:
+      "// Strip the spaces to the base digits, then append the Luhn\n" +
+      "// check digit that makes the whole number valid.\n" +
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + lib.luhn(base);"
+  },
+  {
+    id: "card-visa",
+    highlight: true,
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "4\\d{3} \\d{4} \\d{4} \\d{3}",
+    flags: "",
+    name: { en: "Visa", pt: "Visa" },
+    note: {
+      en: "Visa numbers begin with <tt>4</tt> and run sixteen digits. Pinning " +
+          "that first digit shrinks the space tenfold to 10^14, each with its " +
+          "Luhn digit computed. The leading digit is why a card's issuer can be " +
+          "read off the front.",
+      pt: "Números Visa começam com <tt>4</tt> e têm dezesseis dígitos. Fixar " +
+          "esse primeiro dígito reduz o espaço em dez vezes, para 10^14, cada um " +
+          "com seu dígito de Luhn calculado. É pelo dígito inicial que se " +
+          "reconhece a bandeira do cartão."
+    },
+    code:
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + lib.luhn(base);"
+  },
+  {
+    id: "card-mc",
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "5[1-5]\\d{2} \\d{4} \\d{4} \\d{3}",
+    flags: "",
+    name: { en: "Mastercard", pt: "Mastercard" },
+    note: {
+      en: "Mastercard takes <tt>51</tt> through <tt>55</tt> as its first two " +
+          "digits (the newer <tt>2221-2720</tt> range is left out here for " +
+          "simplicity): 5 x 10^13 valid sixteen-digit numbers, Luhn and all.",
+      pt: "A Mastercard usa <tt>51</tt> a <tt>55</tt> como os dois primeiros " +
+          "dígitos (a faixa mais nova, <tt>2221-2720</tt>, fica de fora aqui " +
+          "para simplificar): 5 x 10^13 números válidos de dezesseis dígitos, " +
+          "com Luhn e tudo."
+    },
+    code:
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + lib.luhn(base);"
+  },
+  {
+    id: "card-amex",
+    family: { en: "Credit Cards", pt: "Cartões de Crédito" },
+    pattern: "3[47]\\d{2} \\d{6} \\d{4}",
+    flags: "",
+    name: { en: "American Express", pt: "American Express" },
+    note: {
+      en: "American Express is the odd one out: fifteen digits, not sixteen, " +
+          "starting <tt>34</tt> or <tt>37</tt> and written 4-6-5 rather than " +
+          "four fours. 2 x 10^12 of them, the Luhn digit appended as ever.",
+      pt: "A American Express é a exceção: quinze dígitos, não dezesseis, " +
+          "começando com <tt>34</tt> ou <tt>37</tt> e escritos em 4-6-5 em vez " +
+          "de quatro grupos de quatro. 2 x 10^12 deles, com o dígito de Luhn " +
+          "acrescentado como sempre."
+    },
+    code:
+      "var base = lib.keep(value, \"0-9\");\n" +
+      "return value + lib.luhn(base);"
   },
   {
     id: "cep",
@@ -6492,16 +6700,22 @@ const BUILTIN = [
     id: "poker",
     highlight: true,
     family: { en: "Combinatorics", pt: "Combinatória" },
-    pattern: "([2-9TJQKA][SHDC]){{5}}",
+    pattern: "\\[ ([2-9TJQKA](♠|♥|♦|♣) ){{5}}\\]",
     flags: "",
     name: { en: "Poker Hands", pt: "Mãos de Pôquer" },
     note: {
       en: "Every five-card hand from a 52-card deck: C(52,5) = 2,598,960. " +
           "Seek to any of them instantly, or ask for a random one -- the whole " +
-          "space of hands, indexed, without dealing a single card.",
+          "space of hands, indexed, without dealing a single card. The suits are " +
+          "Unicode glyphs picked by an alternation <tt>(♠|♥|♦|♣)</tt> rather than " +
+          "a class: the engine works in bytes, so a class cannot hold a multi-byte " +
+          "glyph, but an alternation of them works fine.",
       pt: "Toda mão de cinco cartas de um baralho de 52: C(52,5) = 2.598.960. " +
           "Vá a qualquer uma na hora, ou peça uma aleatória -- todo o espaço " +
-          "de mãos, indexado, sem distribuir uma única carta."
+          "de mãos, indexado, sem distribuir uma única carta. Os naipes são " +
+          "glifos Unicode escolhidos por uma alternação <tt>(♠|♥|♦|♣)</tt> em vez " +
+          "de uma classe: o motor trabalha em bytes, então uma classe não comporta " +
+          "um glifo de vários bytes, mas uma alternação deles funciona."
     }
   },
   {
@@ -6893,15 +7107,26 @@ function makeEngine(Module, {
     return out;
   };
 
-  // A search string crosses the boundary as raw bytes, one per character's low
-  // eight bits, the same latin1 mapping the page renders members with -- so a
-  // member holding any byte, valid UTF-8 or not, is searched for exactly as it
-  // is shown. The caller frees the buffer.
+  const enc = new TextEncoder();
+  // A search string crosses the boundary as its UTF-8 bytes -- the same
+  // encoding decodeMember reads a member back from (see app.js), so a member
+  // copied from a row and pasted into the search box is looked up by exactly
+  // the bytes it was shown as: suit glyphs, accented letters and all. Writing
+  // the code point's low byte instead, as this once did, split a multi-byte
+  // character like the two-byte 'a' in 'Olá' or the three-byte '♦' into
+  // the wrong bytes, and the lookup missed. The caller frees the buffer.
   const putBytes = (str) => {
-    const len = str.length;
+    const bytes = enc.encode(str);
+    const len = bytes.length;
     const ptr = Module._malloc(len || 1);
-    for (let i = 0; i < len; i++) Module.HEAPU8[ptr + i] = str.charCodeAt(i) & 0xff;
-    return { ptr, len };
+    Module.HEAPU8.set(bytes, ptr);
+    // The same bytes as a byte-per-char string -- the form a row renderer
+    // decodes back for display (see decodeMember). A found search row shows
+    // this rather than the raw search text, which is real Unicode and would be
+    // mis-decoded, turning '2♠' into '2`'.
+    let disp = "";
+    for (let i = 0; i < len; i++) disp += String.fromCharCode(bytes[i]);
+    return { ptr, len, disp };
   };
 
   const clearPerm = () => { if (perm) { api.permRelease(perm); perm = 0; } permCount = null; };
@@ -7003,7 +7228,7 @@ function makeEngine(Module, {
     search({ text, cap }) {
       if (!rxe) return { rows: [], count: "0", shown: 0 };
       const limit = Math.max(1, cap | 0);
-      const { ptr, len } = putBytes(text);
+      const { ptr, len, disp } = putBytes(text);
       const listPtr = api.rankAll(rxe, ptr, len, limit);
       if (!listPtr) {                       // the set cannot be ranked
         Module._free(ptr);
@@ -7015,7 +7240,7 @@ function makeEngine(Module, {
       const indices = list ? list.split("\n") : [];
       const rows = indices.map((i) => {
         const shown = perm ? (takeString(api.permUnmap(perm, i)) || i) : i;
-        return withTransform(shown, text);
+        return withTransform(shown, disp);
       });
       return { rows, count, shown: indices.length };
     },
