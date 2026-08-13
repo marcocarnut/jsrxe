@@ -526,10 +526,14 @@ export const BUILTIN = [
       pt: "A expressão termina antes do dígito verificador, que é calculado e acrescido " +
           "no final pelo código auxiliar. Portanto, cada linha é um CNPJ de fato válido."
     },
-    code:
-      "// The two CNPJ check digits: mod 11 with weights that cycle 2..9 (the\n" +
-      "// cap), over the punctuation-stripped base.\n" +
-      "return value + \"-\" + lib.mod11(value, 2, 9);"
+    code: {
+      en: "// The two CNPJ check digits: mod 11 with weights that cycle 2..9 (the\n" +
+          "// cap), over the punctuation-stripped base.\n" +
+          "return value + \"-\" + lib.mod11(value, 2, 9);",
+      pt: "// Os dois dígitos verificadores do CNPJ: mod 11 com pesos que ciclam\n" +
+          "// 2..9 (o cap), sobre a base sem pontuação.\n" +
+          "return value + \"-\" + lib.mod11(value, 2, 9);"
+    }
   },
   {
     id: "cnpj-all",
@@ -563,10 +567,14 @@ export const BUILTIN = [
           "dígito continua usando mod 11 sobre o código ASCII de cada caractere " +
           "menos 48 e, por isso, não quebra compatibilidade com o formato pré-2026."
     },
-    code:
-      "// Same as the numeric CNPJ -- mod11 keeps the letters too (each worth\n" +
-      "// its code point minus 48, so A = 17), weights cycling 2..9.\n" +
-      "return value + \"-\" + lib.mod11(value, 2, 9);",
+    code: {
+      en: "// Same as the numeric CNPJ -- mod11 keeps the letters too (each worth\n" +
+          "// its code point minus 48, so A = 17), weights cycling 2..9.\n" +
+          "return value + \"-\" + lib.mod11(value, 2, 9);",
+      pt: "// Igual ao CNPJ numérico -- o mod11 mantém as letras também (cada uma\n" +
+          "// valendo seu código menos 48, então A = 17), com pesos ciclando 2..9.\n" +
+          "return value + \"-\" + lib.mod11(value, 2, 9);"
+    },
     bookmarks: [
       // 12.ABC.345/01DE, base 12ABC34501DE in [0-9A-Z]{12}, whose check
       // digits are 35 -- the worked example in Receita Federal's note.
@@ -599,10 +607,14 @@ export const BUILTIN = [
       pt: "A expressão termina antes do verificador e o código o acrescenta, " +
           "então cada linha é um CPF válido com dígitos verificadores corretos."
     },
-    code:
-      "// The two CPF check digits: mod 11 with weights 2, 3, 4, ... (no cap, so\n" +
-      "// they run up to 10 and 11), over the digits alone.\n" +
-      "return value + \"-\" + lib.mod11(value);"
+    code: {
+      en: "// The two CPF check digits: mod 11 with weights 2, 3, 4, ... (no cap, so\n" +
+          "// they run up to 10 and 11), over the digits alone.\n" +
+          "return value + \"-\" + lib.mod11(value);",
+      pt: "// Os dois dígitos verificadores do CPF: mod 11 com pesos 2, 3, 4, ...\n" +
+          "// (sem cap, então chegam a 10 e 11), só sobre os dígitos.\n" +
+          "return value + \"-\" + lib.mod11(value);"
+    }
   },
   {
     id: "card-all",
