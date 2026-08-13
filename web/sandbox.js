@@ -15,36 +15,42 @@
 
 import { sha256 } from "./sha256.js";
 
-// mod 11 with the classic Brazilian weighting, shared by CPF and CNPJ. Each
-// character counts as its code point minus 48, which is why the alphanumeric
-// CNPJ works unchanged: a digit's value is itself, and a letter continues
-// upward from A = 17.
-function mod11(chars, weights) {
-  let sum = 0;
-  for (let i = 0; i < chars.length; i++)
-    sum += (chars.charCodeAt(i) - 48) * weights[i];
-  const r = 11 - (sum % 11);
-  return r > 9 ? 0 : r;
-}
-
 const HELPERS = {
   sha256,
-  mod11,
 
-  // The two Brazilian check digits, given the base and the two weight rows.
-  // Returned as a two-character string, most significant first.
-  checkDigits(base, w1, w2) {
-    const d1 = mod11(base, w1);
-    const d2 = mod11(base + d1, w2);
-    return "" + d1 + d2;
+  // Brazilian mod-11 check digits over the value's digits and letters, ignoring
+  // any separators. Each character counts as its code point minus 48, so a
+  // digit is worth itself and a letter carries on from A = 17 -- which is why
+  // the one call serves the alphanumeric CNPJ as well. It returns `count` digits
+  // (default 2), each folded into the base before the next is computed. The
+  // weights climb 2, 3, 4, ... from the right; a positive `cap` cycles them back
+  // to 2 once they pass it -- CPF lets them run (cap 0, up to 10 and 11), CNPJ
+  // caps at 9.
+  mod11(value, count = 2, cap = 0) {
+    const base = String(value).replace(/[^0-9A-Z]/g, "");
+    let out = "";
+    for (let k = 0; k < count; k++) {
+      const s = base + out;
+      let sum = 0;
+      for (let i = 0; i < s.length; i++) {
+        const p = s.length - 1 - i;                  // distance from the right
+        const w = cap > 0 ? (p % (cap - 1)) + 2 : p + 2;
+        sum += (s.charCodeAt(i) - 48) * w;
+      }
+      const r = 11 - (sum % 11);
+      out += (r > 9 ? 0 : r);
+    }
+    return out;
   },
 
-  // The Luhn (mod 10) check digit that makes a card number valid: from the
-  // rightmost base digit, double every other one and cast a result over nine
-  // down by nine, sum, and return the digit that brings the total to a
-  // multiple of ten. The same check every payment terminal runs.
-  luhn(base) {
-    let sum = 0, dbl = true;               // the rightmost base digit doubles
+  // The Luhn (mod 10) check digit that makes a card number valid, over the
+  // value's digits (separators ignored): from the rightmost digit, double every
+  // other one and cast a result over nine down by nine, sum, and return the
+  // digit that brings the total to a multiple of ten. The check every terminal
+  // runs.
+  luhn(value) {
+    const base = String(value).replace(/[^0-9]/g, "");
+    let sum = 0, dbl = true;                // the rightmost digit doubles
     for (let i = base.length - 1; i >= 0; i--) {
       let d = base.charCodeAt(i) - 48;
       if (dbl) { d *= 2; if (d > 9) d -= 9; }
@@ -54,8 +60,9 @@ const HELPERS = {
     return String((10 - (sum % 10)) % 10);
   },
 
-  // Keep only the characters matching a class, e.g. digitsOf("12.345") ==
-  // "12345". Handy for stripping a formatted number back to its payload.
+  // Keep only the characters matching a class, e.g. keep("12.345", "0-9") ==
+  // "12345". The check-digit helpers strip separators on their own now; this
+  // stays for the odd case that wants a payload pulled out by hand.
   keep(s, re) { return s.replace(new RegExp("[^" + re + "]", "g"), ""); },
 
   toHex(s) {
@@ -72,15 +79,12 @@ export const HELPER_DOCS = [
   { sig: "lib.sha256(s)",
     en: "SHA-256 of the string's bytes, as 64 hex characters.",
     pt: "SHA-256 dos bytes da cadeia, em 64 caracteres hexadecimais." },
-  { sig: "lib.mod11(chars, weights)",
-    en: "One Brazilian check digit: sum of (code point − 48) times weight, mod 11, folded to 0 above 9.",
-    pt: "Um dígito verificador brasileiro: soma de (código − 48) vezes peso, mod 11, dobrado a 0 acima de 9." },
-  { sig: "lib.checkDigits(base, w1, w2)",
-    en: "Both check digits as a two-character string, the second computed over the base plus the first.",
-    pt: "Os dois dígitos como texto de dois caracteres, o segundo calculado sobre a base mais o primeiro." },
-  { sig: "lib.luhn(base)",
-    en: "The Luhn (mod-10) check digit that makes a card number valid, computed over the base digits.",
-    pt: "O dígito verificador de Luhn (mod 10) que torna um número de cartão válido, calculado sobre os dígitos da base." },
+  { sig: "lib.mod11(value, count, cap)",
+    en: "Brazilian mod-11 check digits (count, default 2), ignoring separators. Weights climb 2,3,4,… from the right; cap>0 cycles them back to 2 above it (CNPJ 9, CPF 0).",
+    pt: "Dígitos verificadores mod 11 (count, padrão 2), ignorando separadores. Os pesos sobem 2,3,4,… da direita; cap>0 os recicla a 2 acima dele (CNPJ 9, CPF 0)." },
+  { sig: "lib.luhn(value)",
+    en: "The Luhn (mod-10) check digit that makes a card number valid, over the value's digits, ignoring separators.",
+    pt: "O dígito verificador de Luhn (mod 10) que valida um cartão, sobre os dígitos do valor, ignorando separadores." },
   { sig: 'lib.keep(s, "0-9A-Z")',
     en: "Keep only the characters in the class, e.g. stripping punctuation back to a payload.",
     pt: "Mantém só os caracteres da classe, p.ex. removendo pontuação para voltar à carga útil." },

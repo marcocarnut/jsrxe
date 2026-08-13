@@ -527,12 +527,9 @@ export const BUILTIN = [
           "no final pelo código auxiliar. Portanto, cada linha é um CNPJ de fato válido."
     },
     code:
-      "// Strip the punctuation to the twelve-digit base, then append the two\n" +
-      "// check digits computed as Receita Federal specifies.\n" +
-      "var base = lib.keep(value, \"0-9\");\n" +
-      "return value + \"-\" + lib.checkDigits(base,\n" +
-      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
-      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);"
+      "// The two CNPJ check digits: mod 11 with weights that cycle 2..9 (the\n" +
+      "// cap), over the punctuation-stripped base.\n" +
+      "return value + \"-\" + lib.mod11(value, 2, 9);"
   },
   {
     id: "cnpj-all",
@@ -567,12 +564,9 @@ export const BUILTIN = [
           "menos 48 e, por isso, não quebra compatibilidade com o formato pré-2026."
     },
     code:
-      "// Strip the punctuation to the twelve-character base, then append\n" +
-      "// the two check digits computed as Receita Federal specifies.\n" +
-      "var base = lib.keep(value, \"0-9A-Z\");\n" +
-      "return value + \"-\" + lib.checkDigits(base,\n" +
-      "  [5,4,3,2,9,8,7,6,5,4,3,2],\n" +
-      "  [6,5,4,3,2,9,8,7,6,5,4,3,2]);",
+      "// Same as the numeric CNPJ -- mod11 keeps the letters too (each worth\n" +
+      "// its code point minus 48, so A = 17), weights cycling 2..9.\n" +
+      "return value + \"-\" + lib.mod11(value, 2, 9);",
     bookmarks: [
       // 12.ABC.345/01DE, base 12ABC34501DE in [0-9A-Z]{12}, whose check
       // digits are 35 -- the worked example in Receita Federal's note.
@@ -606,12 +600,9 @@ export const BUILTIN = [
           "então cada linha é um CPF válido com dígitos verificadores corretos."
     },
     code:
-      "// Strip the dots to the nine-digit base, append the two check\n" +
-      "// digits, computed mod 11 exactly as Receita Federal specifies.\n" +
-      "var base = lib.keep(value, \"0-9\");\n" +
-      "return value + \"-\" + lib.checkDigits(base,\n" +
-      "  [10,9,8,7,6,5,4,3,2],\n" +
-      "  [11,10,9,8,7,6,5,4,3,2]);"
+      "// The two CPF check digits: mod 11 with weights 2, 3, 4, ... (no cap, so\n" +
+      "// they run up to 10 and 11), over the digits alone.\n" +
+      "return value + \"-\" + lib.mod11(value);"
   },
   {
     id: "card-all",
@@ -649,10 +640,9 @@ export const BUILTIN = [
           "maquininha roda antes de a rede ver o cartão."
     },
     code:
-      "// Strip the spaces to the base digits, then append the Luhn\n" +
-      "// check digit that makes the whole number valid.\n" +
-      "var base = lib.keep(value, \"0-9\");\n" +
-      "return value + lib.luhn(base);"
+      "// Append the Luhn check digit that makes the whole number valid --\n" +
+      "// lib.luhn reads past the spaces on its own.\n" +
+      "return value + lib.luhn(value);"
   },
   {
     id: "card-visa",
@@ -672,8 +662,7 @@ export const BUILTIN = [
           "reconhece a bandeira do cartão."
     },
     code:
-      "var base = lib.keep(value, \"0-9\");\n" +
-      "return value + lib.luhn(base);"
+      "return value + lib.luhn(value);"
   },
   {
     id: "card-mc",
@@ -691,8 +680,7 @@ export const BUILTIN = [
           "com Luhn e tudo."
     },
     code:
-      "var base = lib.keep(value, \"0-9\");\n" +
-      "return value + lib.luhn(base);"
+      "return value + lib.luhn(value);"
   },
   {
     id: "card-amex",
@@ -710,8 +698,7 @@ export const BUILTIN = [
           "acrescentado como sempre."
     },
     code:
-      "var base = lib.keep(value, \"0-9\");\n" +
-      "return value + lib.luhn(base);"
+      "return value + lib.luhn(value);"
   },
   {
     id: "cep",
