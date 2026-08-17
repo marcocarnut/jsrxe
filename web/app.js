@@ -215,14 +215,18 @@ function unitName(key, value) {
   return value === 1 ? s : p;
 }
 
-// How the speed slider reads: 10^e visits a second, said as "N per second",
-// with the clean powers annotated by the time between visits.
+// How the speed slider reads: 10^e visits a second, said as "N per second".
+// The exponent is continuous (the slider steps in fractions), so the rate is
+// interpolated logarithmically -- 10^1.5 is ~32 per second, an in-between the
+// old whole-power steps skipped. The rate rounds to a whole count of visits;
+// only a clean integer power is annotated with the time between visits.
 function rateLabel(e) {
   const per = { 3: "millisecond", 6: "microsecond", 9: "nanosecond",
                 12: "picosecond", 15: "femtosecond" };
+  const rate = BigInt(Math.round(Math.pow(10, e)));
   // "per second" is elliptical (one per second of visits), so no "de" here.
-  let label = `${scaledNumber((10n ** BigInt(e)).toString()).str} ${t("perSecond")}`;
-  if (per[e]) label += ` (${t("timeOnePer")} ${t("period_" + per[e])})`;
+  let label = `${scaledNumber(rate.toString()).str} ${t("perSecond")}`;
+  if (Number.isInteger(e) && per[e]) label += ` (${t("timeOnePer")} ${t("period_" + per[e])})`;
   return label;
 }
 
@@ -277,7 +281,7 @@ function renderTime() {
     big.textContent = t("timeForever"); state.timeTip = t("timeForeverTip"); return;
   }
   if (!state.count) { big.textContent = ""; state.timeTip = ""; return; }
-  const count = BigInt(state.count), rate = 10n ** BigInt(e);
+  const count = BigInt(state.count), rate = BigInt(Math.round(Math.pow(10, e)));
   if (count < rate) {
     big.textContent = t("timeInstant"); state.timeTip = t("timeInstantTip"); return;
   }
