@@ -742,6 +742,7 @@ async function reparse() {
   if (state.tab === "search") {
     if ($("findtext").value) runSearch(); else renderSearch();
   } else if (state.tab === "tree") renderTree();
+  else if (state.tab === "crack") renderCrack();
   else loadRows();
 }
 
@@ -948,13 +949,42 @@ function setTab(tab) {
   show($("elements-view"), tab === "elements");
   show($("search-view"), tab === "search");
   show($("tree-view"), tab === "tree");
-  // The Tree tab wants the whole panel, so it hides the shared results table
-  // and its status line rather than sitting above them.
-  show($("results"), tab !== "tree");
-  show($("status"), tab !== "tree");
+  show($("crack-view"), tab === "crack");
+  // The Tree and Crack tabs want the whole panel, so they hide the shared
+  // results table and its status line rather than sitting above them.
+  const owns = tab === "tree" || tab === "crack";
+  show($("results"), !owns);
+  show($("status"), !owns);
   if (tab === "elements") loadRows();
   else if (tab === "search") { renderSearch(); $("findtext").focus(); }
-  else renderTree();
+  else if (tab === "tree") renderTree();
+  else renderCrack();
+}
+
+// The Crack tab: reflect whether the current set can be cracked at all, and
+// gate the button. The GPU pipeline itself lands in the next step; for now this
+// wires the UI, the finiteness gate, and the WebGPU availability check.
+function renderCrack() {
+  if (state.tab !== "crack") return;
+  const go = $("crackgo"), st = $("crackstatus");
+  const say = (key, cls) => { st.textContent = t(key); st.className = cls || "dim"; };
+  const disable = (key, cls) => { go.disabled = true; say(key, cls); };
+  if (!navigator.gpu)         return disable("crackNoGpu", "err");
+  if (!state.ok)              return disable("crackEmptyPat");
+  if (state.infinite)        return disable("crackNeedsFinite", "err");
+  go.disabled = false;
+  say("crackComing");
+}
+
+// Kick off a crack. Step 1 stubs this: it validates the targets and the set,
+// then reports that the GPU pipeline is not yet wired. crack.js fills it in.
+async function runCrack() {
+  const st = $("crackstatus"), out = $("crackout");
+  out.textContent = "";
+  const tgts = $("cracktgts").value.split(/\s+/).map(s => s.trim().toLowerCase())
+                 .filter(s => /^[0-9a-f]+$/.test(s) && s.length % 2 === 0);
+  if (!tgts.length) { st.textContent = t("crackNoTargets"); st.className = "err"; return; }
+  st.textContent = t("crackComing"); st.className = "dim";
 }
 
 // The numbering toggle appears in both tabs' controls; both reflect the one
@@ -1803,6 +1833,8 @@ function wire() {
   };
   for (const b of document.querySelectorAll(".etab"))
     b.onclick = () => setTab(b.dataset.etab);
+  $("crackgears").onclick = () => $("crackknobs").showModal();
+  $("crackgo").onclick = () => runCrack();
   // Search as you type, like the other inputs, so there is no button to press.
   const searchSoon = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 200); };
   $("findtext").oninput = searchSoon;

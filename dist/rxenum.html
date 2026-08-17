@@ -449,6 +449,28 @@ dialog menu button { background: var(--bg); color: var(--fg);
 #savego { background: var(--accent-bg); color: var(--accent);
           border-color: var(--accent); }
 
+/* --- Crack tab --------------------------------------------------------- */
+#crack-view .controls { align-items: center; }
+#crack-view #crackgo { background: var(--accent-bg); color: var(--accent);
+          border: 1px solid var(--accent); border-radius: 6px;
+          padding: .35rem 1rem; cursor: pointer; font: inherit; }
+#crack-view #crackgo[disabled] { opacity: .5; cursor: default;
+          background: var(--bg); color: var(--dim); border-color: var(--line); }
+#crack-view .iconbtn { padding: .3rem .5rem; display: inline-flex;
+          align-items: center; background: var(--bg); color: var(--fg);
+          border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+#crack-view .iconbtn svg { width: 18px; height: 18px; display: block; }
+#crack-view .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
+#cracktgts { width: 100%; box-sizing: border-box; margin-top: .3rem;
+          font-family: ui-monospace, monospace; font-size: .85rem;
+          background: var(--bg); color: var(--fg);
+          border: 1px solid var(--line); border-radius: 6px; padding: .5rem; }
+#crackstatus { margin-top: .7rem; min-height: 1.4em; }
+#crackout { margin-top: .6rem; white-space: pre-wrap; font-family: ui-monospace, monospace;
+          font-size: .85rem; }
+#crackout .hit { color: var(--fg); }
+#crackout .hit .pt { color: var(--accent); font-weight: 600; }
+
 </style>
 </head>
 <body>
@@ -593,6 +615,7 @@ dialog menu button { background: var(--bg); color: var(--fg);
         <button class="etab on" data-etab="elements" data-t="elements"></button>
         <button class="etab" data-etab="search" data-t="searchTab"></button>
         <button class="etab" data-etab="tree" data-t="treeTab"></button>
+        <button class="etab" data-etab="crack" data-t="crackTab"></button>
       </div>
 
       <div id="elements-view">
@@ -670,6 +693,29 @@ dialog menu button { background: var(--bg); color: var(--fg);
           <div id="cy"></div>
           <div id="treemsg" class="dim"></div>
         </div>
+      </div>
+
+      <!-- GPU keycracking. Like the Tree tab it takes over the panel, hiding the
+           shared results table; a WebGPU compute shader, JIT'd per pattern, lays
+           the set's candidates on-device and hashes them. -->
+      <div id="crack-view" hidden>
+        <div class="controls">
+          <label class="ctl"><span data-t="crackHashAlg"></span>
+            <select id="crackalg">
+              <option value="md5">MD5</option>
+              <option value="sha256" disabled>SHA-256</option>
+              <option value="ntlm" disabled>NTLM</option>
+              <option value="sha1" disabled>SHA-1</option>
+            </select></label>
+          <button id="crackgo" data-t="crackGo"></button>
+          <button id="crackgears" class="iconbtn" data-ttip="crackKnobs" aria-label="knobs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+        <label class="ctl grow" for="cracktgts"><span data-t="crackTargets"></span></label>
+        <textarea id="cracktgts" rows="4" data-tplace="crackTargetsPlace" spellcheck="false"></textarea>
+        <div id="crackstatus" class="dim"></div>
+        <div id="crackout"></div>
       </div>
 
       <table id="results">
@@ -775,6 +821,28 @@ dialog menu button { background: var(--bg); color: var(--fg);
     <menu>
       <button type="button" id="exportcancel" data-t="exportCancel"></button>
       <button type="submit" id="exportgo" data-t="exportGo"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="crackknobs">
+  <form method="dialog">
+    <h3 data-t="crackKnobs"></h3>
+    <label><span data-t="crackWorkgroup"></span>
+      <select id="knobwg"><option>64</option><option>128</option><option selected>256</option></select></label>
+    <label><span data-t="crackCap"></span>
+      <select id="knobcap"><option>4096</option><option selected>8192</option><option>16384</option><option>32768</option><option>65535</option></select></label>
+    <label><span data-t="crackMode"></span>
+      <select id="knobmode">
+        <option value="serial" selected data-t="crackModeSerial"></option>
+        <option value="interleaved" data-t="crackModeInterleaved"></option>
+      </select></label>
+    <label><span data-t="crackInterleave"></span>
+      <select id="knobww"><option>2</option><option selected>4</option><option>8</option></select></label>
+    <label class="check"><input id="knobfw" type="checkbox">
+      <span data-t="crackFirstWord"></span></label>
+    <menu>
+      <button type="submit" data-t="crackKnobsClose"></button>
     </menu>
   </form>
 </dialog>
@@ -5433,6 +5501,34 @@ const STRINGS = {
     treeEmpty:        "Enter a valid expression to see its tree.",
     treeLoading:      "Loading the tree view…",
     treeEmptyStr:     "∅",                // shown for a node that produced ""
+    crackTab:         "Crack",
+    crackHint:        "Recover the plaintext behind a hash by hashing every "
+                    + "member of the set on the GPU. The finiteness a regex "
+                    + "buys you is the point: a tight expression is a tiny "
+                    + "search space.",
+    crackHashAlg:     "Hash",
+    crackGo:          "Crack",
+    crackStop:        "Stop",
+    crackTargets:     "Target hashes (one hex digest per line)",
+    crackTargetsPlace:"5d41402abc4b2a76b9719d911017c592",
+    crackKnobs:       "Tuning",
+    crackKnobsClose:  "Done",
+    crackWorkgroup:   "Workgroup size",
+    crackCap:         "Max workgroups",
+    crackMode:        "Kernel mode",
+    crackModeSerial:  "serial (one hash per step)",
+    crackModeInterleaved: "interleaved (overlap chains)",
+    crackInterleave:  "Interleave width",
+    crackFirstWord:   "First-word compare (faster, re-confirms hits)",
+    crackNoGpu:       "WebGPU is not available in this browser — the Crack tab needs it.",
+    crackNoGpuAdapter:"No WebGPU adapter (GPU) is available.",
+    crackNeedsFinite: "GPU cracking needs a finite set. This expression is infinite.",
+    crackUnsupported: "GPU cracking does not yet handle this pattern's shape.",
+    crackEmptyPat:    "Enter a valid expression to crack.",
+    crackNoTargets:   "Paste at least one hex digest to search for.",
+    crackReady:       "Ready — paste target hashes and press Crack.",
+    crackComing:      "GPU pipeline is wired in the next step.",
+    crackNoMatch:     "No matches — the plaintext isn't in this set, or the digest is off.",
     fromIndex:        "From index",
     perPage:          "Per page",
     zeroBased:        "Count from zero",
@@ -5637,6 +5733,34 @@ const STRINGS = {
     treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
     treeLoading:      "Carregando a árvore…",
     treeEmptyStr:     "∅",
+    crackTab:         "Quebrar",
+    crackHint:        "Recupere o texto por trás de um hash calculando o hash "
+                    + "de cada membro do conjunto na GPU. A finitude que uma "
+                    + "regex garante é o ponto: uma expressão enxuta é um "
+                    + "espaço de busca minúsculo.",
+    crackHashAlg:     "Hash",
+    crackGo:          "Quebrar",
+    crackStop:        "Parar",
+    crackTargets:     "Hashes-alvo (um digest hex por linha)",
+    crackTargetsPlace:"5d41402abc4b2a76b9719d911017c592",
+    crackKnobs:       "Ajustes",
+    crackKnobsClose:  "Pronto",
+    crackWorkgroup:   "Tamanho do workgroup",
+    crackCap:         "Máx. de workgroups",
+    crackMode:        "Modo do kernel",
+    crackModeSerial:  "serial (um hash por passo)",
+    crackModeInterleaved: "intercalado (sobrepõe cadeias)",
+    crackInterleave:  "Largura de intercalação",
+    crackFirstWord:   "Comparar 1ª palavra (mais rápido, reconfirma achados)",
+    crackNoGpu:       "WebGPU não está disponível neste navegador — a aba Quebrar precisa dele.",
+    crackNoGpuAdapter:"Nenhum adaptador WebGPU (GPU) disponível.",
+    crackNeedsFinite: "A quebra na GPU precisa de um conjunto finito. Esta expressão é infinita.",
+    crackUnsupported: "A quebra na GPU ainda não trata a forma deste padrão.",
+    crackEmptyPat:    "Digite uma expressão válida para quebrar.",
+    crackNoTargets:   "Cole ao menos um digest hex para procurar.",
+    crackReady:       "Pronto — cole os hashes-alvo e pressione Quebrar.",
+    crackComing:      "O pipeline de GPU entra no próximo passo.",
+    crackNoMatch:     "Sem correspondências — o texto não está neste conjunto, ou o digest está errado.",
     fromIndex:        "A partir do índice",
     perPage:          "Por página",
     zeroBased:        "Contar a partir de zero",
@@ -8168,6 +8292,7 @@ async function reparse() {
   if (state.tab === "search") {
     if ($("findtext").value) runSearch(); else renderSearch();
   } else if (state.tab === "tree") renderTree();
+  else if (state.tab === "crack") renderCrack();
   else loadRows();
 }
 
@@ -8374,13 +8499,42 @@ function setTab(tab) {
   show($("elements-view"), tab === "elements");
   show($("search-view"), tab === "search");
   show($("tree-view"), tab === "tree");
-  // The Tree tab wants the whole panel, so it hides the shared results table
-  // and its status line rather than sitting above them.
-  show($("results"), tab !== "tree");
-  show($("status"), tab !== "tree");
+  show($("crack-view"), tab === "crack");
+  // The Tree and Crack tabs want the whole panel, so they hide the shared
+  // results table and its status line rather than sitting above them.
+  const owns = tab === "tree" || tab === "crack";
+  show($("results"), !owns);
+  show($("status"), !owns);
   if (tab === "elements") loadRows();
   else if (tab === "search") { renderSearch(); $("findtext").focus(); }
-  else renderTree();
+  else if (tab === "tree") renderTree();
+  else renderCrack();
+}
+
+// The Crack tab: reflect whether the current set can be cracked at all, and
+// gate the button. The GPU pipeline itself lands in the next step; for now this
+// wires the UI, the finiteness gate, and the WebGPU availability check.
+function renderCrack() {
+  if (state.tab !== "crack") return;
+  const go = $("crackgo"), st = $("crackstatus");
+  const say = (key, cls) => { st.textContent = t(key); st.className = cls || "dim"; };
+  const disable = (key, cls) => { go.disabled = true; say(key, cls); };
+  if (!navigator.gpu)         return disable("crackNoGpu", "err");
+  if (!state.ok)              return disable("crackEmptyPat");
+  if (state.infinite)        return disable("crackNeedsFinite", "err");
+  go.disabled = false;
+  say("crackComing");
+}
+
+// Kick off a crack. Step 1 stubs this: it validates the targets and the set,
+// then reports that the GPU pipeline is not yet wired. crack.js fills it in.
+async function runCrack() {
+  const st = $("crackstatus"), out = $("crackout");
+  out.textContent = "";
+  const tgts = $("cracktgts").value.split(/\s+/).map(s => s.trim().toLowerCase())
+                 .filter(s => /^[0-9a-f]+$/.test(s) && s.length % 2 === 0);
+  if (!tgts.length) { st.textContent = t("crackNoTargets"); st.className = "err"; return; }
+  st.textContent = t("crackComing"); st.className = "dim";
 }
 
 // The numbering toggle appears in both tabs' controls; both reflect the one
@@ -9229,6 +9383,8 @@ function wire() {
   };
   for (const b of document.querySelectorAll(".etab"))
     b.onclick = () => setTab(b.dataset.etab);
+  $("crackgears").onclick = () => $("crackknobs").showModal();
+  $("crackgo").onclick = () => runCrack();
   // Search as you type, like the other inputs, so there is no button to press.
   const searchSoon = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 200); };
   $("findtext").oninput = searchSoon;

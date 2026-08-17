@@ -148,6 +148,7 @@
         <button class="etab on" data-etab="elements" data-t="elements"></button>
         <button class="etab" data-etab="search" data-t="searchTab"></button>
         <button class="etab" data-etab="tree" data-t="treeTab"></button>
+        <button class="etab" data-etab="crack" data-t="crackTab"></button>
       </div>
 
       <div id="elements-view">
@@ -225,6 +226,29 @@
           <div id="cy"></div>
           <div id="treemsg" class="dim"></div>
         </div>
+      </div>
+
+      <!-- GPU keycracking. Like the Tree tab it takes over the panel, hiding the
+           shared results table; a WebGPU compute shader, JIT'd per pattern, lays
+           the set's candidates on-device and hashes them. -->
+      <div id="crack-view" hidden>
+        <div class="controls">
+          <label class="ctl"><span data-t="crackHashAlg"></span>
+            <select id="crackalg">
+              <option value="md5">MD5</option>
+              <option value="sha256" disabled>SHA-256</option>
+              <option value="ntlm" disabled>NTLM</option>
+              <option value="sha1" disabled>SHA-1</option>
+            </select></label>
+          <button id="crackgo" data-t="crackGo"></button>
+          <button id="crackgears" class="iconbtn" data-ttip="crackKnobs" aria-label="knobs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+        <label class="ctl grow" for="cracktgts"><span data-t="crackTargets"></span></label>
+        <textarea id="cracktgts" rows="4" data-tplace="crackTargetsPlace" spellcheck="false"></textarea>
+        <div id="crackstatus" class="dim"></div>
+        <div id="crackout"></div>
       </div>
 
       <table id="results">
@@ -330,6 +354,28 @@
     <menu>
       <button type="button" id="exportcancel" data-t="exportCancel"></button>
       <button type="submit" id="exportgo" data-t="exportGo"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="crackknobs">
+  <form method="dialog">
+    <h3 data-t="crackKnobs"></h3>
+    <label><span data-t="crackWorkgroup"></span>
+      <select id="knobwg"><option>64</option><option>128</option><option selected>256</option></select></label>
+    <label><span data-t="crackCap"></span>
+      <select id="knobcap"><option>4096</option><option selected>8192</option><option>16384</option><option>32768</option><option>65535</option></select></label>
+    <label><span data-t="crackMode"></span>
+      <select id="knobmode">
+        <option value="serial" selected data-t="crackModeSerial"></option>
+        <option value="interleaved" data-t="crackModeInterleaved"></option>
+      </select></label>
+    <label><span data-t="crackInterleave"></span>
+      <select id="knobww"><option>2</option><option selected>4</option><option>8</option></select></label>
+    <label class="check"><input id="knobfw" type="checkbox">
+      <span data-t="crackFirstWord"></span></label>
+    <menu>
+      <button type="submit" data-t="crackKnobsClose"></button>
     </menu>
   </form>
 </dialog>

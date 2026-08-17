@@ -441,3 +441,25 @@ dialog menu button { background: var(--bg); color: var(--fg);
                      padding: .35rem .9rem; cursor: pointer; font: inherit; }
 #savego { background: var(--accent-bg); color: var(--accent);
           border-color: var(--accent); }
+
+/* --- Crack tab --------------------------------------------------------- */
+#crack-view .controls { align-items: center; }
+#crack-view #crackgo { background: var(--accent-bg); color: var(--accent);
+          border: 1px solid var(--accent); border-radius: 6px;
+          padding: .35rem 1rem; cursor: pointer; font: inherit; }
+#crack-view #crackgo[disabled] { opacity: .5; cursor: default;
+          background: var(--bg); color: var(--dim); border-color: var(--line); }
+#crack-view .iconbtn { padding: .3rem .5rem; display: inline-flex;
+          align-items: center; background: var(--bg); color: var(--fg);
+          border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+#crack-view .iconbtn svg { width: 18px; height: 18px; display: block; }
+#crack-view .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
+#cracktgts { width: 100%; box-sizing: border-box; margin-top: .3rem;
+          font-family: ui-monospace, monospace; font-size: .85rem;
+          background: var(--bg); color: var(--fg);
+          border: 1px solid var(--line); border-radius: 6px; padding: .5rem; }
+#crackstatus { margin-top: .7rem; min-height: 1.4em; }
+#crackout { margin-top: .6rem; white-space: pre-wrap; font-family: ui-monospace, monospace;
+          font-size: .85rem; }
+#crackout .hit { color: var(--fg); }
+#crackout .hit .pt { color: var(--accent); font-weight: 600; }

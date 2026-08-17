@@ -139,6 +139,40 @@ export const STRINGS = {
     treeEmpty:        "Enter a valid expression to see its tree.",
     treeLoading:      "Loading the tree view…",
     treeEmptyStr:     "∅",                // shown for a node that produced ""
+    crackTab:         "Crack",
+    crackHint:        "Recover the plaintext behind a hash by hashing every "
+                    + "member of the set on the GPU. The finiteness a regex "
+                    + "buys you is the point: a tight expression is a tiny "
+                    + "search space.",
+    crackHashAlg:     "Hash",
+    crackGo:          "Crack",
+    crackStop:        "Stop",
+    crackTargets:     "Target hashes (one hex digest per line)",
+    crackTargetsPlace:"5d41402abc4b2a76b9719d911017c592",
+    crackKnobs:       "Tuning",
+    crackKnobsClose:  "Done",
+    crackWorkgroup:   "Workgroup size",
+    crackCap:         "Max workgroups",
+    crackMode:        "Kernel mode",
+    crackModeSerial:  "serial (one hash per step)",
+    crackModeInterleaved: "interleaved (overlap chains)",
+    crackInterleave:  "Interleave width",
+    crackFirstWord:   "First-word compare (faster, re-confirms hits)",
+    crackNoGpu:       "WebGPU is not available here — the Crack tab needs it. "
+                    + "Try a recent Chrome, Edge, or Safari. In Firefox, enable "
+                    + "dom.webgpu.enabled in about:config; in Chrome on Linux you "
+                    + "may need chrome://flags/#enable-unsafe-webgpu. (A slower "
+                    + "CPU fallback may come later.)",
+    crackNoGpuAdapter:"WebGPU is present but no GPU adapter was offered. On a "
+                    + "laptop this can mean the browser is on the low-power "
+                    + "integrated GPU only, or a flag is still needed.",
+    crackNeedsFinite: "GPU cracking needs a finite set. This expression is infinite.",
+    crackUnsupported: "GPU cracking does not yet handle this pattern's shape.",
+    crackEmptyPat:    "Enter a valid expression to crack.",
+    crackNoTargets:   "Paste at least one hex digest to search for.",
+    crackReady:       "Ready — paste target hashes and press Crack.",
+    crackComing:      "GPU pipeline is wired in the next step.",
+    crackNoMatch:     "No matches — the plaintext isn't in this set, or the digest is off.",
     fromIndex:        "From index",
     perPage:          "Per page",
     zeroBased:        "Count from zero",
@@ -343,6 +377,40 @@ export const STRINGS = {
     treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
     treeLoading:      "Carregando a árvore…",
     treeEmptyStr:     "∅",
+    crackTab:         "Quebrar",
+    crackHint:        "Recupere o texto por trás de um hash calculando o hash "
+                    + "de cada membro do conjunto na GPU. A finitude que uma "
+                    + "regex garante é o ponto: uma expressão enxuta é um "
+                    + "espaço de busca minúsculo.",
+    crackHashAlg:     "Hash",
+    crackGo:          "Quebrar",
+    crackStop:        "Parar",
+    crackTargets:     "Hashes-alvo (um digest hex por linha)",
+    crackTargetsPlace:"5d41402abc4b2a76b9719d911017c592",
+    crackKnobs:       "Ajustes",
+    crackKnobsClose:  "Pronto",
+    crackWorkgroup:   "Tamanho do workgroup",
+    crackCap:         "Máx. de workgroups",
+    crackMode:        "Modo do kernel",
+    crackModeSerial:  "serial (um hash por passo)",
+    crackModeInterleaved: "intercalado (sobrepõe cadeias)",
+    crackInterleave:  "Largura de intercalação",
+    crackFirstWord:   "Comparar 1ª palavra (mais rápido, reconfirma achados)",
+    crackNoGpu:       "WebGPU não está disponível aqui — a aba Quebrar precisa "
+                    + "dele. Tente um Chrome, Edge ou Safari recente. No Firefox, "
+                    + "ative dom.webgpu.enabled em about:config; no Chrome em "
+                    + "Linux talvez precise de chrome://flags/#enable-unsafe-webgpu. "
+                    + "(Um fallback em CPU, mais lento, pode vir depois.)",
+    crackNoGpuAdapter:"WebGPU existe, mas nenhum adaptador de GPU foi oferecido. "
+                    + "Em notebooks isso pode significar que o navegador está só "
+                    + "na GPU integrada, ou que ainda falta uma flag.",
+    crackNeedsFinite: "A quebra na GPU precisa de um conjunto finito. Esta expressão é infinita.",
+    crackUnsupported: "A quebra na GPU ainda não trata a forma deste padrão.",
+    crackEmptyPat:    "Digite uma expressão válida para quebrar.",
+    crackNoTargets:   "Cole ao menos um digest hex para procurar.",
+    crackReady:       "Pronto — cole os hashes-alvo e pressione Quebrar.",
+    crackComing:      "O pipeline de GPU entra no próximo passo.",
+    crackNoMatch:     "Sem correspondências — o texto não está neste conjunto, ou o digest está errado.",
     fromIndex:        "A partir do índice",
     perPage:          "Por página",
     zeroBased:        "Contar a partir de zero",
