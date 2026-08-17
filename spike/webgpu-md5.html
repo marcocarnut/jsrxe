@@ -31,6 +31,7 @@ on the host, the low ≤6 swept on the GPU (26⁶ &lt; 2³²) — all 32-bit, no
     <select id="mode"><option value="serial" selected>serial</option><option value="interleaved">interleaved</option></select></span>
   <span><label>Interleave</label>
     <select id="ww"><option>2</option><option selected>4</option><option>8</option></select></span>
+  <span><label><input type="checkbox" id="fw"> 1st-word only</label></span>
 </div>
 
 <label>Target MD5 digests (one 32-hex per line)</label>
@@ -135,33 +136,40 @@ function laneBuild(n, g, plen, w, idxExpr) {
 }
 
 // Binary-search the sorted targets for digest dg; p0e/p1e are the packed
-// plaintext byte expressions to store on a hit.
-function searchRecord(dg, p0e, p1e, guard) { return `
+// plaintext byte expressions to store on a hit. In first-word mode dg is a
+// single u32 (the digest's first word) and the host re-hashes to confirm.
+function searchRecord(dg, p0e, p1e, guard, fw) {
+  const record = `let slot = atomicAdd(&hitcount, 1u);
+          if (slot < ${MAXHITS}u) { hits[slot*4u + 0u] = ${p0e}; hits[slot*4u + 1u] = ${p1e}; hits[slot*4u + 2u] = u32(mid); }`;
+  const inner = fw
+    ? `let tw = targets[u32(mid) * 4u];
+        if (${dg} == tw) { ${record} break; }
+        if (${dg} < tw) { hi = mid - 1; } else { lo = mid + 1; }`
+    : `let base = u32(mid) * 4u; var cmp: i32 = 0;
+        for (var k: u32 = 0u; k < 4u; k++) {
+          if (${dg}[k] != targets[base + k]) { cmp = select(1, -1, ${dg}[k] < targets[base + k]); break; }
+        }
+        if (cmp == 0) { ${record} break; }
+        if (cmp < 0) { hi = mid - 1; } else { lo = mid + 1; }`;
+  return `
     if (${guard}) {
       var lo: i32 = 0; var hi: i32 = i32(P.ntgt) - 1;
       loop {
         if (lo > hi) { break; }
-        let mid = (lo + hi) / 2; let base = u32(mid) * 4u; var cmp: i32 = 0;
-        for (var k: u32 = 0u; k < 4u; k++) {
-          if (${dg}[k] != targets[base + k]) { cmp = select(1, -1, ${dg}[k] < targets[base + k]); break; }
-        }
-        if (cmp == 0) {
-          let slot = atomicAdd(&hitcount, 1u);
-          if (slot < ${MAXHITS}u) {
-            hits[slot*4u + 0u] = ${p0e}; hits[slot*4u + 1u] = ${p1e}; hits[slot*4u + 2u] = u32(mid);
-          }
-          break;
-        }
-        if (cmp < 0) { hi = mid - 1; } else { lo = mid + 1; }
+        let mid = (lo + hi) / 2; ${inner}
       }
     }`;
 }
-const digest = w => `    let dg${w} = vec4<u32>(rev(A${w}+0x67452301u), rev(B${w}+0xefcdab89u), rev(C${w}+0x98badcfeu), rev(D${w}+0x10325476u));\n`;
+// In first-word mode only word a is finalized (rounds 61-63 finalize b/c/d and
+// are dead-code-eliminated); dg{w} is that single word rather than the vec4.
+const digest = (w, fw) => fw
+  ? `    let dg${w} = rev(A${w}+0x67452301u);\n`
+  : `    let dg${w} = vec4<u32>(rev(A${w}+0x67452301u), rev(B${w}+0xefcdab89u), rev(C${w}+0x98badcfeu), rev(D${w}+0x10325476u));\n`;
 
 // ---- kernel: SERIAL (one hash per loop step) ----------------------------
-function serialShader(n, g, plen, wg) {
+function serialShader(n, g, plen, wg, fw) {
   let rounds = ""; for (let i = 0; i < 64; i++) rounds += round1(i, 0);
-  const rec = searchRecord("dg0", packBytes(n,g,plen,0,0,4), packBytes(n,g,plen,0,4,8), "true");
+  const rec = searchRecord("dg0", packBytes(n,g,plen,0,0,4), packBytes(n,g,plen,0,4,8), "true", fw);
   return head() + `
 @compute @workgroup_size(${wg})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
@@ -170,7 +178,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) 
   loop {
     if (j >= P.loN) { break; }
 ${laneBuild(n, g, plen, 0, "j")}
-${rounds}${digest(0)}${rec}
+${rounds}${digest(0, fw)}${rec}
     j = j + stride;
   }
 }`;
@@ -179,12 +187,12 @@ ${rounds}${digest(0)}${rec}
 // ---- kernel: INTERLEAVED (W independent hashes per loop step) ------------
 // The W chains are advanced round-by-round together, so the GPU overlaps their
 // dependency chains (ILP) instead of stalling on one MD5's serial rounds.
-function interleavedShader(n, g, plen, wg, W) {
+function interleavedShader(n, g, plen, wg, W, fw) {
   let body = "";
   for (let w = 0; w < W; w++) body += laneBuild(n, g, plen, w, `j + ${w}u * stride`) + "\n";
   for (let i = 0; i < 64; i++) for (let w = 0; w < W; w++) body += round1(i, w);
   for (let w = 0; w < W; w++)
-    body += digest(w) + searchRecord(`dg${w}`, packBytes(n,g,plen,w,0,4), packBytes(n,g,plen,w,4,8), `j${w} < P.loN`) + "\n";
+    body += digest(w, fw) + searchRecord(`dg${w}`, packBytes(n,g,plen,w,0,4), packBytes(n,g,plen,w,4,8), `j${w} < P.loN`, fw) + "\n";
   return head() + `
 @compute @workgroup_size(${wg})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
@@ -202,6 +210,25 @@ const hex2bytes = h => { const b = []; for (let i = 0; i < h.length; i += 2) b.p
 const beWord = (b,o) => ((b[o]<<24)|(b[o+1]<<16)|(b[o+2]<<8)|b[o+3]) >>> 0;
 const wordsHex = ws => ws.map(w => (w>>>0).toString(16).padStart(8,"0")).join("");
 
+// A small CPU MD5, only to confirm first-word-mode hits (WebCrypto has no MD5).
+function md5hex(str) {
+  const u = x => x >>> 0, rol = (x,c) => u((x << c) | (x >>> (32 - c)));
+  const cand = [...str].map(c => c.charCodeAt(0)), N = cand.length;
+  const m = new Array(16).fill(0);
+  for (let w = 0; w < 14; w++) { let word = 0; for (let t = 0; t < 4; t++) { const p = w*4+t; let b = 0; if (p < N) b = cand[p]; else if (p === N) b = 0x80; word = u(word | (b << (8*t))); } m[w] = word; }
+  m[14] = u(N*8); m[15] = 0;
+  let a = 0x67452301, b = 0xefcdab89, c = 0x98badcfe, d = 0x10325476; const a0=a,b0=b,c0=c,d0=d;
+  for (let i = 0; i < 64; i++) { let f, g;
+    if (i < 16) { f = u((b&c)|(~b&d)); g = i; }
+    else if (i < 32) { f = u((d&b)|(~d&c)); g = (5*i+1)&15; }
+    else if (i < 48) { f = u(b^c^d); g = (3*i+5)&15; }
+    else { f = u(c^(b|~d)); g = (7*i)&15; }
+    const ff = u(f + a + K[i] + m[g]); a = d; d = c; c = b; b = u(b + rol(ff, S[i])); }
+  a=u(a+a0); b=u(b+b0); c=u(c+c0); d=u(d+d0);
+  const rev = x => u(((x&0xff)<<24)|((x&0xff00)<<8)|((x>>>8)&0xff00)|((x>>>24)&0xff));
+  return [rev(a),rev(b),rev(c),rev(d)].map(w => (w>>>0).toString(16).padStart(8,"0")).join("");
+}
+
 async function crack() {
   $("out").textContent = "";
   if (!navigator.gpu) { status("WebGPU not available in this browser.", "err"); return; }
@@ -218,6 +245,7 @@ async function crack() {
   const cap = parseInt($("cap").value);
   const mode = $("mode").value;
   const W = parseInt($("ww").value);
+  const fw = $("fw").checked;
 
   const lines = $("tgts").value.split(/\s+/).map(s => s.trim().toLowerCase()).filter(s => /^[0-9a-f]{32}$/.test(s));
   if (!lines.length) { status("Paste at least one 32-hex MD5 digest.", "err"); return; }
@@ -229,7 +257,7 @@ async function crack() {
   const tgtArr = new Uint32Array(ntgt*4);
   tg.forEach((w,i) => tgtArr.set(w, i*4));
 
-  const code = mode === "serial" ? serialShader(n, g, plen, wg) : interleavedShader(n, g, plen, wg, W);
+  const code = mode === "serial" ? serialShader(n, g, plen, wg, fw) : interleavedShader(n, g, plen, wg, W, fw);
   const module = device.createShaderModule({ code });
   const info = await module.getCompilationInfo();
   const errs = info.messages.filter(m => m.type === "error");
@@ -301,15 +329,23 @@ async function crack() {
   bReadCnt.unmap(); bReadHit.unmap();
 
   const got = Math.min(nhits, MAXHITS);
-  const rows = [];
+  const tgtSet = new Set(lines);
+  const rows = []; let bogus = 0;
   for (let i = 0; i < got; i++) {
     const p0 = hitData[i*4], p1 = hitData[i*4+1], midx = hitData[i*4+2];
     let s = "";
     for (let k = 0; k < n; k++) { const w = k < 4 ? p0 : p1; s += String.fromCharCode((w >> (8*(k%4))) & 0xff); }
-    rows.push(`${wordsHex(tg[midx])}:${s}`);
+    if (fw) {
+      // GPU matched only the first word; re-hash on the CPU to confirm.
+      const full = md5hex(s);
+      if (tgtSet.has(full)) rows.push(`${full}:${s}`); else bogus++;
+    } else {
+      rows.push(`${wordsHex(tg[midx])}:${s}`);
+    }
   }
   rows.sort();
-  status(`Done in ${secs.toFixed(2)}s — ${(rate/1e6).toFixed(0)} MH/s — ${modeStr}, wg ${wg}, ${wgroups} groups — ${got} hit(s)` + (nhits>MAXHITS?` (of ${nhits}, capped)`:""));
+  const fwNote = fw ? ` · ${rows.length} confirmed, ${bogus} first-word false positive(s)` : "";
+  status(`Done in ${secs.toFixed(2)}s — ${(rate/1e6).toFixed(0)} MH/s — ${modeStr}, wg ${wg}, ${wgroups} groups — ${got} raw hit(s)${fwNote}` + (nhits>MAXHITS?` (of ${nhits}, capped)`:""));
   $("out").textContent = rows.length ? rows.join("\n") : "(no matches — the plaintext isn't an [a-z]{"+n+"} string, or the digest is off)";
 }
 
