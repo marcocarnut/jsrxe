@@ -1,0 +1,317 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebGPU MD5 keycrack spike — [a-z]{n}</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.2rem; }
+  textarea { width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; }
+  label { font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; margin: .6rem 0; }
+  .row > span { display: inline-flex; gap: .4rem; align-items: center; }
+  select, input[type=number] { font: inherit; }
+  button { font-size: 1rem; padding: .4rem 1rem; margin-top: .6rem; cursor: pointer; }
+  #status { margin-top: .8rem; font-weight: 600; min-height: 1.5em; }
+  #out { margin-top: .6rem; white-space: pre-wrap; font-family: ui-monospace, monospace; background: #f5f5f5; padding: .6rem; border-radius: 4px; }
+  .dim { color: #777; font-weight: 400; }
+  .err { color: #b00; }
+</style>
+
+<h1>WebGPU MD5 keycrack spike — <code>[a-z]{n}</code></h1>
+<p class="dim">One GPU lane per candidate (grid-stride): unrank the index into an <i>n</i>-letter
+lowercase string, MD5 it in WGSL, binary-search the pasted digests. The high letters are enumerated
+on the host, the low ≤6 swept on the GPU (26⁶ &lt; 2³²) — all 32-bit, no 64-bit emulation.</p>
+
+<div class="row">
+  <span><label>Length n</label> <input id="n" type="number" min="2" max="8" value="7" style="width:4rem"></span>
+  <span><label>Workgroup</label>
+    <select id="wg"><option>64</option><option>128</option><option selected>256</option></select></span>
+  <span><label>Max workgroups</label>
+    <select id="cap"><option>4096</option><option selected>8192</option><option>16384</option><option>32768</option><option>65535</option></select></span>
+  <span><label>Mode</label>
+    <select id="mode"><option value="serial" selected>serial</option><option value="interleaved">interleaved</option></select></span>
+  <span><label>Interleave</label>
+    <select id="ww"><option>2</option><option selected>4</option><option>8</option></select></span>
+</div>
+
+<label>Target MD5 digests (one 32-hex per line)</label>
+<textarea id="tgts" rows="4" placeholder="5d41402abc4b2a76b9719d911017c592">5d41402abc4b2a76b9719d911017c592</textarea>
+<p class="dim">Default is md5("hello"). Add md5 of any 2–8 lowercase-letter word to have something to find.</p>
+
+<button id="go">Crack</button>
+<div id="status"></div>
+<div id="out"></div>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const status = (s, cls) => { $("status").innerHTML = s; $("status").className = cls || ""; };
+
+// ---- MD5 round constants ------------------------------------------------
+const K = [
+ 0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
+ 0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
+ 0xf61e2562,0xc040b340,0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
+ 0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,0x676f02d9,0x8d2a4c8a,
+ 0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
+ 0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
+ 0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
+ 0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391];
+const S = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+ 5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+ 4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+ 6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+const MAXHITS = 1024;
+
+// The per-round (function variant, message index, K, shift) — shared by both
+// kernels. mkF(w) builds the F expression over lane w's state variables A/B/C/D.
+function roundSpec(i) {
+  let g, mkF;
+  if (i < 16)      { g = i;             mkF = w => `(B${w} & C${w}) | (~B${w} & D${w})`; }
+  else if (i < 32) { g = (5*i+1) & 15;  mkF = w => `(D${w} & B${w}) | (~D${w} & C${w})`; }
+  else if (i < 48) { g = (3*i+5) & 15;  mkF = w => `B${w} ^ C${w} ^ D${w}`; }
+  else             { g = (7*i)   & 15;  mkF = w => `C${w} ^ (B${w} | ~D${w})`; }
+  return { g, mkF, s: S[i], k: K[i] >>> 0 };
+}
+const round1 = (i, w) => {   // one MD5 round for lane w, scalar message word m{w}_{g}
+  const r = roundSpec(i);
+  return `    { let ff = (${r.mkF(w)}) + A${w} + ${r.k}u + m${w}_${r.g}; let rb = B${w} + ((ff << ${r.s}u) | (ff >> ${32-r.s}u)); A${w} = D${w}; D${w} = C${w}; C${w} = B${w}; B${w} = rb; }\n`;
+};
+
+// Common shader head: buffers and rev(). (N/G/PLEN are baked into the codegen,
+// so nothing here depends on them at runtime.)
+function head() { return `
+struct Params { loN: u32, ntgt: u32, _p0: u32, _p1: u32, pfx: vec4<u32> };
+@group(0) @binding(0) var<storage, read>       targets : array<u32>;
+@group(0) @binding(1) var<storage, read_write> hitcount: atomic<u32>;
+@group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
+@group(0) @binding(3) var<uniform>             P       : Params;
+fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((x >> 8u) & 0xff00u) | ((x >> 24u) & 0xffu); }
+`; }
+
+// candidate byte at position p, lane w: a prefix letter (from the uniform) or a
+// low letter (97 + a decoded base-26 digit e{w}_{c}). Everything scalar.
+function candByte(n, g, plen, w, p) {
+  if (p < plen) return `P.pfx[${p}u]`;
+  const c = plen + g - 1 - p;                 // which decoded digit lands at p
+  return `(97u + e${w}_${c})`;
+}
+// MD5 message word k for lane w. The candidate occupies bytes 0..n-1, the pad
+// 0x80 is at byte n, everything past it is zero, and word 14 is the bit length
+// -- all baked as literals, so the compiler folds the +0 rounds and drops the
+// message array. Only the one or two words carrying candidate bytes survive.
+function msgWord(n, g, plen, w, k) {
+  if (k === 14) return `${n*8}u`;
+  if (k === 15) return `0u`;
+  const terms = [];
+  for (let t = 0; t < 4; t++) {
+    const pos = 4*k + t; let term;
+    if (pos < n) term = candByte(n, g, plen, w, pos);
+    else if (pos === n) term = `0x80u`;
+    else continue;
+    terms.push(t === 0 ? term : `(${term} << ${8*t}u)`);
+  }
+  return terms.length ? terms.join(" | ") : `0u`;
+}
+// pack candidate bytes [lo,hi) little-endian, for the hit record's plaintext.
+function packBytes(n, g, plen, w, lo, hi) {
+  const terms = [];
+  for (let p = lo; p < Math.min(hi, n); p++) {
+    const cb = candByte(n, g, plen, w, p);
+    terms.push(p === lo ? cb : `(${cb} << ${8*(p-lo)}u)`);
+  }
+  return terms.length ? terms.join(" | ") : `0u`;
+}
+
+// lane w: decode the index into scalar digits, the message words as scalars, init.
+function laneBuild(n, g, plen, w, idxExpr) {
+  let s = `\n    let j${w} = ${idxExpr};\n    var q${w} = j${w};\n`;
+  for (let c = 0; c < g; c++) {
+    s += `    let e${w}_${c} = q${w} % 26u;`;
+    if (c < g - 1) s += ` q${w} = q${w} / 26u;`;
+    s += `\n`;
+  }
+  for (let k = 0; k < 16; k++) s += `    let m${w}_${k} = ${msgWord(n, g, plen, w, k)};\n`;
+  s += `    var A${w}: u32 = 0x67452301u; var B${w}: u32 = 0xefcdab89u; var C${w}: u32 = 0x98badcfeu; var D${w}: u32 = 0x10325476u;`;
+  return s;
+}
+
+// Binary-search the sorted targets for digest dg; p0e/p1e are the packed
+// plaintext byte expressions to store on a hit.
+function searchRecord(dg, p0e, p1e, guard) { return `
+    if (${guard}) {
+      var lo: i32 = 0; var hi: i32 = i32(P.ntgt) - 1;
+      loop {
+        if (lo > hi) { break; }
+        let mid = (lo + hi) / 2; let base = u32(mid) * 4u; var cmp: i32 = 0;
+        for (var k: u32 = 0u; k < 4u; k++) {
+          if (${dg}[k] != targets[base + k]) { cmp = select(1, -1, ${dg}[k] < targets[base + k]); break; }
+        }
+        if (cmp == 0) {
+          let slot = atomicAdd(&hitcount, 1u);
+          if (slot < ${MAXHITS}u) {
+            hits[slot*4u + 0u] = ${p0e}; hits[slot*4u + 1u] = ${p1e}; hits[slot*4u + 2u] = u32(mid);
+          }
+          break;
+        }
+        if (cmp < 0) { hi = mid - 1; } else { lo = mid + 1; }
+      }
+    }`;
+}
+const digest = w => `    let dg${w} = vec4<u32>(rev(A${w}+0x67452301u), rev(B${w}+0xefcdab89u), rev(C${w}+0x98badcfeu), rev(D${w}+0x10325476u));\n`;
+
+// ---- kernel: SERIAL (one hash per loop step) ----------------------------
+function serialShader(n, g, plen, wg) {
+  let rounds = ""; for (let i = 0; i < 64; i++) rounds += round1(i, 0);
+  const rec = searchRecord("dg0", packBytes(n,g,plen,0,0,4), packBytes(n,g,plen,0,4,8), "true");
+  return head() + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let stride = nwg.x * ${wg}u;
+  var j = gid.x;
+  loop {
+    if (j >= P.loN) { break; }
+${laneBuild(n, g, plen, 0, "j")}
+${rounds}${digest(0)}${rec}
+    j = j + stride;
+  }
+}`;
+}
+
+// ---- kernel: INTERLEAVED (W independent hashes per loop step) ------------
+// The W chains are advanced round-by-round together, so the GPU overlaps their
+// dependency chains (ILP) instead of stalling on one MD5's serial rounds.
+function interleavedShader(n, g, plen, wg, W) {
+  let body = "";
+  for (let w = 0; w < W; w++) body += laneBuild(n, g, plen, w, `j + ${w}u * stride`) + "\n";
+  for (let i = 0; i < 64; i++) for (let w = 0; w < W; w++) body += round1(i, w);
+  for (let w = 0; w < W; w++)
+    body += digest(w) + searchRecord(`dg${w}`, packBytes(n,g,plen,w,0,4), packBytes(n,g,plen,w,4,8), `j${w} < P.loN`) + "\n";
+  return head() + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let stride = nwg.x * ${wg}u;
+  var j = gid.x;
+  loop {
+    if (j >= P.loN) { break; }
+${body}    j = j + ${W}u * stride;
+  }
+}`;
+}
+
+// ---- host --------------------------------------------------------------
+const hex2bytes = h => { const b = []; for (let i = 0; i < h.length; i += 2) b.push(parseInt(h.substr(i,2),16)); return b; };
+const beWord = (b,o) => ((b[o]<<24)|(b[o+1]<<16)|(b[o+2]<<8)|b[o+3]) >>> 0;
+const wordsHex = ws => ws.map(w => (w>>>0).toString(16).padStart(8,"0")).join("");
+
+async function crack() {
+  $("out").textContent = "";
+  if (!navigator.gpu) { status("WebGPU not available in this browser.", "err"); return; }
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) { status("No WebGPU adapter (GPU) available.", "err"); return; }
+  const device = await adapter.requestDevice();
+
+  const n = Math.max(2, Math.min(8, parseInt($("n").value) || 7));
+  const g = Math.min(n, 6);
+  const plen = n - g;
+  const loN = 26 ** g;
+  const prefixCount = 26 ** plen;
+  const wg = parseInt($("wg").value);
+  const cap = parseInt($("cap").value);
+  const mode = $("mode").value;
+  const W = parseInt($("ww").value);
+
+  const lines = $("tgts").value.split(/\s+/).map(s => s.trim().toLowerCase()).filter(s => /^[0-9a-f]{32}$/.test(s));
+  if (!lines.length) { status("Paste at least one 32-hex MD5 digest.", "err"); return; }
+  let tg = lines.map(h => { const b = hex2bytes(h); return [beWord(b,0),beWord(b,4),beWord(b,8),beWord(b,12)]; });
+  const cmp = (x,y) => (x[0]-y[0])||(x[1]-y[1])||(x[2]-y[2])||(x[3]-y[3]);
+  tg.sort(cmp);
+  tg = tg.filter((w,i) => i===0 || cmp(w,tg[i-1])!==0);
+  const ntgt = tg.length;
+  const tgtArr = new Uint32Array(ntgt*4);
+  tg.forEach((w,i) => tgtArr.set(w, i*4));
+
+  const code = mode === "serial" ? serialShader(n, g, plen, wg) : interleavedShader(n, g, plen, wg, W);
+  const module = device.createShaderModule({ code });
+  const info = await module.getCompilationInfo();
+  const errs = info.messages.filter(m => m.type === "error");
+  if (errs.length) { status("Shader compile error: " + errs[0].message + " (line " + errs[0].lineNum + ")", "err"); return; }
+  const pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "main" } });
+
+  const bTgt = device.createBuffer({ size: tgtArr.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+  device.queue.writeBuffer(bTgt, 0, tgtArr);
+  const bCnt = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+  const bHit = device.createBuffer({ size: MAXHITS*4*4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+  const bReadCnt = device.createBuffer({ size: 4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  const bReadHit = device.createBuffer({ size: MAXHITS*4*4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  device.queue.writeBuffer(bCnt, 0, new Uint32Array([0]));
+
+  const RING = 8;
+  const rings = Array.from({ length: RING }, () => {
+    const u = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const b = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
+      { binding: 0, resource: { buffer: bTgt } }, { binding: 1, resource: { buffer: bCnt } },
+      { binding: 2, resource: { buffer: bHit } }, { binding: 3, resource: { buffer: u } } ] });
+    return { u, b };
+  });
+
+  // Grid: at most `cap` workgroups; each thread grid-strides through the block.
+  // In interleaved mode each thread also does W hashes per step, so the launched
+  // grid is 1/W as tall (it still covers everything via the stride).
+  const denom = mode === "serial" ? 1 : W;
+  const wgroups = Math.min(Math.ceil(loN / (wg * denom)), cap);
+
+  const total = 26 ** n;
+  const modeStr = mode === "serial" ? "serial" : `interleaved×${W}`;
+  status(`[a-z]{${n}} = ${total.toLocaleString()} candidates · ${modeStr} · wg ${wg} · ${wgroups} groups · ${ntgt} target(s)…`);
+  const uni = new Uint32Array(8);
+  const t0 = performance.now();
+  let done = 0;
+
+  for (let start = 0; start < prefixCount; start += RING) {
+    const batch = Math.min(RING, prefixCount - start);
+    for (let r = 0; r < batch; r++) {
+      const p = start + r;
+      uni[0] = loN; uni[1] = ntgt; uni[4]=uni[5]=uni[6]=uni[7]=0;
+      let pp = p;
+      for (let c = plen - 1; c >= 0; c--) { uni[4 + c] = 97 + (pp % 26); pp = Math.floor(pp / 26); }
+      device.queue.writeBuffer(rings[r].u, 0, uni);
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginComputePass();
+      pass.setPipeline(pipeline); pass.setBindGroup(0, rings[r].b);
+      pass.dispatchWorkgroups(wgroups);
+      pass.end();
+      device.queue.submit([enc.finish()]);
+      done += loN;
+    }
+    await device.queue.onSubmittedWorkDone();
+    const rate = done / ((performance.now() - t0) / 1000);
+    status(`${(100*Math.min(start+batch,prefixCount)/prefixCount).toFixed(0)}% — ${(rate/1e6).toFixed(0)} MH/s · ${modeStr} · wg ${wg}`);
+    await new Promise(r => setTimeout(r));
+  }
+  await device.queue.onSubmittedWorkDone();
+  const secs = (performance.now() - t0) / 1000;
+  const rate = total / secs;
+
+  const enc = device.createCommandEncoder();
+  enc.copyBufferToBuffer(bCnt, 0, bReadCnt, 0, 4);
+  enc.copyBufferToBuffer(bHit, 0, bReadHit, 0, MAXHITS*4*4);
+  device.queue.submit([enc.finish()]);
+  await bReadCnt.mapAsync(GPUMapMode.READ); await bReadHit.mapAsync(GPUMapMode.READ);
+  const nhits = new Uint32Array(bReadCnt.getMappedRange())[0];
+  const hitData = new Uint32Array(bReadHit.getMappedRange().slice(0));
+  bReadCnt.unmap(); bReadHit.unmap();
+
+  const got = Math.min(nhits, MAXHITS);
+  const rows = [];
+  for (let i = 0; i < got; i++) {
+    const p0 = hitData[i*4], p1 = hitData[i*4+1], midx = hitData[i*4+2];
+    let s = "";
+    for (let k = 0; k < n; k++) { const w = k < 4 ? p0 : p1; s += String.fromCharCode((w >> (8*(k%4))) & 0xff); }
+    rows.push(`${wordsHex(tg[midx])}:${s}`);
+  }
+  rows.sort();
+  status(`Done in ${secs.toFixed(2)}s — ${(rate/1e6).toFixed(0)} MH/s — ${modeStr}, wg ${wg}, ${wgroups} groups — ${got} hit(s)` + (nhits>MAXHITS?` (of ${nhits}, capped)`:""));
+  $("out").textContent = rows.length ? rows.join("\n") : "(no matches — the plaintext isn't an [a-z]{"+n+"} string, or the digest is off)";
+}
+
+$("go").onclick = () => crack().catch(e => status("Error: " + e.message, "err"));
+</script>
