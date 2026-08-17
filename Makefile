@@ -26,7 +26,8 @@ GMP_LIB  := $(GMP)/.libs/libgmp.a
 # The library's sources, minus its demo program, plus ours.
 RXE_SRC  := $(RXE)/rxe.c $(RXE)/rxe_alt.c $(RXE)/rxe_node.c $(RXE)/parse.c \
             $(RXE)/bkreftbl.c $(RXE)/permute.c $(RXE)/repeat.c $(RXE)/comb.c \
-            $(RXE)/pair.c $(RXE)/lens.c $(RXE)/dict.c $(RXE)/rank.c $(RXE)/graph.c
+            $(RXE)/pair.c $(RXE)/lens.c $(RXE)/dict.c $(RXE)/rank.c $(RXE)/graph.c \
+            $(RXE)/rxe_lay.c
 
 EMCC     ?= emcc
 # Always the full path, never bare 'node': sourcing emsdk_env.sh puts $(EMSDK)

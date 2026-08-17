@@ -55,7 +55,8 @@ export function makeEngine(Module, {
     rankCount:    c("rxe_js_rank_count",          "number", ["number","number","number"]),
     rankReason:   c("rxe_js_rank_reason",         "number", []),
     permUnmap:    c("rxe_js_permutation_unmap",   "number", ["number","string"]),
-    graph:        c("rxe_js_graph",               "number", ["number","number","number","number","string"])
+    graph:        c("rxe_js_graph",               "number", ["number","number","number","number","string"]),
+    wheelPlan:    c("rxe_js_wheel_plan",          "number", ["number"])
   };
 
   let rxe = 0;        // the parsed expression
@@ -255,6 +256,19 @@ export function makeEngine(Module, {
       if (!json) return { nodes: [], edges: [] };
       try { return JSON.parse(json); }
       catch (e) { return { nodes: [], edges: [], error: String(e) }; }
+    },
+
+    // The pattern's odometer, for the WebGPU crack tab: the wheels rxe_lay
+    // decomposes the set into (the same the native JIT compiles), as JSON. Every
+    // wheel's alternatives cross as raw bytes so crack.js can lay candidates on
+    // the GPU byte-for-byte as the library would. { ok:false, reason } when the
+    // set is one no odometer expresses (infinite, or too large to unroll).
+    wheelPlan() {
+      if (!rxe) return { ok: false, reason: "no expression" };
+      const json = takeString(api.wheelPlan(rxe));
+      if (!json) return { ok: false, reason: "out of memory" };
+      try { return JSON.parse(json); }
+      catch (e) { return { ok: false, reason: String(e) }; }
     },
 
     // Set the per-member byte cap. Below it members render whole; above it

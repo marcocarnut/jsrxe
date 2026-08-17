@@ -35,6 +35,7 @@
 #include "rxe.h"
 #include "lens.h"
 #include "rxe_graph.h"
+#include "rxe_lay.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -441,6 +442,89 @@ char *rxe_js_graph(struct rxe *rxe, int collapse, int unroll, int fold,
     jputs(&out, "]}");
     free(g.nodes.buf);
     free(g.edges.buf);
+    return out.buf;
+}
+
+/* ------------------------------ Wheel plan ------------------------------ */
+
+// The odometer the WebGPU crack tab lays candidates from. rxe_lay (the same
+// wheels rxejit compiles to C/OpenCL) decomposes the set; here they are
+// serialised so crack.js can JIT a WGSL kernel that generates candidates on the
+// GPU. The library owns the decomposition; nothing about WGSL lives here.
+
+// One wheel as JSON: its alternatives' bytes laid flat, with n and the fixed
+// width L. L==0 is a variable-width wheel, and then off[i]/len[i] slice the i-th
+// alternative out of bytes; L>0 (a char class is L==1) means alternative i is
+// bytes[i*L .. i*L+L], the fast case the GPU odometer wants.
+static void jput_wheel(struct jbuf *b, const struct wheel *w)
+{
+    int blen = w->L ? w->n * w->L
+                    : (w->n ? w->aoff[w->n - 1] + w->alen[w->n - 1] : 0);
+    jputs(b, "{\"n\":");  jputi(b, w->n);
+    jputs(b, ",\"L\":");  jputi(b, w->L);
+    jputs(b, ",\"bytes\":[");
+    for (int i = 0; i < blen; i++) { if (i) jput(b, ",", 1); jputi(b, (unsigned char)w->base[i]); }
+    jput(b, "]", 1);
+    if (!w->L) {
+        jputs(b, ",\"off\":[");
+        for (int i = 0; i < w->n; i++) { if (i) jput(b, ",", 1); jputi(b, w->aoff[i]); }
+        jputs(b, "],\"len\":[");
+        for (int i = 0; i < w->n; i++) { if (i) jput(b, ",", 1); jputi(b, w->alen[i]); }
+        jput(b, "]", 1);
+    }
+    jput(b, "}", 1);
+}
+
+// The pattern's odometer as JSON, or { ok:false, reason } for a set no odometer
+// can express (an infinite repeat, an alternation too large to unroll) -- the
+// same declines rxe_lay names. The plan also carries the two super-wheels (a
+// large variable-count repeat, a combinatorial {{...}} choice) so the hybrid
+// path can host-enumerate them; the fast path uses them only to bail. Freshly
+// allocated; release with rxe_js_free. NULL only on allocation failure.
+EMSCRIPTEN_KEEPALIVE
+char *rxe_js_wheel_plan(struct rxe *rxe)
+{
+    struct jbuf out = { NULL, 0, 0 };
+    if (!rxe) return NULL;
+
+    struct build b;
+    if (rxe_lay_build(&b, rxe) < 0) {
+        jputs(&out, "{\"ok\":false,\"reason\":");
+        jputq(&out, rxe_lay_reason());
+        jput(&out, "}", 1);
+        return out.buf;
+    }
+
+    jputs(&out, "{\"ok\":true,\"nw\":");  jputi(&out, b.nw);
+    jputs(&out, ",\"hasBackref\":");      jputs(&out, b.has_backref ? "true" : "false");
+    jputs(&out, ",\"wheels\":[");
+    for (int i = 0; i < b.nw; i++) { if (i) jput(&out, ",", 1); jput_wheel(&out, &b.w[i]); }
+    jput(&out, "]", 1);
+
+    jputs(&out, ",\"lr\":{\"active\":");  jputs(&out, b.lr_active ? "true" : "false");
+    if (b.lr_active) {
+        jputs(&out, ",\"at\":"); jputi(&out, b.lr_at);
+        jputs(&out, ",\"a\":");  jputi(&out, b.lr_a);
+        jputs(&out, ",\"b\":");  jputi(&out, b.lr_b);
+        jputs(&out, ",\"sw\":[");
+        for (int i = 0; i < b.lr_nsw; i++) { if (i) jput(&out, ",", 1); jput_wheel(&out, &b.lr_sw[i]); }
+        jput(&out, "]", 1);
+    }
+    jput(&out, "}", 1);
+
+    jputs(&out, ",\"perm\":{\"active\":"); jputs(&out, b.perm_active ? "true" : "false");
+    if (b.perm_active) {
+        jputs(&out, ",\"at\":");      jputi(&out, b.perm_at);
+        jputs(&out, ",\"lo\":");      jputi(&out, b.perm_lo);
+        jputs(&out, ",\"hi\":");      jputi(&out, b.perm_hi);
+        jputs(&out, ",\"ordered\":"); jputs(&out, b.perm_ordered ? "true" : "false");
+        jputs(&out, ",\"chop\":");    jputi(&out, b.perm_chop);
+        jputs(&out, ",\"pool\":");    jput_wheel(&out, &b.perm_pool);
+    }
+    jput(&out, "}", 1);
+
+    jput(&out, "}", 1);
+    rxe_lay_free(&b);
     return out.buf;
 }
 

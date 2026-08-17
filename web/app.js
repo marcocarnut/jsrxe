@@ -3,6 +3,7 @@ import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
 import { HELPER_DOCS } from "./sandbox.js";
 import { BUILTIN_DICTS } from "./dicts.js";
+import { runCrack, analyzePlan } from "./crack.js";
 
 /* --------------------------------------------------------------- transport */
 
@@ -961,31 +962,122 @@ function setTab(tab) {
   else renderCrack();
 }
 
-// The Crack tab: reflect whether the current set can be cracked at all, and
-// gate the button. The GPU pipeline itself lands in the next step; for now this
-// wires the UI, the finiteness gate, and the WebGPU availability check.
-function renderCrack() {
-  if (state.tab !== "crack") return;
-  const go = $("crackgo"), st = $("crackstatus");
-  const say = (key, cls) => { st.textContent = t(key); st.className = cls || "dim"; };
-  const disable = (key, cls) => { go.disabled = true; say(key, cls); };
-  if (!navigator.gpu)         return disable("crackNoGpu", "err");
-  if (!state.ok)              return disable("crackEmptyPat");
-  if (state.infinite)        return disable("crackNeedsFinite", "err");
-  go.disabled = false;
-  say("crackComing");
+// The Crack tab: reflect whether the current set can be cracked, gate the
+// button, and show the keyspace size. The odometer comes from the library
+// (wheelPlan); crack.js decides whether the fast GPU path handles it.
+let crackRun = { state: "idle", control: null, plan: null };   // state: idle | running | paused
+function crackSay(key, cls) { const st = $("crackstatus"); st.textContent = t(key); st.className = cls || "dim"; }
+
+// A pause/stop handle the crack loop polls between dispatches. gate() blocks
+// while paused (resolving on resume or stop); stopped() ends the run.
+function makeControl() {
+  let paused = false, stopped = false, waiters = [];
+  const wake = () => { const w = waiters; waiters = []; w.forEach(r => r()); };
+  return {
+    paused: () => paused, stopped: () => stopped,
+    pause() { paused = true; }, resume() { paused = false; wake(); },
+    stop() { stopped = true; paused = false; wake(); },
+    async gate() { while (paused && !stopped) await new Promise(r => waiters.push(r)); },
+  };
 }
 
-// Kick off a crack. Step 1 stubs this: it validates the targets and the set,
-// then reports that the GPU pipeline is not yet wired. crack.js fills it in.
-async function runCrack() {
-  const st = $("crackstatus"), out = $("crackout");
-  out.textContent = "";
-  const tgts = $("cracktgts").value.split(/\s+/).map(s => s.trim().toLowerCase())
-                 .filter(s => /^[0-9a-f]+$/.test(s) && s.length % 2 === 0);
-  if (!tgts.length) { st.textContent = t("crackNoTargets"); st.className = "err"; return; }
-  st.textContent = t("crackComing"); st.className = "dim";
+// Reflect the run state on the two buttons: Crack toggles to Pause/Resume, Stop
+// shows only while a run is live.
+function crackButtons() {
+  const go = $("crackgo"), stop = $("crackstop");
+  go.textContent = t(crackRun.state === "running" ? "crackPause"
+                    : crackRun.state === "paused" ? "crackResume" : "crackGo");
+  show(stop, crackRun.state !== "idle");
 }
+
+async function renderCrack() {
+  if (state.tab !== "crack") return;
+  const go = $("crackgo");
+  if (crackRun.state !== "idle") return;         // a run owns the status while active
+  if (!navigator.gpu)  { go.disabled = true; return crackSay("crackNoGpu", "err"); }
+  if (!state.ok)       { go.disabled = true; return crackSay("crackEmptyPat"); }
+  if (state.infinite)  { go.disabled = true; return crackSay("crackNeedsFinite", "err"); }
+  const plan = await call("wheelPlan", {});
+  if (state.tab !== "crack" || crackRun.state !== "idle") return;   // changed while awaiting
+  crackRun.plan = plan;
+  const fp = analyzePlan(plan, $("crackalg").value);
+  if (!fp.ok) {
+    go.disabled = true;
+    $("crackstatus").className = "dim";
+    $("crackstatus").textContent = t("crackUnsupported") + " — " + fp.reason;
+    return;
+  }
+  go.disabled = false;
+  $("crackstatus").className = "dim";
+  $("crackstatus").textContent = t("crackReady") + " · " + fmtBig(fp.total) + " candidates";
+}
+
+function readKnobs() {
+  return { wg: +$("knobwg").value, cap: +$("knobcap").value,
+           mode: $("knobmode").value, ww: +$("knobww").value, fw: $("knobfw").checked };
+}
+
+// A rate in hashes/s as a friendly MH/s or GH/s.
+function fmtRate(r) {
+  if (!isFinite(r) || r <= 0) return "…";
+  return r >= 1e9 ? (r/1e9).toFixed(2) + " GH/s" : (r/1e6).toFixed(0) + " MH/s";
+}
+// A BigInt candidate count with thousands separators (locale-aware).
+function fmtBig(n) { return n.toLocaleString(DECSEP === "," ? "en" : "pt"); }
+
+// The Crack button, by state: idle -> start; running -> pause; paused -> resume.
+function onCrackGo() {
+  if (crackRun.state === "idle") { startCrack(); return; }
+  if (crackRun.state === "running") {
+    crackRun.control.pause(); crackRun.state = "paused"; crackButtons();
+    const st = $("crackstatus"); st.textContent = (st.textContent || "") + " · " + t("crackPaused");
+  } else {
+    crackRun.control.resume(); crackRun.state = "running"; crackButtons();
+  }
+}
+function onCrackStop() { if (crackRun.control) crackRun.control.stop(); }
+
+async function startCrack() {
+  const st = $("crackstatus"), out = $("crackout"), prog = $("crackprog");
+  out.textContent = "";
+  const targets = $("cracktgts").value.split(/\s+/).filter(Boolean);
+  if (!targets.length) { crackSay("crackNoTargets", "err"); return; }
+  const hash = $("crackalg").value;
+  const plan = crackRun.plan || await call("wheelPlan", {});
+  const control = makeControl();
+  crackRun = { state: "running", control, plan };
+  crackButtons();
+  show(prog, true); prog.value = 0;
+  const onProgress = (frac, rate) => {
+    prog.value = Math.round(frac * 1000);
+    st.className = "dim";
+    st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate);
+  };
+  try {
+    const res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, control });
+    if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
+    else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }
+    else                    renderCrackResults(res, res.stopped);
+  } catch (e) {
+    st.className = "err"; st.textContent = "Error: " + (e && e.message ? e.message : e);
+  } finally {
+    crackRun.state = "idle"; crackRun.control = null;
+    crackButtons(); show(prog, false); $("crackgo").disabled = false;
+  }
+}
+
+function renderCrackResults(res, stopped) {
+  const st = $("crackstatus"), out = $("crackout");
+  st.className = "dim";
+  const head = stopped ? t("crackStopped") : t("crackDone");
+  st.textContent = head + " · " + fmtRate(res.rate) + " · " + res.hits.length + " match(es)"
+    + (res.fw && res.bogus ? " (" + res.bogus + " re-checked away)" : "")
+    + (res.capped ? " (of " + res.raw + ", capped)" : "");
+  if (!res.hits.length) { out.textContent = stopped ? "" : t("crackNoMatch"); return; }
+  out.innerHTML = res.hits.map(h =>
+    `<div class="hit">${escHtml(h.hex)}:<span class="pt">${escHtml(h.plaintext)}</span></div>`).join("");
+}
+function escHtml(s) { return s.replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); }
 
 // The numbering toggle appears in both tabs' controls; both reflect the one
 // state, and flipping either re-renders the visible table under the new offset.
@@ -1834,7 +1926,9 @@ function wire() {
   for (const b of document.querySelectorAll(".etab"))
     b.onclick = () => setTab(b.dataset.etab);
   $("crackgears").onclick = () => $("crackknobs").showModal();
-  $("crackgo").onclick = () => runCrack();
+  $("crackgo").onclick = () => onCrackGo();
+  $("crackstop").onclick = () => onCrackStop();
+  $("crackalg").onchange = () => renderCrack();
   // Search as you type, like the other inputs, so there is no button to press.
   const searchSoon = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 200); };
   $("findtext").oninput = searchSoon;
