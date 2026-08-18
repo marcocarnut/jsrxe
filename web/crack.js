@@ -491,9 +491,9 @@ ${jvars}${body}    j = j + ${W}u * stride;
 // table of (off,len) pairs, and each position's radix + base into meta. Every
 // position is normalised to off/len (a fixed L wheel becomes off=i*L,len=L), so
 // the kernel treats them all alike.
-function buildGeneric(fp) {
+function buildGeneric(positions) {
   const bytes = [], meta = [], desc = [];
-  for (const p of fp.positions) {
+  for (const p of positions) {
     const metaBase = meta.length / 2;
     for (let i = 0; i < p.n; i++) {
       const o = p.L > 0 ? i * p.L : p.off[i], l = p.L > 0 ? p.L : p.len[i];
@@ -521,6 +521,13 @@ function genericLane(G, w, idxExpr, H) {
     s += `\n`;
   }
   s += `    var blen${w}: u32 = 0u;\n`;
+  // The host-enumerated outer wheels arrive as a byte prefix; lay it first.
+  s += `    for (var pa=0u; pa<P.plen; pa=pa+1u) { let b = pfxByte(pa);\n`;
+  s += `      pt${w}[blen${w}>>2u] |= b << ((blen${w}&3u)*8u);\n`;
+  if (H.widen)                s += `      { let mp = 2u*blen${w}; msg${w}[mp>>2u] |= b << ((mp&3u)*8u); }\n`;
+  else if (H.endian === "le") s += `      msg${w}[blen${w}>>2u] |= b << ((blen${w}&3u)*8u);\n`;
+  else                        s += `      msg${w}[blen${w}>>2u] |= b << ((3u-(blen${w}&3u))*8u);\n`;
+  s += `      blen${w} = blen${w} + 1u; }\n`;
   for (let p = 0; p < nw; p++) {
     s += `    { let mb = ${G.desc[p].metaBase * 2}u + alt${w}_${p}*2u; let o = mtab[mb]; let l = mtab[mb+1u];\n`;
     s += `      for (var k=0u; k<l; k=k+1u) {\n`;
@@ -540,7 +547,7 @@ function genericLane(G, w, idxExpr, H) {
 
 function genericShaderHead(H) {
   return `
-struct Params { lo: u32, hi: u32, ntgt: u32, _pad: u32, pfx: array<vec4<u32>, 4> };
+struct Params { lo: u32, hi: u32, ntgt: u32, plen: u32, pfx: array<vec4<u32>, 4> };
 @group(0) @binding(0) var<storage, read>       targets : array<u32>;
 @group(0) @binding(1) var<storage, read_write> hitcount: atomic<u32>;
 @group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
@@ -548,6 +555,7 @@ struct Params { lo: u32, hi: u32, ntgt: u32, _pad: u32, pfx: array<vec4<u32>, 4>
 @group(0) @binding(4) var<storage, read>       pool    : array<u32>;
 @group(0) @binding(5) var<storage, read>       mtab    : array<u32>;
 fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((x >> 8u) & 0xff00u) | ((x >> 24u) & 0xffu); }
+fn pfxByte(a: u32) -> u32 { let w = a >> 2u; return (P.pfx[w >> 2u][w & 3u] >> ((a & 3u) * 8u)) & 0xffu; }
 ${H.consts || ""}`;
 }
 
@@ -606,6 +614,13 @@ function parseTargets(lines, H) {
   return rows;
 }
 
+// Generic split: outer positions (host-enumerated into a byte prefix) and inner
+// positions (swept on the GPU, their radii product <= 2^32).
+function buildGA(fp) {
+  const { split, innerN } = splitPositions(fp.positions);
+  return { split, innerN, outer: fp.positions.slice(0, split), inner: fp.positions.slice(split), total: fp.total };
+}
+
 // Build the analysis object the codegen reads: positions, split, byte->position
 // map, and the prefix byte count.
 function buildA(fp) {
@@ -627,7 +642,7 @@ export function buildShader({ plan, hash = "md5", knobs = {} }) {
   if (!fp.ok) return { error: fp.reason };
   const fw = H.firstWord, wg = knobs.wg || 256, W = knobs.ww || 4, il = knobs.mode === "interleaved";
   let code;
-  if (generic) { const G = buildGeneric(fp); code = il ? genericInterleavedShader(G, wg, W, fw, H) : genericSerialShader(G, wg, fw, H); }
+  if (generic) { const G = buildGeneric(buildGA(fp).inner); code = il ? genericInterleavedShader(G, wg, W, fw, H) : genericSerialShader(G, wg, fw, H); }
   else { const A = buildA(fp); code = il ? interleavedShader(A, wg, W, A.width, fw, H) : serialShader(A, wg, A.width, fw, H); }
   return { code, generic };
 }
@@ -644,9 +659,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   let fp = analyzePlan(plan, hash), generic = false;
   if (!fp.ok) { fp = analyzeGeneric(plan, hash); generic = fp.ok; }   // variable-width (dicts, alternations)
   if (!fp.ok) return { supported: false, reason: fp.reason };
-  if (fp.perm) return { supported: false, reason: "a {{...}} combinatorial choice (GPU kernel next; CPU for now)" };
-  if (generic && fp.total > 0xffffffffn)
-    return { supported: false, reason: `keyspace ${fp.total} over the generic kernel's 2^32 single-sweep limit (host split coming)` };
+  if (fp.perm) return { supported: false, reason: "a {{...}} combinatorial choice (use {n} for now; CPU handles {{...}})" };
   if (!navigator.gpu) return { supported: false, reason: "no WebGPU" };
 
   const adapter = await navigator.gpu.requestAdapter();
@@ -660,7 +673,8 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   rows.forEach((r, i) => tgtArr.set(r.w, i * H.words));
 
   const A = generic ? null : buildA(fp);
-  const G = generic ? buildGeneric(fp) : null;
+  const GA = generic ? buildGA(fp) : null;
+  const G = generic ? buildGeneric(GA.inner) : null;
   const wg = knobs.wg || 256, cap = knobs.cap || 8192;
   const mode = knobs.mode || "serial", W = knobs.ww || 4;
   const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
@@ -697,12 +711,14 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     return { u, b };
   });
 
-  const innerN = generic ? Number(fp.total) : A.innerN;
+  const innerN = generic ? GA.innerN : A.innerN;
   const denom = mode === "serial" ? 1 : W;
 
   // Host outer enumeration: the positions [0, split) as a mixed-radix counter,
-  // most-significant first. The generic path is a single sweep, so no outer part.
-  const outer = generic ? [] : A.positions.slice(0, A.split);
+  // most-significant first -- the "initial unrank" the GPU is spared. For the
+  // generic path the outer wheels are variable width, so they become a byte
+  // prefix of length plen rather than fixed cells.
+  const outer = generic ? GA.outer : A.positions.slice(0, A.split);
   let outerN = 1n; for (const p of outer) outerN *= BigInt(p.n);
 
   const ab = new ArrayBuffer(U);
@@ -719,9 +735,20 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     let x = oi;
     for (let i = outer.length - 1; i >= 0; i--) { const n = BigInt(outer[i].n); digits[i] = Number(x % n); x /= n; }
     uBytes.fill(0);
-    for (let i = 0; i < outer.length; i++) {
-      const p = outer[i], d = digits[i];
-      for (let k = 0; k < p.L; k++) uBytes[p.off + k] = p.bytes[d * p.L + k];
+    if (generic) {
+      // Assemble the chosen outer members into a byte prefix of length plen.
+      let plen = 0;
+      for (let i = 0; i < outer.length; i++) {
+        const p = outer[i], d = digits[i];
+        if (p.L > 0) for (let k = 0; k < p.L; k++) uBytes[plen++] = p.bytes[d * p.L + k];
+        else { const o = p.off[d], l = p.len[d]; for (let k = 0; k < l; k++) uBytes[plen++] = p.bytes[o + k]; }
+      }
+      uScal[3] = plen;                     // Params.plen
+    } else {
+      for (let i = 0; i < outer.length; i++) {
+        const p = outer[i], d = digits[i];
+        for (let k = 0; k < p.L; k++) uBytes[p.off + k] = p.bytes[d * p.L + k];
+      }
     }
   };
 
