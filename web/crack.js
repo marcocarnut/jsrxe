@@ -70,6 +70,39 @@ export function analyzePlan(plan, hash) {
   return { ok: true, positions, width, total };
 }
 
+// The generic path: a product of positions, but a position may be variable
+// width (L=0, alternatives sliced from bytes by off[]/len[]) -- a dictionary,
+// or an alternation like (cat|fish). The candidate is assembled byte by byte
+// and hashed at its actual length, rather than laid at compile-time offsets.
+// Super-wheels (a large repeat, or a {{...}} choice) are still declined here --
+// the diceware step. maxLen bounds each position's contribution.
+export function analyzeGeneric(plan, hash) {
+  if (!plan || !plan.ok) return { ok: false, reason: plan && plan.reason || "no plan" };
+  if (plan.hasBackref)   return { ok: false, reason: "a backreference" };
+  if (plan.lr && plan.lr.active)   return { ok: false, reason: "a large variable-count repeat (coming soon)" };
+  if (plan.perm && plan.perm.active) return { ok: false, reason: "a combinatorial {{...}} choice (coming soon)" };
+  if (!plan.wheels || !plan.wheels.length) return { ok: false, reason: "an empty pattern" };
+
+  const positions = [];
+  let maxWidth = 0;
+  for (const w of plan.wheels) {
+    const bytes = Uint8Array.from(w.bytes);
+    if (w.L > 0) { positions.push({ n: w.n, L: w.L, bytes, maxLen: w.L }); maxWidth += w.L; }
+    else {
+      const off = Uint32Array.from(w.off), len = Uint32Array.from(w.len);
+      let ml = 0; for (const x of len) if (x > ml) ml = x;
+      positions.push({ n: w.n, L: 0, bytes, off, len, maxLen: ml });
+      maxWidth += ml;
+    }
+  }
+  const maxW = HASHES[hash].maxWidth;
+  if (maxWidth > maxW) return { ok: false, reason: `up to ${maxWidth} bytes; the GPU ${hash} kernel handles up to ${maxW}` };
+
+  let total = 1n;
+  for (const p of positions) total *= BigInt(p.n);
+  return { ok: true, positions, maxWidth, total, generic: true };
+}
+
 // The host/GPU split: take positions from the end (least significant) until the
 // product of their radii would exceed the GPU's 32-bit budget; those are swept
 // on the device, the rest enumerated on the host. Returns the index of the
@@ -628,7 +661,8 @@ function layCandidate(positions, gi) {
   let s = "";
   for (let p = 0; p < positions.length; p++) {
     const pos = positions[p], d = digits[p];
-    for (let k = 0; k < pos.L; k++) s += String.fromCharCode(pos.bytes[d * pos.L + k]);
+    if (pos.L > 0) for (let k = 0; k < pos.L; k++) s += String.fromCharCode(pos.bytes[d * pos.L + k]);
+    else { const o = pos.off[d], l = pos.len[d]; for (let k = 0; k < l; k++) s += String.fromCharCode(pos.bytes[o + k]); }
   }
   return s;
 }
@@ -640,7 +674,8 @@ function layCandidate(positions, gi) {
 export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, control }) {
   const H = HASHES[hash];
   if (!H) return { supported: false, reason: `${hash} not wired yet` };
-  const fp = analyzePlan(plan, hash);
+  let fp = analyzePlan(plan, hash);
+  if (!fp.ok) fp = analyzeGeneric(plan, hash);        // variable-width (dicts, alternations)
   if (!fp.ok) return { supported: false, reason: fp.reason };
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
