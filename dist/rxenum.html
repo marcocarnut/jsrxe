@@ -713,9 +713,9 @@ dialog menu button { background: var(--bg); color: var(--fg);
           <label class="ctl"><span data-t="crackHashAlg"></span>
             <select id="crackalg">
               <option value="md5">MD5</option>
-              <option value="sha256" disabled>SHA-256</option>
-              <option value="ntlm" disabled>NTLM</option>
-              <option value="sha1" disabled>SHA-1</option>
+              <option value="sha256">SHA-256</option>
+              <option value="ntlm">NTLM</option>
+              <option value="sha1">SHA-1</option>
             </select></label>
           <button id="crackgo" data-t="crackGo"></button>
           <button id="crackstop" data-t="crackStop" hidden></button>
@@ -7615,8 +7615,8 @@ function makeEngine(Module, {
 // inside 32-bit arithmetic (WGSL has no u64). No candidate ever crosses the
 // wasm boundary -- only the plan does.
 //
-// This file is a code generator, nothing more: it knows odometers and MD5, not
-// rxe. The spike it grew from is jsrxe/spike/webgpu-md5.html.
+// This file is a code generator, nothing more: it knows odometers and hashes,
+// not rxe. The spike it grew from is jsrxe/spike/webgpu-md5.html.
 
 const MAXHITS = 1024;
 const RING = 8;                 // uniform buffers in flight, so the host never stalls the GPU
@@ -7699,8 +7699,17 @@ function splitPositions(positions) {
   return { split, innerN: inner };
 }
 
-// ---- MD5 in WGSL, scalarized (from the spike) ---------------------------
-function roundSpec(i) {
+// ---- the hashes in WGSL -------------------------------------------------
+// Each hash lays the same candidate (candByte), differs only in how the 16
+// message words are assembled (endianness, and NTLM's UTF-16LE widening) and in
+// its compression. A compress(w, fw) emits the per-lane rounds and defines the
+// digest words dg{w}_0.. ; first-word mode keeps only dg{w}_0 and the host
+// re-hashes to confirm (MD5/NTLM only -- SHA's word 0 needs every round).
+
+const rotl = (x, c) => `((${x} << ${c}u) | (${x} >> ${32 - c}u))`;
+const rotr = (x, c) => `((${x} >> ${c}u) | (${x} << ${32 - c}u))`;
+
+function roundSpec(i) {                 // MD5 per-round facts
   let g, mkF;
   if (i < 16)      { g = i;             mkF = w => `(B${w} & C${w}) | (~B${w} & D${w})`; }
   else if (i < 32) { g = (5*i+1) & 15;  mkF = w => `(D${w} & B${w}) | (~D${w} & C${w})`; }
@@ -7708,65 +7717,156 @@ function roundSpec(i) {
   else             { g = (7*i)   & 15;  mkF = w => `C${w} ^ (B${w} | ~D${w})`; }
   return { g, mkF, s: MD5_S[i], k: MD5_K[i] >>> 0 };
 }
-const md5Round = (i, w) => {
-  const r = roundSpec(i);
-  return `    { let ff = (${r.mkF(w)}) + A${w} + ${r.k}u + m${w}_${r.g}; let rb = B${w} + ((ff << ${r.s}u) | (ff >> ${32-r.s}u)); A${w} = D${w}; D${w} = C${w}; C${w} = B${w}; B${w} = rb; }\n`;
-};
-const md5Init = w => `    var A${w}: u32 = 0x67452301u; var B${w}: u32 = 0xefcdab89u; var C${w}: u32 = 0x98badcfeu; var D${w}: u32 = 0x10325476u;\n`;
-const md5Digest = (w, fw) => fw
-  ? `    let dg${w} = rev(A${w}+0x67452301u);\n`
-  : `    let dg${w} = vec4<u32>(rev(A${w}+0x67452301u), rev(B${w}+0xefcdab89u), rev(C${w}+0x98badcfeu), rev(D${w}+0x10325476u));\n`;
+const MD_IV = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
 
-// Per-hash facts: digest length, how many u32 words the sorted target holds, the
-// candidate ceiling one block allows, and the WGSL that hashes a lane. MD5 is
-// the only one wired now; the others slot in beside it (step 4).
+function md5Compress(w, fw) {
+  let s = `    var A${w}=0x67452301u; var B${w}=0xefcdab89u; var C${w}=0x98badcfeu; var D${w}=0x10325476u;\n`;
+  for (let i = 0; i < 64; i++) {
+    const r = roundSpec(i);
+    s += `    { let ff = (${r.mkF(w)}) + A${w} + ${r.k}u + m${w}_${r.g}; let rb = B${w} + ${rotl("ff", r.s)}; A${w}=D${w}; D${w}=C${w}; C${w}=B${w}; B${w}=rb; }\n`;
+  }
+  const reg = ["A","B","C","D"], n = fw ? 1 : 4;
+  for (let i = 0; i < n; i++) s += `    let dg${w}_${i} = rev(${reg[i]}${w} + ${MD_IV[i]>>>0}u);\n`;
+  return s;
+}
+
+// MD4 (NTLM), 48 rounds. Destination register cycles A,D,C,B; its three inputs
+// are the next three in A,B,C,D order. Round groups F/G/H differ in the mixing
+// function, the added constant, and the message-word order and shifts.
+function md4Compress(w, fw) {
+  const R = ["A","B","C","D"], dest = [0,3,2,1];
+  let s = `    var A${w}=0x67452301u; var B${w}=0xefcdab89u; var C${w}=0x98badcfeu; var D${w}=0x10325476u;\n`;
+  const emit = (ff, kArr, sArr, add) => {
+    for (let j = 0; j < 16; j++) {
+      const d = dest[j % 4];
+      const dr = R[d]+w, b1 = R[(d+1)%4]+w, b2 = R[(d+2)%4]+w, b3 = R[(d+3)%4]+w;
+      const addc = add ? ` + ${add>>>0}u` : "";
+      s += `    ${dr} = ${rotl(`(${dr} + (${ff(b1,b2,b3)}) + m${w}_${kArr[j]}${addc})`, sArr[j%4])};\n`;
+    }
+  };
+  const F=(x,y,z)=>`(${x} & ${y}) | (~${x} & ${z})`;
+  const G=(x,y,z)=>`(${x} & ${y}) | (${x} & ${z}) | (${y} & ${z})`;
+  const H4=(x,y,z)=>`${x} ^ ${y} ^ ${z}`;
+  emit(F, [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], [3,7,11,19], 0);
+  emit(G, [0,4,8,12,1,5,9,13,2,6,10,14,3,7,11,15], [3,5,9,13], 0x5a827999);
+  emit(H4,[0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15], [3,9,11,15], 0x6ed9eba1);
+  const reg = ["A","B","C","D"], n = fw ? 1 : 4;
+  for (let i = 0; i < n; i++) s += `    let dg${w}_${i} = rev(${reg[i]}${w} + ${MD_IV[i]>>>0}u);\n`;
+  return s;
+}
+
+const SHA1_IV = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0];
+function sha1Compress(w) {              // 20-byte digest, big-endian, no first-word
+  const R = ["a","b","c","d","e"];
+  let s = `    var W${w}: array<u32,80>;\n`;
+  for (let k = 0; k < 16; k++) s += `    W${w}[${k}] = m${w}_${k};\n`;
+  s += `    for (var i:u32=16u; i<80u; i=i+1u) { let x = W${w}[i-3u]^W${w}[i-8u]^W${w}[i-14u]^W${w}[i-16u]; W${w}[i] = ${rotl("x",1)}; }\n`;
+  s += `    var a${w}=${SHA1_IV[0]>>>0}u; var b${w}=${SHA1_IV[1]>>>0}u; var c${w}=${SHA1_IV[2]>>>0}u; var d${w}=${SHA1_IV[3]>>>0}u; var e${w}=${SHA1_IV[4]>>>0}u;\n`;
+  s += `    for (var i:u32=0u; i<80u; i=i+1u) {
+      var f:u32; var k:u32;
+      if (i<20u) { f=(b${w}&c${w})|(~b${w}&d${w}); k=0x5a827999u; }
+      else if (i<40u) { f=b${w}^c${w}^d${w}; k=0x6ed9eba1u; }
+      else if (i<60u) { f=(b${w}&c${w})|(b${w}&d${w})|(c${w}&d${w}); k=0x8f1bbcdcu; }
+      else { f=b${w}^c${w}^d${w}; k=0xca62c1d6u; }
+      let t = ${rotl(`a${w}`,5)} + f + e${w} + k + W${w}[i];
+      e${w}=d${w}; d${w}=c${w}; c${w}=${rotl(`b${w}`,30)}; b${w}=a${w}; a${w}=t;
+    }\n`;
+  for (let i = 0; i < 5; i++) s += `    let dg${w}_${i} = ${SHA1_IV[i]>>>0}u + ${R[i]}${w};\n`;
+  return s;
+}
+
+const SHA256_IV = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+const SHA256_K = [
+ 0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+ 0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+ 0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+ 0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+ 0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+ 0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+ 0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+ 0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+function sha256Compress(w) {            // 32-byte digest, big-endian, no first-word
+  const R = ["a","b","c","d","e","f","g","h"];
+  let s = `    var W${w}: array<u32,64>;\n`;
+  for (let k = 0; k < 16; k++) s += `    W${w}[${k}] = m${w}_${k};\n`;
+  s += `    for (var i:u32=16u; i<64u; i=i+1u) {
+      let x = W${w}[i-15u]; let y = W${w}[i-2u];
+      let s0 = ${rotr("x",7)} ^ ${rotr("x",18)} ^ (x >> 3u);
+      let s1 = ${rotr("y",17)} ^ ${rotr("y",19)} ^ (y >> 10u);
+      W${w}[i] = W${w}[i-16u] + s0 + W${w}[i-7u] + s1;
+    }\n`;
+  s += `    var a${w}=${SHA256_IV[0]>>>0}u; var b${w}=${SHA256_IV[1]>>>0}u; var c${w}=${SHA256_IV[2]>>>0}u; var d${w}=${SHA256_IV[3]>>>0}u; var e${w}=${SHA256_IV[4]>>>0}u; var f${w}=${SHA256_IV[5]>>>0}u; var g${w}=${SHA256_IV[6]>>>0}u; var h${w}=${SHA256_IV[7]>>>0}u;\n`;
+  s += `    for (var i:u32=0u; i<64u; i=i+1u) {
+      let S1 = ${rotr(`e${w}`,6)} ^ ${rotr(`e${w}`,11)} ^ ${rotr(`e${w}`,25)};
+      let ch = (e${w} & f${w}) ^ (~e${w} & g${w});
+      let t1 = h${w} + S1 + ch + SHA256_K[i] + W${w}[i];
+      let S0 = ${rotr(`a${w}`,2)} ^ ${rotr(`a${w}`,13)} ^ ${rotr(`a${w}`,22)};
+      let maj = (a${w} & b${w}) ^ (a${w} & c${w}) ^ (b${w} & c${w});
+      let t2 = S0 + maj;
+      h${w}=g${w}; g${w}=f${w}; f${w}=e${w}; e${w}=d${w}+t1; d${w}=c${w}; c${w}=b${w}; b${w}=a${w}; a${w}=t1+t2;
+    }\n`;
+  for (let i = 0; i < 8; i++) s += `    let dg${w}_${i} = ${SHA256_IV[i]>>>0}u + ${R[i]}${w};\n`;
+  return s;
+}
+
+// Per-hash facts: digest hex length, u32 words in a digest, the candidate ceiling
+// one block allows, message-word endianness, NTLM's UTF-16LE widening, the round
+// count, whether first-word compare is sound, the WGSL compressor, and the CPU
+// oracle (also the fallback, and what confirms a first-word hit).
 const HASHES = {
-  md5: {
-    hexlen: 32, words: 4, maxWidth: 55,
-    round: md5Round, init: md5Init, digest: md5Digest,
-    rounds: 64,
-    firstWord: true,          // word A finalizes at round 60; 61-63 are dead code
-  },
+  md5:    { hexlen: 32, words: 4, maxWidth: 55, endian: "le", widen: false, firstWord: true,  compress: md5Compress,    cpu: (s) => md5hex(s) },
+  ntlm:   { hexlen: 32, words: 4, maxWidth: 27, endian: "le", widen: true,  firstWord: true,  compress: md4Compress,    cpu: (s) => ntlmhex(s) },
+  sha1:   { hexlen: 40, words: 5, maxWidth: 55, endian: "be", widen: false, firstWord: false, compress: sha1Compress,   cpu: (s) => sha1hex(s), consts: "" },
+  sha256: { hexlen: 64, words: 8, maxWidth: 55, endian: "be", widen: false, firstWord: false, compress: sha256Compress, cpu: (s) => sha256(s),
+            consts: `const SHA256_K = array<u32,64>(${SHA256_K.map(x=>`${x>>>0}u`).join(",")});\n` },
 };
 
 // ---- the candidate-laying codegen ---------------------------------------
 
-// Byte at absolute position `a` for lane w. An inner position's byte comes from
-// its decoded digit (arithmetic if the alphabet is contiguous, else a baked
-// table); an outer position's byte is a constant the host wrote into the prefix
-// uniform, read back word-aligned.
 // The prefix uniform word at constant index k, and byte at constant index a --
 // baked to constant array/component indices so the compiler folds them, rather
 // than a runtime function with dynamic uniform indexing.
 const pfxWordExpr = (k) => `P.pfx[${k >> 2}u][${k & 3}u]`;
 const pfxByteExpr = (a) => { const w = a >> 2; return `((${pfxWordExpr(w)} >> ${(a & 3) * 8}u) & 0xffu)`; };
 
+// Byte at absolute candidate position `a` for lane w: an inner position's byte
+// (arithmetic for a contiguous class, else a baked table), or an outer one from
+// the prefix uniform.
 function candByte(A, w, a) {
-  const p = A.posAt[a];                 // which position owns byte a
+  const p = A.posAt[a];
   const pos = A.positions[p];
-  const k = a - pos.off;                // which byte of that position
-  if (p < A.split) return pfxByteExpr(a);         // outer: from the prefix uniform
-  if (pos.L === 1 && pos.contig) return `(${pos.bytes[0]}u + e${w}_${p})`;   // inner contiguous class
-  if (pos.L === 1)               return `AP${p}[e${w}_${p}]`;                // inner tabled class
-  return `AP${p}[e${w}_${p} * ${pos.L}u + ${k}u]`;   // inner multi-byte alternative
+  const k = a - pos.off;
+  if (p < A.split) return pfxByteExpr(a);
+  if (pos.L === 1 && pos.contig) return `(${pos.bytes[0]}u + e${w}_${p})`;
+  if (pos.L === 1)               return `AP${p}[e${w}_${p}]`;
+  return `AP${p}[e${w}_${p} * ${pos.L}u + ${k}u]`;
 }
 
-// MD5 message word m{w}_{k}: the four candidate bytes at 4k..4k+3, or the pad /
-// length words. A word entirely inside the host prefix is that prefix word
-// verbatim; otherwise it is folded from candByte, and the +0 pad past the
-// candidate lets the compiler drop the dead words.
-function msgWord(A, w, k, width) {
-  if (k === 14) return `${width*8}u`;
-  if (k === 15) return `0u`;
-  const base = 4*k;
-  if (base + 4 <= A.prefixBytes) return pfxWordExpr(k);   // wholly in the prefix
+// The byte at message position `p` (already the UTF-16LE-widened message when
+// widen): a candidate byte, the 0x80 pad, or null for a zero the caller drops.
+function msgByte(A, w, p, width, H) {
+  if (H.widen) {
+    const elen = 2 * width;
+    if (p < elen) return (p & 1) ? null : candByte(A, w, p >> 1);
+    return p === elen ? `0x80u` : null;
+  }
+  if (p < width) return candByte(A, w, p);
+  return p === width ? `0x80u` : null;
+}
+
+// Message word k: the four bytes at 4k..4k+3 in the hash's endianness, or the
+// bit-length word (word 14 little-endian, word 15 big-endian). Zero bytes past
+// the pad are dropped so the compiler folds the dead words.
+function msgWord(A, w, k, width, H) {
+  const elen = (H.widen ? 2 * width : width) * 8;
+  if (H.endian === "le") { if (k === 14) return `${elen>>>0}u`; if (k === 15) return `0u`; }
+  else                   { if (k === 14) return `0u`; if (k === 15) return `${elen>>>0}u`; }
   const terms = [];
   for (let t = 0; t < 4; t++) {
-    const a = base + t; let term;
-    if (a < width) term = candByte(A, w, a);
-    else if (a === width) term = `0x80u`;
-    else continue;
-    terms.push(t === 0 ? term : `(${term} << ${8*t}u)`);
+    const bv = msgByte(A, w, 4*k + t, width, H);
+    if (bv === null) continue;
+    const shift = H.endian === "le" ? 8*t : 8*(3-t);
+    terms.push(shift ? `((${bv}) << ${shift}u)` : `(${bv})`);
   }
   return terms.length ? terms.join(" | ") : `0u`;
 }
@@ -7781,32 +7881,27 @@ function packBytes(A, w, lo, hi, width) {
   return terms.length ? terms.join(" | ") : `0u`;
 }
 
-// Decode lane w's index into its inner-position digits e{p}, then the message
-// words as scalars, then the hash state.
+// Decode lane w's index into its inner-position digits, then the 16 message
+// words as scalars. The hash's compress() takes it from there.
 function laneBuild(A, w, idxExpr, width, H) {
   let s = `\n    var q${w} = ${idxExpr};\n`;
-  // Least-significant inner position varies fastest: peel digits from the end.
   for (let p = A.positions.length - 1; p >= A.split; p--) {
     s += `    let e${w}_${p} = q${w} % ${A.positions[p].n}u;`;
     if (p > A.split) s += ` q${w} = q${w} / ${A.positions[p].n}u;`;
     s += `\n`;
   }
-  for (let k = 0; k < 16; k++) s += `    let m${w}_${k} = ${msgWord(A, w, k, width)};\n`;
-  s += H.init(w);
+  for (let k = 0; k < 16; k++) s += `    let m${w}_${k} = ${msgWord(A, w, k, width, H)};\n`;
   return s;
 }
 
-// Shader head: bindings, the prefix accessors, rev(), and a const table per
-// tabled inner position. Everything else is baked, so nothing here varies at
-// runtime except the target list and the per-dispatch prefix.
+// Shader head: bindings, rev(), any hash constants, and a const table per tabled
+// inner position.
 function shaderHead(A, H) {
   let tables = "";
   for (let p = A.split; p < A.positions.length; p++) {
     const pos = A.positions[p];
-    const tabled = !(pos.L === 1 && pos.contig);
-    if (!tabled) continue;
-    const vals = Array.from(pos.bytes).map(b => `${b}u`).join(",");
-    tables += `const AP${p} = array<u32, ${pos.bytes.length}>(${vals});\n`;
+    if (pos.L === 1 && pos.contig) continue;
+    tables += `const AP${p} = array<u32, ${pos.bytes.length}>(${Array.from(pos.bytes).map(b => `${b}u`).join(",")});\n`;
   }
   return `
 struct Params { loN: u32, ntgt: u32, wbytes: u32, _pad: u32, pfx: array<vec4<u32>, 4> };
@@ -7815,41 +7910,44 @@ struct Params { loN: u32, ntgt: u32, wbytes: u32, _pad: u32, pfx: array<vec4<u32
 @group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
 @group(0) @binding(3) var<uniform>             P       : Params;
 fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((x >> 8u) & 0xff00u) | ((x >> 24u) & 0xffu); }
-${tables}`;
+${H.consts || ""}${tables}`;
 }
 
-// Binary-search the sorted targets for digest dg; on a hit store the plaintext
-// (two packed words) and the target index. In first-word mode dg is one u32 and
-// the host re-hashes to confirm; otherwise it is the full digest, H.words wide.
-function searchRecord(A, w, dg, guard, width, fw, H) {
+// Binary-search the sorted targets for lane w's digest words dg{w}_0.. and, on a
+// hit, store the plaintext (two packed words) and the target row. `ndg` words
+// are compared (all, or just word 0 in first-word mode); the digest is stored as
+// H.words per row, so word 0 sits at mid*H.words.
+function searchRecord(A, w, width, ndg, H, guard) {
   const p0 = packBytes(A, w, 0, 4, width), p1 = packBytes(A, w, 4, 8, width);
   const record = `let slot = atomicAdd(&hitcount, 1u);
           if (slot < ${MAXHITS}u) { hits[slot*4u + 0u] = ${p0}; hits[slot*4u + 1u] = ${p1}; hits[slot*4u + 2u] = u32(mid); }`;
-  const inner = fw
-    ? `let tw = targets[u32(mid) * ${H.words}u];
-        if (${dg} == tw) { ${record} break; }
-        if (${dg} < tw) { hi = mid - 1; } else { lo = mid + 1; }`
-    : `let base = u32(mid) * ${H.words}u; var cmp: i32 = 0;
-        for (var k: u32 = 0u; k < ${H.words}u; k++) {
-          if (${dg}[k] != targets[base + k]) { cmp = select(1, -1, ${dg}[k] < targets[base + k]); break; }
-        }
-        if (cmp == 0) { ${record} break; }
-        if (cmp < 0) { hi = mid - 1; } else { lo = mid + 1; }`;
-  return `
-    if (${guard}) {
+  let chain = "";
+  for (let k = 0; k < ndg; k++) {
+    const dg = `dg${w}_${k}`, tg = `targets[base + ${k}u]`;
+    chain += `${k === 0 ? "        if" : "        else if"} (${dg} < ${tg}) { cmp = -1; }\n`;
+    chain += `        else if (${dg} > ${tg}) { cmp = 1; }\n`;
+  }
+  const search = `
+    {
       var lo: i32 = 0; var hi: i32 = i32(P.ntgt) - 1;
       loop {
         if (lo > hi) { break; }
-        let mid = (lo + hi) / 2; ${inner}
+        let mid = (lo + hi) / 2;
+        let base = u32(mid) * ${H.words}u; var cmp: i32 = 0;
+${chain}        if (cmp == 0) { ${record} break; }
+        if (cmp < 0) { hi = mid - 1; } else { lo = mid + 1; }
       }
     }`;
+  return guard === "true" ? search : `\n    if (${guard}) {${search}\n    }`;
 }
 
-function rounds(H, w) { let s = ""; for (let i = 0; i < H.rounds; i++) s += H.round(i, w); return s; }
+function laneKernel(A, w, idxExpr, width, fw, H, guard) {
+  const ndg = fw ? 1 : H.words;
+  return laneBuild(A, w, idxExpr, width, H) + H.compress(w, fw) + searchRecord(A, w, width, ndg, H, guard);
+}
 
 // Serial kernel: one candidate per grid-stride step.
 function serialShader(A, wg, width, fw, H) {
-  const rec = searchRecord(A, 0, "dg0", "true", width, fw, H);
   return shaderHead(A, H) + `
 @compute @workgroup_size(${wg})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
@@ -7857,24 +7955,20 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) 
   var j = gid.x;
   loop {
     if (j >= P.loN) { break; }
-${laneBuild(A, 0, "j", width, H)}${rounds(H, 0)}${H.digest(0, fw)}${rec}
+${laneKernel(A, 0, "j", width, fw, H, "true")}
     j = j + stride;
   }
 }`;
 }
 
-// Interleaved kernel: W independent candidates advanced round-by-round together,
-// so the GPU overlaps their dependency chains instead of stalling on one.
+// Interleaved kernel: W independent candidates per step, so their dependency
+// chains overlap instead of stalling one at a time.
 function interleavedShader(A, wg, W, width, fw, H) {
-  let body = "";
-  for (let w = 0; w < W; w++) body += laneBuild(A, w, `j + ${w}u * stride`, width, H) + "\n";
-  for (let i = 0; i < H.rounds; i++) for (let w = 0; w < W; w++) body += H.round(i, w);
-  for (let w = 0; w < W; w++)
-    body += H.digest(w, fw) + searchRecord(A, w, `dg${w}`, `j${w} < P.loN`, width, fw, H) + "\n";
-  // Each lane needs its own bounds var j{w}; derive them up front.
-  let jvars = "";
-  for (let w = 0; w < W; w++) jvars += `    let j${w} = j + ${w}u * stride;\n`;
-  // laneBuild already reads "j + w*stride"; expose j{w} only for the guard.
+  let jvars = "", body = "";
+  for (let w = 0; w < W; w++) {
+    jvars += `    let j${w} = j + ${w}u * stride;\n`;
+    body += laneKernel(A, w, `j${w}`, width, fw, H, `j${w} < P.loN`) + "\n";
+  }
   return shaderHead(A, H) + `
 @compute @workgroup_size(${wg})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
@@ -7913,6 +8007,22 @@ function buildA(fp) {
   const prefixBytes = split > 0 ? fp.positions[split].off : 0;
   const innerN = fp.positions.slice(split).reduce((a, p) => a * p.n, 1);
   return { positions: fp.positions, split, posAt, prefixBytes, innerN, width: fp.width, total: fp.total };
+}
+
+// The generated WGSL for a plan + hash, for tests and debugging. { code, A } or
+// { error }.
+function buildShader({ plan, hash = "md5", knobs = {} }) {
+  const H = HASHES[hash];
+  if (!H) return { error: `${hash} not wired` };
+  const fp = analyzePlan(plan, hash);
+  if (!fp.ok) return { error: fp.reason };
+  const A = buildA(fp);
+  const fw = H.firstWord && !!knobs.fw;
+  const wg = knobs.wg || 256, W = knobs.ww || 4;
+  const code = knobs.mode === "interleaved"
+    ? interleavedShader(A, wg, W, A.width, fw, H)
+    : serialShader(A, wg, A.width, fw, H);
+  return { code, A };
 }
 
 // Crack a fixed-width odometer pattern on the GPU. `plan` is engine.wheelPlan();
@@ -8143,10 +8253,65 @@ async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, con
   return { supported: true, hits, rate, total, ntgt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound };
 }
 
-// A tiny CPU hash, only to confirm first-word-mode hits (WebCrypto has no MD5).
-function cpuHash(hash, str) {
-  if (hash === "md5") return md5hex(str);
-  return "";
+// The CPU hash (WebCrypto has none of these synchronously): confirms a first-
+// word hit, and hashes every candidate in the no-WebGPU fallback. All are single
+// block, which every fast-path candidate is (maxWidth <= 55).
+function cpuHash(hash, str) { return HASHES[hash].cpu(str); }
+
+// MD4 of a byte array (NTLM's inner hash), one block.
+function md4hex(bytes) {
+  const u = x => x>>>0, rol = (x,c) => u((x << c) | (x >>> (32-c)));
+  const N = bytes.length, m = new Array(16).fill(0);
+  for (let i = 0; i < N; i++) m[i>>2] = u(m[i>>2] | (bytes[i] << (8*(i&3))));
+  m[N>>2] = u(m[N>>2] | (0x80 << (8*(N&3))));
+  m[14] = u(N*8);
+  let a=0x67452301,b=0xefcdab89,c=0x98badcfe,d=0x10325476;
+  const a0=a,b0=b,c0=c,d0=d;
+  const F=(x,y,z)=>(x&y)|(~x&z), G=(x,y,z)=>(x&y)|(x&z)|(y&z), Hh=(x,y,z)=>x^y^z;
+  const ff=(a,b,c,d,k,s)=>rol(u(a+F(b,c,d)+m[k]),s);
+  const gg=(a,b,c,d,k,s)=>rol(u(a+G(b,c,d)+m[k]+0x5a827999),s);
+  const hh=(a,b,c,d,k,s)=>rol(u(a+Hh(b,c,d)+m[k]+0x6ed9eba1),s);
+  a=ff(a,b,c,d,0,3);  d=ff(d,a,b,c,1,7);  c=ff(c,d,a,b,2,11);  b=ff(b,c,d,a,3,19);
+  a=ff(a,b,c,d,4,3);  d=ff(d,a,b,c,5,7);  c=ff(c,d,a,b,6,11);  b=ff(b,c,d,a,7,19);
+  a=ff(a,b,c,d,8,3);  d=ff(d,a,b,c,9,7);  c=ff(c,d,a,b,10,11); b=ff(b,c,d,a,11,19);
+  a=ff(a,b,c,d,12,3); d=ff(d,a,b,c,13,7); c=ff(c,d,a,b,14,11); b=ff(b,c,d,a,15,19);
+  a=gg(a,b,c,d,0,3);  d=gg(d,a,b,c,4,5);  c=gg(c,d,a,b,8,9);   b=gg(b,c,d,a,12,13);
+  a=gg(a,b,c,d,1,3);  d=gg(d,a,b,c,5,5);  c=gg(c,d,a,b,9,9);   b=gg(b,c,d,a,13,13);
+  a=gg(a,b,c,d,2,3);  d=gg(d,a,b,c,6,5);  c=gg(c,d,a,b,10,9);  b=gg(b,c,d,a,14,13);
+  a=gg(a,b,c,d,3,3);  d=gg(d,a,b,c,7,5);  c=gg(c,d,a,b,11,9);  b=gg(b,c,d,a,15,13);
+  a=hh(a,b,c,d,0,3);  d=hh(d,a,b,c,8,9);  c=hh(c,d,a,b,4,11);  b=hh(b,c,d,a,12,15);
+  a=hh(a,b,c,d,2,3);  d=hh(d,a,b,c,10,9); c=hh(c,d,a,b,6,11);  b=hh(b,c,d,a,14,15);
+  a=hh(a,b,c,d,1,3);  d=hh(d,a,b,c,9,9);  c=hh(c,d,a,b,5,11);  b=hh(b,c,d,a,13,15);
+  a=hh(a,b,c,d,3,3);  d=hh(d,a,b,c,11,9); c=hh(c,d,a,b,7,11);  b=hh(b,c,d,a,15,15);
+  a=u(a+a0);b=u(b+b0);c=u(c+c0);d=u(d+d0);
+  const rev = x => u(((x&0xff)<<24)|((x&0xff00)<<8)|((x>>>8)&0xff00)|((x>>>24)&0xff));
+  return [rev(a),rev(b),rev(c),rev(d)].map(x => u(x).toString(16).padStart(8,"0")).join("");
+}
+// NTLM: MD4 of the password widened to UTF-16LE (each byte, then a zero).
+function ntlmhex(str) {
+  const bytes = [];
+  for (let i = 0; i < str.length; i++) { bytes.push(str.charCodeAt(i) & 0xff, 0); }
+  return md4hex(bytes);
+}
+// SHA-1 of a string's bytes, one block. Big-endian words and digest.
+function sha1hex(str) {
+  const u = x => x>>>0, rol = (x,c) => u((x << c) | (x >>> (32-c)));
+  const N = str.length, w = new Array(80).fill(0);
+  for (let i = 0; i < N; i++) w[i>>2] = u(w[i>>2] | ((str.charCodeAt(i) & 0xff) << (8*(3-(i&3)))));
+  w[N>>2] = u(w[N>>2] | (0x80 << (8*(3-(N&3)))));
+  w[15] = u(N*8);
+  for (let i = 16; i < 80; i++) w[i] = rol(u(w[i-3]^w[i-8]^w[i-14]^w[i-16]), 1);
+  let a=0x67452301,b=0xefcdab89,c=0x98badcfe,d=0x10325476,e=0xc3d2e1f0;
+  for (let i = 0; i < 80; i++) {
+    let f, k;
+    if (i<20) { f=(b&c)|(~b&d); k=0x5a827999; }
+    else if (i<40) { f=b^c^d; k=0x6ed9eba1; }
+    else if (i<60) { f=(b&c)|(b&d)|(c&d); k=0x8f1bbcdc; }
+    else { f=b^c^d; k=0xca62c1d6; }
+    const t = u(rol(a,5) + f + e + k + w[i]); e=d; d=c; c=rol(b,30); b=a; a=t;
+  }
+  a=u(a+0x67452301);b=u(b+0xefcdab89);c=u(c+0x98badcfe);d=u(d+0x10325476);e=u(e+0xc3d2e1f0);
+  return [a,b,c,d,e].map(x => u(x).toString(16).padStart(8,"0")).join("");
 }
 function md5hex(str) {
   const u = x => x >>> 0, rol = (x,c) => u((x << c) | (x >>> (32 - c)));
