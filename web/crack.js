@@ -74,7 +74,12 @@ export function analyzePlan(plan, hash) {
 // first inner position. A single position bigger than the budget still works --
 // it becomes the only inner one and its own dispatch covers 2^32 at a time is
 // not needed here since one wheel's n never exceeds ALT_CAP (65536).
-const GPU_BUDGET = 1 << 28;     // ~2.7e8 candidates/dispatch: ~0.1s, keeps yields frequent
+// Candidates per dispatch. Big enough that per-dispatch host/drain overhead is
+// amortised -- small dispatches (the earlier 2^28 forced [a-z]{7} to 26^5 =
+// 12M, 676 dispatches) leave the GPU idle across ~85 pipeline drains and swamp
+// the compute, which also hides the knobs. 2^30 keeps [a-z]{7} at 26^6 = 309M,
+// 26 dispatches, matching the spike; still < 2^32 so lanes stay u32.
+const GPU_BUDGET = 1 << 30;
 function splitPositions(positions) {
   let inner = 1, split = positions.length;
   while (split > 0) {
@@ -124,11 +129,17 @@ const HASHES = {
 // its decoded digit (arithmetic if the alphabet is contiguous, else a baked
 // table); an outer position's byte is a constant the host wrote into the prefix
 // uniform, read back word-aligned.
+// The prefix uniform word at constant index k, and byte at constant index a --
+// baked to constant array/component indices so the compiler folds them, rather
+// than a runtime function with dynamic uniform indexing.
+const pfxWordExpr = (k) => `P.pfx[${k >> 2}u][${k & 3}u]`;
+const pfxByteExpr = (a) => { const w = a >> 2; return `((${pfxWordExpr(w)} >> ${(a & 3) * 8}u) & 0xffu)`; };
+
 function candByte(A, w, a) {
   const p = A.posAt[a];                 // which position owns byte a
   const pos = A.positions[p];
   const k = a - pos.off;                // which byte of that position
-  if (p < A.split) return `pfxByte(${a}u)`;       // outer: from the prefix uniform
+  if (p < A.split) return pfxByteExpr(a);         // outer: from the prefix uniform
   if (pos.L === 1 && pos.contig) return `(${pos.bytes[0]}u + e${w}_${p})`;   // inner contiguous class
   if (pos.L === 1)               return `AP${p}[e${w}_${p}]`;                // inner tabled class
   return `AP${p}[e${w}_${p} * ${pos.L}u + ${k}u]`;   // inner multi-byte alternative
@@ -142,7 +153,7 @@ function msgWord(A, w, k, width) {
   if (k === 14) return `${width*8}u`;
   if (k === 15) return `0u`;
   const base = 4*k;
-  if (base + 4 <= A.prefixBytes) return `pfxWord(${k}u)`;   // wholly in the prefix
+  if (base + 4 <= A.prefixBytes) return pfxWordExpr(k);   // wholly in the prefix
   const terms = [];
   for (let t = 0; t < 4; t++) {
     const a = base + t; let term;
@@ -198,8 +209,6 @@ struct Params { loN: u32, ntgt: u32, wbytes: u32, _pad: u32, pfx: array<vec4<u32
 @group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
 @group(0) @binding(3) var<uniform>             P       : Params;
 fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((x >> 8u) & 0xff00u) | ((x >> 24u) & 0xffu); }
-fn pfxWord(k: u32) -> u32 { return P.pfx[k >> 2u][k & 3u]; }
-fn pfxByte(a: u32) -> u32 { return (pfxWord(a >> 2u) >> ((a & 3u) * 8u)) & 0xffu; }
 ${tables}`;
 }
 
