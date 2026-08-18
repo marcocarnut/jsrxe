@@ -152,21 +152,24 @@ function md4Compress(w, fw) {
 }
 
 const SHA1_IV = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0];
+// Unrolled, with the message schedule as SSA scalars W{w}_i rather than an array
+// -- each is live only from its definition to its last use, so the compiler
+// keeps them in registers instead of spilling a fixed 80-word buffer.
 function sha1Compress(w) {              // 20-byte digest, big-endian, no first-word
   const R = ["a","b","c","d","e"];
-  let s = `    var W${w}: array<u32,80>;\n`;
-  for (let k = 0; k < 16; k++) s += `    W${w}[${k}] = m${w}_${k};\n`;
-  s += `    for (var i:u32=16u; i<80u; i=i+1u) { let x = W${w}[i-3u]^W${w}[i-8u]^W${w}[i-14u]^W${w}[i-16u]; W${w}[i] = ${rotl("x",1)}; }\n`;
+  let s = "";
+  for (let i = 0; i < 16; i++) s += `    let W${w}_${i} = m${w}_${i};\n`;
+  for (let i = 16; i < 80; i++)
+    s += `    let W${w}_${i} = ${rotl(`(W${w}_${i-3} ^ W${w}_${i-8} ^ W${w}_${i-14} ^ W${w}_${i-16})`, 1)};\n`;
   s += `    var a${w}=${SHA1_IV[0]>>>0}u; var b${w}=${SHA1_IV[1]>>>0}u; var c${w}=${SHA1_IV[2]>>>0}u; var d${w}=${SHA1_IV[3]>>>0}u; var e${w}=${SHA1_IV[4]>>>0}u;\n`;
-  s += `    for (var i:u32=0u; i<80u; i=i+1u) {
-      var f:u32; var k:u32;
-      if (i<20u) { f=(b${w}&c${w})|(~b${w}&d${w}); k=0x5a827999u; }
-      else if (i<40u) { f=b${w}^c${w}^d${w}; k=0x6ed9eba1u; }
-      else if (i<60u) { f=(b${w}&c${w})|(b${w}&d${w})|(c${w}&d${w}); k=0x8f1bbcdcu; }
-      else { f=b${w}^c${w}^d${w}; k=0xca62c1d6u; }
-      let t = ${rotl(`a${w}`,5)} + f + e${w} + k + W${w}[i];
-      e${w}=d${w}; d${w}=c${w}; c${w}=${rotl(`b${w}`,30)}; b${w}=a${w}; a${w}=t;
-    }\n`;
+  for (let i = 0; i < 80; i++) {
+    let f, k;
+    if (i < 20)      { f = `(b${w} & c${w}) | (~b${w} & d${w})`;                     k = 0x5a827999; }
+    else if (i < 40) { f = `b${w} ^ c${w} ^ d${w}`;                                  k = 0x6ed9eba1; }
+    else if (i < 60) { f = `(b${w} & c${w}) | (b${w} & d${w}) | (c${w} & d${w})`;    k = 0x8f1bbcdc; }
+    else             { f = `b${w} ^ c${w} ^ d${w}`;                                  k = 0xca62c1d6; }
+    s += `    { let t = ${rotl(`a${w}`,5)} + (${f}) + e${w} + ${k>>>0}u + W${w}_${i}; e${w}=d${w}; d${w}=c${w}; c${w}=${rotl(`b${w}`,30)}; b${w}=a${w}; a${w}=t; }\n`;
+  }
   for (let i = 0; i < 5; i++) s += `    let dg${w}_${i} = ${SHA1_IV[i]>>>0}u + ${R[i]}${w};\n`;
   return s;
 }
@@ -183,24 +186,24 @@ const SHA256_K = [
  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
 function sha256Compress(w) {            // 32-byte digest, big-endian, no first-word
   const R = ["a","b","c","d","e","f","g","h"];
-  let s = `    var W${w}: array<u32,64>;\n`;
-  for (let k = 0; k < 16; k++) s += `    W${w}[${k}] = m${w}_${k};\n`;
-  s += `    for (var i:u32=16u; i<64u; i=i+1u) {
-      let x = W${w}[i-15u]; let y = W${w}[i-2u];
-      let s0 = ${rotr("x",7)} ^ ${rotr("x",18)} ^ (x >> 3u);
-      let s1 = ${rotr("y",17)} ^ ${rotr("y",19)} ^ (y >> 10u);
-      W${w}[i] = W${w}[i-16u] + s0 + W${w}[i-7u] + s1;
-    }\n`;
+  let s = "";
+  for (let i = 0; i < 16; i++) s += `    let W${w}_${i} = m${w}_${i};\n`;
+  for (let i = 16; i < 64; i++) {
+    const x = `W${w}_${i-15}`, y = `W${w}_${i-2}`;
+    const s0 = `(${rotr(x,7)} ^ ${rotr(x,18)} ^ (${x} >> 3u))`;
+    const s1 = `(${rotr(y,17)} ^ ${rotr(y,19)} ^ (${y} >> 10u))`;
+    s += `    let W${w}_${i} = W${w}_${i-16} + ${s0} + W${w}_${i-7} + ${s1};\n`;
+  }
   s += `    var a${w}=${SHA256_IV[0]>>>0}u; var b${w}=${SHA256_IV[1]>>>0}u; var c${w}=${SHA256_IV[2]>>>0}u; var d${w}=${SHA256_IV[3]>>>0}u; var e${w}=${SHA256_IV[4]>>>0}u; var f${w}=${SHA256_IV[5]>>>0}u; var g${w}=${SHA256_IV[6]>>>0}u; var h${w}=${SHA256_IV[7]>>>0}u;\n`;
-  s += `    for (var i:u32=0u; i<64u; i=i+1u) {
-      let S1 = ${rotr(`e${w}`,6)} ^ ${rotr(`e${w}`,11)} ^ ${rotr(`e${w}`,25)};
-      let ch = (e${w} & f${w}) ^ (~e${w} & g${w});
-      let t1 = h${w} + S1 + ch + SHA256_K[i] + W${w}[i];
-      let S0 = ${rotr(`a${w}`,2)} ^ ${rotr(`a${w}`,13)} ^ ${rotr(`a${w}`,22)};
-      let maj = (a${w} & b${w}) ^ (a${w} & c${w}) ^ (b${w} & c${w});
-      let t2 = S0 + maj;
-      h${w}=g${w}; g${w}=f${w}; f${w}=e${w}; e${w}=d${w}+t1; d${w}=c${w}; c${w}=b${w}; b${w}=a${w}; a${w}=t1+t2;
-    }\n`;
+  for (let i = 0; i < 64; i++) {
+    s += `    { let S1 = ${rotr(`e${w}`,6)} ^ ${rotr(`e${w}`,11)} ^ ${rotr(`e${w}`,25)};`
+       + ` let ch = (e${w} & f${w}) ^ (~e${w} & g${w});`
+       + ` let t1 = h${w} + S1 + ch + ${SHA256_K[i]>>>0}u + W${w}_${i};`
+       + ` let S0 = ${rotr(`a${w}`,2)} ^ ${rotr(`a${w}`,13)} ^ ${rotr(`a${w}`,22)};`
+       + ` let maj = (a${w} & b${w}) ^ (a${w} & c${w}) ^ (b${w} & c${w});`
+       + ` let t2 = S0 + maj;`
+       + ` h${w}=g${w}; g${w}=f${w}; f${w}=e${w}; e${w}=d${w}+t1; d${w}=c${w}; c${w}=b${w}; b${w}=a${w}; a${w}=t1+t2; }\n`;
+  }
   for (let i = 0; i < 8; i++) s += `    let dg${w}_${i} = ${SHA256_IV[i]>>>0}u + ${R[i]}${w};\n`;
   return s;
 }
@@ -212,9 +215,8 @@ function sha256Compress(w) {            // 32-byte digest, big-endian, no first-
 const HASHES = {
   md5:    { hexlen: 32, words: 4, maxWidth: 55, endian: "le", widen: false, firstWord: true,  compress: md5Compress,    cpu: (s) => md5hex(s) },
   ntlm:   { hexlen: 32, words: 4, maxWidth: 27, endian: "le", widen: true,  firstWord: true,  compress: md4Compress,    cpu: (s) => ntlmhex(s) },
-  sha1:   { hexlen: 40, words: 5, maxWidth: 55, endian: "be", widen: false, firstWord: false, compress: sha1Compress,   cpu: (s) => sha1hex(s), consts: "" },
-  sha256: { hexlen: 64, words: 8, maxWidth: 55, endian: "be", widen: false, firstWord: false, compress: sha256Compress, cpu: (s) => sha256(s),
-            consts: `const SHA256_K = array<u32,64>(${SHA256_K.map(x=>`${x>>>0}u`).join(",")});\n` },
+  sha1:   { hexlen: 40, words: 5, maxWidth: 55, endian: "be", widen: false, firstWord: false, compress: sha1Compress,   cpu: (s) => sha1hex(s) },
+  sha256: { hexlen: 64, words: 8, maxWidth: 55, endian: "be", widen: false, firstWord: false, compress: sha256Compress, cpu: (s) => sha256(s) },
 };
 
 // ---- the candidate-laying codegen ---------------------------------------
@@ -300,7 +302,7 @@ function shaderHead(A, H) {
     tables += `const AP${p} = array<u32, ${pos.bytes.length}>(${Array.from(pos.bytes).map(b => `${b}u`).join(",")});\n`;
   }
   return `
-struct Params { loN: u32, ntgt: u32, wbytes: u32, _pad: u32, pfx: array<vec4<u32>, 4> };
+struct Params { lo: u32, hi: u32, ntgt: u32, _pad: u32, pfx: array<vec4<u32>, 4> };
 @group(0) @binding(0) var<storage, read>       targets : array<u32>;
 @group(0) @binding(1) var<storage, read_write> hitcount: atomic<u32>;
 @group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
@@ -348,9 +350,9 @@ function serialShader(A, wg, width, fw, H) {
 @compute @workgroup_size(${wg})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
   let stride = nwg.x * ${wg}u;
-  var j = gid.x;
+  var j = P.lo + gid.x;
   loop {
-    if (j >= P.loN) { break; }
+    if (j >= P.hi) { break; }
 ${laneKernel(A, 0, "j", width, fw, H, "true")}
     j = j + stride;
   }
@@ -363,15 +365,15 @@ function interleavedShader(A, wg, W, width, fw, H) {
   let jvars = "", body = "";
   for (let w = 0; w < W; w++) {
     jvars += `    let j${w} = j + ${w}u * stride;\n`;
-    body += laneKernel(A, w, `j${w}`, width, fw, H, `j${w} < P.loN`) + "\n";
+    body += laneKernel(A, w, `j${w}`, width, fw, H, `j${w} < P.hi`) + "\n";
   }
   return shaderHead(A, H) + `
 @compute @workgroup_size(${wg})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
   let stride = nwg.x * ${wg}u;
-  var j = gid.x;
+  var j = P.lo + gid.x;
   loop {
-    if (j >= P.loN) { break; }
+    if (j >= P.hi) { break; }
 ${jvars}${body}    j = j + ${W}u * stride;
   }
 }`;
@@ -413,7 +415,7 @@ export function buildShader({ plan, hash = "md5", knobs = {} }) {
   const fp = analyzePlan(plan, hash);
   if (!fp.ok) return { error: fp.reason };
   const A = buildA(fp);
-  const fw = H.firstWord && !!knobs.fw;
+  const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
   const wg = knobs.wg || 256, W = knobs.ww || 4;
   const code = knobs.mode === "interleaved"
     ? interleavedShader(A, wg, W, A.width, fw, H)
@@ -447,7 +449,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   const A = buildA(fp);
   const wg = knobs.wg || 256, cap = knobs.cap || 8192;
   const mode = knobs.mode || "serial", W = knobs.ww || 4;
-  const fw = H.firstWord && !!knobs.fw;
+  const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
   const code = mode === "serial" ? serialShader(A, wg, A.width, fw, H)
                                  : interleavedShader(A, wg, W, A.width, fw, H);
   const module = device.createShaderModule({ code });
@@ -475,7 +477,6 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
 
   const innerN = A.innerN;
   const denom = mode === "serial" ? 1 : W;
-  const wgroups = Math.min(Math.max(1, Math.ceil(innerN / (wg * denom))), cap);
 
   // Host outer enumeration: the positions [0, split) as a mixed-radix counter,
   // most-significant first. outerN is a BigInt (it is the whole keyspace / innerN).
@@ -485,7 +486,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   const ab = new ArrayBuffer(U);
   const uScal = new Uint32Array(ab, 0, 4);
   const uBytes = new Uint8Array(ab, 16, PFX_WORDS * 4);
-  uScal[0] = innerN >>> 0; uScal[1] = ntgt; uScal[2] = A.width;
+  uScal[2] = ntgt;                       // lo (base) and hi are set per chunk below
 
   const t0 = performance.now();
   let done = 0n;
@@ -542,26 +543,38 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     processed = got;
   }
 
+  // Adaptive dispatch size: sub-divide each prefix's inner sweep into chunks
+  // aimed at ~CHUNK_SEC of GPU work, so progress and hits refresh several times a
+  // second and the first (small) chunk lands almost at once -- while a fast hash
+  // still gets chunks large enough to amortise the per-dispatch overhead. The
+  // size steers itself from the rate the last chunk actually ran at.
+  const CHUNK_SEC = 0.2, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30;
+  let chunk = 1 << 22;
   let r = 0, stopped = false, allFound = false, pausedMs = 0;
+
+  outer:
   for (let oi = 0n; oi < outerN; oi++) {
     if (control && control.stopped()) { stopped = true; break; }
     setPrefix(oi);
-    device.queue.writeBuffer(rings[r].u, 0, ab);
-    const enc = device.createCommandEncoder();
-    const pass = enc.beginComputePass();
-    pass.setPipeline(pipeline); pass.setBindGroup(0, rings[r].b);
-    pass.dispatchWorkgroups(wgroups);
-    pass.end();
-    device.queue.submit([enc.finish()]);
-    done += BigInt(innerN);
-    r = (r + 1) % RING;
-    // Drain every RING dispatches (or at the end): report progress, stream any
-    // new hits, and honour pause/stop. Also the browser-yield point, so the page
-    // stays live and the GPU queue does not run unbounded ahead of the host.
-    if (r === 0 || oi + 1n === outerN) {
+    for (let base = 0; base < innerN; base += chunk) {
+      const hi = Math.min(base + chunk, innerN), count = hi - base;
+      uScal[0] = base; uScal[1] = hi;
+      device.queue.writeBuffer(rings[r].u, 0, ab);
+      const wgroups = Math.min(Math.max(1, Math.ceil(count / (wg * denom))), cap);
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginComputePass();
+      pass.setPipeline(pipeline); pass.setBindGroup(0, rings[r].b);
+      pass.dispatchWorkgroups(wgroups);
+      pass.end();
+      device.queue.submit([enc.finish()]);
+      const tc = performance.now();
       await device.queue.onSubmittedWorkDone();
+      const dt = performance.now() - tc;
+      done += BigInt(count);
+      r = (r + 1) % RING;
       await drainHits();
-      if (foundHex.size >= ntgt) { allFound = true; break; }   // every target cracked -- stop early
+      if (foundHex.size >= ntgt) { allFound = true; break outer; }   // every target cracked -- stop early
+      if (dt > 0) chunk = Math.max(CHUNK_MIN, Math.min(CHUNK_MAX, Math.round(count / (dt/1000) * CHUNK_SEC)));
       if (onProgress) {
         const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
         const rate = Number(done) / secs, eta = rate > 0 ? Number(total - done) / rate : Infinity;
@@ -569,18 +582,18 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
       }
       await new Promise(res => setTimeout(res));
       if (control) {
-        if (control.stopped()) { stopped = true; break; }
+        if (control.stopped()) { stopped = true; break outer; }
         if (control.paused && control.paused()) {
           const pt = performance.now();
           await control.gate();
           pausedMs += performance.now() - pt;
-          if (control.stopped()) { stopped = true; break; }
+          if (control.stopped()) { stopped = true; break outer; }
         }
       }
     }
   }
   await device.queue.onSubmittedWorkDone();
-  await drainHits();                                  // catch hits from the final, undrained batch
+  await drainHits();                                  // catch any hit from the final chunk
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
   const rate = Number(done) / secs;
   device.destroy();

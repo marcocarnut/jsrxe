@@ -1014,7 +1014,7 @@ async function renderCrack() {
 
 function readKnobs() {
   return { wg: +$("knobwg").value, cap: +$("knobcap").value,
-           mode: $("knobmode").value, ww: +$("knobww").value, fw: $("knobfw").checked };
+           mode: $("knobmode").value, ww: +$("knobww").value };
 }
 
 // A rate in hashes/s as a friendly MH/s or GH/s.
