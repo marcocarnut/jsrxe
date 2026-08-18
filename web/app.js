@@ -1024,6 +1024,21 @@ function fmtRate(r) {
 }
 // A BigInt candidate count with thousands separators (locale-aware).
 function fmtBig(n) { return n.toLocaleString(DECSEP === "," ? "en" : "pt"); }
+// A duration in seconds as d/h/m/s, dropping units above the largest that is
+// needed (45s; 1m 30s; 1h 1m 1s; 2d 3h 0m 0s).
+function fmtEta(sec) {
+  if (!isFinite(sec) || sec < 0) return "…";
+  sec = Math.round(sec);
+  const d = Math.floor(sec / 86400); sec -= d*86400;
+  const h = Math.floor(sec / 3600);  sec -= h*3600;
+  const m = Math.floor(sec / 60);    const s = sec - m*60;
+  const parts = [];
+  if (d) parts.push(d + "d");
+  if (d || h) parts.push(h + "h");
+  if (d || h || m) parts.push(m + "m");
+  parts.push(s + "s");
+  return parts.join(" ");
+}
 
 // The Crack button, by state: idle -> start; running -> pause; paused -> resume.
 function onCrackGo() {
@@ -1041,7 +1056,7 @@ async function startCrack() {
   const st = $("crackstatus"), out = $("crackout"), prog = $("crackprog");
   out.textContent = "";
   // Only bare-hash lines are cracked; a line already carrying a plaintext (a
-  // comma and more) is a prior result the crack.js parser skips.
+  // colon and more, the hashcat/john potfile form) is a prior result to skip.
   const targets = $("cracktgts").value.split("\n").map(s => s.trim()).filter(Boolean);
   if (!targets.length) { crackSay("crackNoTargets", "err"); return; }
   const hash = $("crackalg").value;
@@ -1050,10 +1065,10 @@ async function startCrack() {
   crackRun = { state: "running", control, plan };
   crackButtons();
   show(prog, true); prog.value = 0;
-  const onProgress = (frac, rate) => {
+  const onProgress = (frac, rate, eta) => {
     prog.value = Math.round(frac * 1000);
     st.className = "dim";
-    st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate);
+    st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
   };
   try {
     const res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, onHit: crackWriteHit, control });
@@ -1069,15 +1084,15 @@ async function startCrack() {
 }
 
 // A cracked target, streamed in as it is found: replace its bare-hash line in
-// the textarea with "hash,plaintext" -- the results live in the input box, and
-// a re-run skips the now-annotated line. Newlines in the plaintext are escaped
-// so one hit stays one line.
+// the textarea with "hash:plaintext" (hashcat/john potfile form) -- the results
+// live in the input box, and a re-run skips the now-annotated line. Newlines in
+// the plaintext are escaped so one hit stays one line.
 function crackWriteHit(hit) {
   const ta = $("cracktgts");
   const pt = hit.plaintext.replace(/[\r\n]/g, "\\n");
   const lines = ta.value.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim().toLowerCase() === hit.hex) { lines[i] = hit.hex + "," + pt; break; }
+    if (lines[i].trim().toLowerCase() === hit.hex) { lines[i] = hit.hex + ":" + pt; break; }
   }
   ta.value = lines.join("\n");
 }

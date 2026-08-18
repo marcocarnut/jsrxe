@@ -452,7 +452,8 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
       if (foundHex.size >= ntgt) { allFound = true; break; }   // every target cracked -- stop early
       if (onProgress) {
         const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
-        onProgress(Number(done * 100000n / total) / 100000, Number(done) / secs);
+        const rate = Number(done) / secs, eta = rate > 0 ? Number(total - done) / rate : Infinity;
+        onProgress(Number(done * 100000n / total) / 100000, rate, eta);
       }
       await new Promise(res => setTimeout(res));
       if (control) {
@@ -522,7 +523,10 @@ export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onH
     if ((gi & 0x3ffffn) === 0n) {
       done = gi;
       if (control && control.stopped()) { stopped = true; break; }
-      if (onProgress) onProgress(Number(gi * 100000n / total) / 100000, Number(gi) / ((performance.now()-t0)/1000 || 1));
+      if (onProgress) {
+        const rate = Number(gi) / ((performance.now()-t0)/1000 || 1);
+        onProgress(Number(gi * 100000n / total) / 100000, rate, rate > 0 ? Number(total - gi) / rate : Infinity);
+      }
       await new Promise(res => setTimeout(res));
       if (control && control.paused && control.paused()) { await control.gate(); if (control.stopped()) { stopped = true; break; } }
     }
