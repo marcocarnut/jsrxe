@@ -597,6 +597,142 @@ ${jvars}${body}    j = j + ${W}u * stride;
 }`;
 }
 
+// ---- the {{...}} (diceware) GPU kernel ----------------------------------
+// Sweeps the whole choice space on the GPU, each lane unranking its 64-bit
+// global index into the picks, then assembling and hashing them. The index and
+// the unrank arithmetic are 64-bit (two u32); everything after -- pool indices
+// (<= 65536), byte assembly, the hash -- is u32. The host chunks the linear
+// index with a u64 base, so no structural combination split is needed.
+
+// GPU data for a perm plan: the pool (packed bytes + (off,len) meta), a BINOM
+// (Pascal) table as u64 for the unordered colex unrank, and the size blocks.
+export function buildPerm(fp) {
+  const pm = fp.perm, n = pm.n;
+  const bytes = [], meta = [];
+  for (let i = 0; i < n; i++) {
+    const o = pm.itemOff(i), l = pm.itemLen(i);
+    meta.push(bytes.length, l);
+    for (let k = 0; k < l; k++) bytes.push(pm.bytes[o + k]);
+  }
+  const pool = new Uint32Array(Math.ceil(bytes.length / 4) || 1);
+  for (let i = 0; i < bytes.length; i++) pool[i >> 2] |= bytes[i] << ((i & 3) * 8);
+  // BINOM[c][k] (u64: lo,hi) for c in 0..n, k in 0..hi -- only needed unordered.
+  const HI1 = pm.hi + 1;
+  const binom = new Uint32Array(2 * (n + 1) * HI1);
+  for (let c = 0; c <= n; c++) for (let k = 0; k < HI1; k++) {
+    const v = pm.B[c][k], i = 2 * (c * HI1 + k);
+    binom[i] = Number(v & 0xffffffffn); binom[i + 1] = Number(v >> 32n);
+  }
+  // Size blocks PSZ[s-lo] (u64) for the size decode.
+  const psz = [];
+  for (let s = pm.lo; s <= pm.hi; s++) { const v = pm.block(s); psz.push(`vec2<u32>(${Number(v & 0xffffffffn)}u, ${Number(v >> 32n)}u)`); }
+  return { pool, meta: Uint32Array.from(meta), binom, psz, n, lo: pm.lo, hi: pm.hi, ordered: pm.ordered, chop: pm.chop, HI1 };
+}
+
+function permHead(pm, H) {
+  const pszDecl = `const PSZ = array<vec2<u32>, ${pm.psz.length}>(${pm.psz.join(",")});\n`;
+  // binom (binding 6) feeds only the unordered (combination) colex unrank. An
+  // ordered perm never reads it, so `layout:"auto"` would prune binding 6 and a
+  // bindgroup that still supplies it fails validation. Emit the binding and its
+  // accessor only when the shader will actually use them; the host mirrors this.
+  const binomDecl = pm.ordered ? "" :
+    `@group(0) @binding(6) var<storage, read>       binom   : array<u32>;
+fn binomAt(c: u32, k: u32) -> vec2<u32> { let i = (c * ${pm.HI1}u + k) * 2u; return vec2<u32>(binom[i], binom[i+1u]); }
+`;
+  return `
+struct Params { baseLo: u32, baseHi: u32, count: u32, ntgt: u32 };
+@group(0) @binding(0) var<storage, read>       targets : array<u32>;
+@group(0) @binding(1) var<storage, read_write> hitcount: atomic<u32>;
+@group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
+@group(0) @binding(3) var<uniform>             P       : Params;
+@group(0) @binding(4) var<storage, read>       pool    : array<u32>;
+@group(0) @binding(5) var<storage, read>       mtab    : array<u32>;
+${binomDecl}fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((x >> 8u) & 0xff00u) | ((x >> 24u) & 0xffu); }
+fn u64lt(a: vec2<u32>, b: vec2<u32>) -> bool { return a.y < b.y || (a.y == b.y && a.x < b.x); }
+fn u64sub(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> { let bw = select(0u, 1u, a.x < b.x); return vec2<u32>(a.x - b.x, a.y - b.y - bw); }
+fn u64add32(a: vec2<u32>, b: u32) -> vec2<u32> { let lo = a.x + b; let c = select(0u, 1u, lo < a.x); return vec2<u32>(lo, a.y + c); }
+fn u64divmod(a: vec2<u32>, d: u32) -> vec3<u32> { let qh = a.y / d; var r = a.y % d; let t1 = (r << 16u) | (a.x >> 16u); let q1 = t1 / d; r = t1 % d; let t0 = (r << 16u) | (a.x & 0xffffu); let q0 = t0 / d; r = t0 % d; return vec3<u32>((q1 << 16u) | q0, qh, r); }
+${pszDecl}${H.consts || ""}`;
+}
+
+// Unrank lane w's 64-bit index into the picks, assemble + pad the candidate.
+function permLane(pm, w, idxExpr, H) {
+  const HImax = pm.hi;
+  let s = `\n    var jj${w} = ${idxExpr};\n    var s${w} = ${pm.lo}u;\n`;
+  if (pm.lo < pm.hi)
+    s += `    loop { let blk = PSZ[s${w}-${pm.lo}u]; if (u64lt(jj${w}, blk)) { break; } jj${w} = u64sub(jj${w}, blk); s${w} = s${w} + 1u; }\n`;
+  s += `    var idx${w}: array<u32, ${HImax}>;\n`;
+  if (pm.ordered) {
+    s += `    { var code: array<u32, ${HImax}>;\n`;
+    s += `      for (var pp: i32 = i32(s${w})-1; pp >= 0; pp = pp - 1) { let dm = u64divmod(jj${w}, ${pm.n}u - u32(pp)); jj${w} = dm.xy; code[u32(pp)] = dm.z; }\n`;
+    s += `      var used: array<u32, ${HImax}>; var nu = 0u;\n`;
+    s += `      for (var pp: u32 = 0u; pp < s${w}; pp = pp + 1u) { var a = code[pp];\n`;
+    s += `        for (var u: u32 = 0u; u < nu; u = u + 1u) { if (used[u] <= a) { a = a + 1u; } }\n`;
+    s += `        idx${w}[pp] = a; var ins = nu; loop { if (ins == 0u || used[ins-1u] <= a) { break; } used[ins] = used[ins-1u]; ins = ins - 1u; } used[ins] = a; nu = nu + 1u; } }\n`;
+  } else {
+    s += `    { var up = ${pm.n}u;\n`;
+    s += `      for (var k: u32 = s${w}; k >= 1u; k = k - 1u) { var loc = k - 1u; var hic = up - 1u;\n`;
+    s += `        loop { if (loc >= hic) { break; } let mid = (loc + hic + 1u) >> 1u; if (!u64lt(jj${w}, binomAt(mid, k))) { loc = mid; } else { hic = mid - 1u; } }\n`;
+    s += `        jj${w} = u64sub(jj${w}, binomAt(loc, k)); idx${w}[k-1u] = loc; up = loc; } }\n`;
+  }
+  // assemble the chosen items into msg + pt (endian / NTLM-widen aware), pad.
+  s += `    var msg${w}: array<u32,16>; var pt${w}: array<u32,14>;\n`;
+  s += `    for (var z=0u; z<16u; z=z+1u){ msg${w}[z]=0u; } for (var z=0u; z<14u; z=z+1u){ pt${w}[z]=0u; }\n`;
+  s += `    var blen${w}: u32 = 0u;\n`;
+  s += `    for (var pp${w}: u32 = 0u; pp${w} < s${w}; pp${w} = pp${w} + 1u) { let it = idx${w}[pp${w}]; let o = mtab[it*2u]; let l = mtab[it*2u+1u];\n`;
+  s += `      for (var k=0u; k<l; k=k+1u) { let b = (pool[(o+k)>>2u] >> (((o+k)&3u)*8u)) & 0xffu;\n`;
+  s += `        let cp = blen${w}+k; pt${w}[cp>>2u] |= b << ((cp&3u)*8u);\n`;
+  if (H.widen)                s += `        let mp = 2u*(blen${w}+k); msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
+  else if (H.endian === "le") s += `        let mp = blen${w}+k; msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
+  else                        s += `        let mp = blen${w}+k; msg${w}[mp>>2u] |= b << ((3u-(mp&3u))*8u);\n`;
+  s += `      }\n      blen${w} = blen${w} + l; }\n`;
+  if (pm.chop) s += `    if (s${w} > 0u) { blen${w} = blen${w} - ${pm.chop}u; }\n`;
+  if (H.widen)                s += `    { let e = 2u*blen${w}; msg${w}[e>>2u] |= 0x80u << ((e&3u)*8u); msg${w}[14] = e*8u; }\n`;
+  else if (H.endian === "le") s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((blen${w}&3u)*8u); msg${w}[14] = blen${w}*8u;\n`;
+  else                        s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((3u-(blen${w}&3u))*8u); msg${w}[15] = blen${w}*8u;\n`;
+  for (let k = 0; k < 16; k++) s += `    let m${w}_${k} = msg${w}[${k}];\n`;
+  return s;
+}
+
+function permLaneKernel(pm, w, idxExpr, fw, H, guard) {
+  const ndg = fw ? 1 : H.words;
+  const pt = { words: Array.from({ length: 14 }, (_, k) => `pt${w}[${k}]`), len: `blen${w}` };
+  return permLane(pm, w, idxExpr, H) + H.compress(w, fw) + searchRecord(w, ndg, H, guard, pt);
+}
+
+function permSerialShader(pm, wg, fw, H) {
+  return permHead(pm, H) + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let stride = nwg.x * ${wg}u;
+  var g = gid.x;
+  loop {
+    if (g >= P.count) { break; }
+    let j = u64add32(vec2<u32>(P.baseLo, P.baseHi), g);
+${permLaneKernel(pm, 0, "j", fw, H, "true")}
+    g = g + stride;
+  }
+}`;
+}
+
+function permInterleavedShader(pm, wg, W, fw, H) {
+  let jvars = "", body = "";
+  for (let w = 0; w < W; w++) {
+    jvars += `    let g${w} = g + ${w}u * stride;\n    let j${w} = u64add32(vec2<u32>(P.baseLo, P.baseHi), g${w});\n`;
+    body += permLaneKernel(pm, w, `j${w}`, fw, H, `g${w} < P.count`) + "\n";
+  }
+  return permHead(pm, H) + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let stride = nwg.x * ${wg}u;
+  var g = gid.x;
+  loop {
+    if (g >= P.count) { break; }
+${jvars}${body}    g = g + ${W}u * stride;
+  }
+}`;
+}
+
 // ---- host driver --------------------------------------------------------
 
 const cmpWords = (x, y) => { for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
@@ -641,10 +777,12 @@ export function buildShader({ plan, hash = "md5", knobs = {} }) {
   if (!fp.ok) { fp = analyzeGeneric(plan, hash); generic = fp.ok; }
   if (!fp.ok) return { error: fp.reason };
   const fw = H.firstWord, wg = knobs.wg || 256, W = knobs.ww || 4, il = knobs.mode === "interleaved";
+  const isPerm = !!fp.perm;
   let code;
-  if (generic) { const G = buildGeneric(buildGA(fp).inner); code = il ? genericInterleavedShader(G, wg, W, fw, H) : genericSerialShader(G, wg, fw, H); }
+  if (isPerm) { const PM = buildPerm(fp); code = il ? permInterleavedShader(PM, wg, W, fw, H) : permSerialShader(PM, wg, fw, H); }
+  else if (generic) { const G = buildGeneric(buildGA(fp).inner); code = il ? genericInterleavedShader(G, wg, W, fw, H) : genericSerialShader(G, wg, fw, H); }
   else { const A = buildA(fp); code = il ? interleavedShader(A, wg, W, A.width, fw, H) : serialShader(A, wg, A.width, fw, H); }
-  return { code, generic };
+  return { code, generic, isPerm };
 }
 
 // Crack a fixed-width odometer pattern on the GPU. `plan` is engine.wheelPlan();
@@ -659,7 +797,9 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   let fp = analyzePlan(plan, hash), generic = false;
   if (!fp.ok) { fp = analyzeGeneric(plan, hash); generic = fp.ok; }   // variable-width (dicts, alternations)
   if (!fp.ok) return { supported: false, reason: fp.reason };
-  if (fp.perm) return { supported: false, reason: "a {{...}} combinatorial choice (use {n} for now; CPU handles {{...}})" };
+  const isPerm = !!fp.perm;                          // a {{...}} choice: u64 unrank kernel
+  if (isPerm && fp.total > 0xffffffffffffffffn)
+    return { supported: false, reason: `keyspace ${fp.total} over the kernel's 2^64 limit` };
   if (!navigator.gpu) return { supported: false, reason: "no WebGPU" };
 
   const adapter = await navigator.gpu.requestAdapter();
@@ -672,13 +812,19 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   const tgtArr = new Uint32Array(ntgt * H.words);
   rows.forEach((r, i) => tgtArr.set(r.w, i * H.words));
 
-  const A = generic ? null : buildA(fp);
-  const GA = generic ? buildGA(fp) : null;
-  const G = generic ? buildGeneric(GA.inner) : null;
+  // A perm plan also satisfies analyzeGeneric (it returns the {{...}} choice), so
+  // `generic` is true for it too; `gen` is the strictly variable-width path.
+  const gen = generic && !isPerm;
+  const A = generic || isPerm ? null : buildA(fp);
+  const GA = gen ? buildGA(fp) : null;
+  const G = gen ? buildGeneric(GA.inner) : null;
+  const PM = isPerm ? buildPerm(fp) : null;
   const wg = knobs.wg || 256, cap = knobs.cap || 8192;
   const mode = knobs.mode || "serial", W = knobs.ww || 4;
   const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
-  const code = generic
+  const code = isPerm
+    ? (mode === "serial" ? permSerialShader(PM, wg, fw, H) : permInterleavedShader(PM, wg, W, fw, H))
+    : generic
     ? (mode === "serial" ? genericSerialShader(G, wg, fw, H) : genericInterleavedShader(G, wg, W, fw, H))
     : (mode === "serial" ? serialShader(A, wg, A.width, fw, H) : interleavedShader(A, wg, W, A.width, fw, H));
   const module = device.createShaderModule({ code });
@@ -696,30 +842,44 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   const bReadHit = device.createBuffer({ size: MAXHITS*HITW*4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
   device.queue.writeBuffer(bCnt, 0, new Uint32Array([0]));
 
-  // The generic kernel reads its pool + meta from storage.
-  const bPool = generic ? device.createBuffer({ size: G.pool.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }) : null;
-  const bMeta = generic ? device.createBuffer({ size: G.meta.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }) : null;
-  if (generic) { device.queue.writeBuffer(bPool, 0, G.pool); device.queue.writeBuffer(bMeta, 0, G.meta); }
+  // The generic and perm kernels read their pool + meta (+ binom, perm) from
+  // storage. The perm kernel's meta lands on binding 5 as `mtab` too.
+  const poolSrc = gen ? G.pool : isPerm ? PM.pool : null;
+  const metaSrc = gen ? G.meta : isPerm ? PM.meta : null;
+  const bPool = poolSrc ? device.createBuffer({ size: poolSrc.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }) : null;
+  const bMeta = metaSrc ? device.createBuffer({ size: metaSrc.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }) : null;
+  const usesBinom = isPerm && !PM.ordered;     // only the unordered colex unrank reads binom
+  const bBinom = usesBinom ? device.createBuffer({ size: PM.binom.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }) : null;
+  if (bPool) device.queue.writeBuffer(bPool, 0, poolSrc);
+  if (bMeta) device.queue.writeBuffer(bMeta, 0, metaSrc);
+  if (bBinom) device.queue.writeBuffer(bBinom, 0, PM.binom);
 
   const rings = Array.from({ length: RING }, () => {
     const u = device.createBuffer({ size: U, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const entries = [
       { binding: 0, resource: { buffer: bTgt } }, { binding: 1, resource: { buffer: bCnt } },
       { binding: 2, resource: { buffer: bHit } }, { binding: 3, resource: { buffer: u } } ];
-    if (generic) entries.push({ binding: 4, resource: { buffer: bPool } }, { binding: 5, resource: { buffer: bMeta } });
+    if (gen) entries.push({ binding: 4, resource: { buffer: bPool } }, { binding: 5, resource: { buffer: bMeta } });
+    if (isPerm) {
+      entries.push({ binding: 4, resource: { buffer: bPool } }, { binding: 5, resource: { buffer: bMeta } });
+      if (usesBinom) entries.push({ binding: 6, resource: { buffer: bBinom } });
+    }
     const b = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries });
     return { u, b };
   });
 
-  const innerN = generic ? GA.innerN : A.innerN;
   const denom = mode === "serial" ? 1 : W;
 
   // Host outer enumeration: the positions [0, split) as a mixed-radix counter,
   // most-significant first -- the "initial unrank" the GPU is spared. For the
   // generic path the outer wheels are variable width, so they become a byte
-  // prefix of length plen rather than fixed cells.
-  const outer = generic ? GA.outer : A.positions.slice(0, A.split);
+  // prefix of length plen rather than fixed cells. The perm path sweeps its
+  // whole 64-bit choice space linearly (no outer wheels yet), so outerN = 1.
+  const outer = isPerm ? [] : generic ? GA.outer : A.positions.slice(0, A.split);
   let outerN = 1n; for (const p of outer) outerN *= BigInt(p.n);
+  // The inner span the GPU sweeps per prefix: 2^32-bounded for fast/generic (a
+  // JS number), the full 64-bit keyspace for perm (a BigInt).
+  const spanTotal = isPerm ? fp.total : BigInt(generic ? GA.innerN : A.innerN);
 
   const ab = new ArrayBuffer(U);
   const uScal = new Uint32Array(ab, 0, 4);
@@ -836,10 +996,22 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   for (let oi = 0n; oi < outerN; oi++) {
     if (control && control.stopped()) { stopped = true; break; }
     setPrefix(oi);
-    let base = 0;
-    while (base < innerN) {
-      const hi = Math.min(base + chunk, innerN), count = hi - base;
-      uScal[0] = base; uScal[1] = hi;
+    // Sweep the inner span in chunks. `basePos` is a BigInt so the perm path can
+    // range over the full 64-bit keyspace; each chunk is <= CHUNK_MAX (2^30), so
+    // `count` is always a safe number and the perm base fits two u32 words.
+    let basePos = 0n;
+    while (basePos < spanTotal) {
+      const rem = spanTotal - basePos;
+      const count = Number(rem < BigInt(chunk) ? rem : BigInt(chunk));
+      if (isPerm) {
+        uScal[0] = Number(basePos & 0xffffffffn);      // baseLo
+        uScal[1] = Number(basePos >> 32n);             // baseHi
+        uScal[2] = count;                              // Params.count
+        uScal[3] = ntgt;                               // Params.ntgt
+      } else {
+        const b = Number(basePos);
+        uScal[0] = b; uScal[1] = b + count;            // lo, hi (ntgt/plen set above)
+      }
       device.queue.writeBuffer(rings[r].u, 0, ab);
       const wgroups = Math.min(Math.max(1, Math.ceil(count / (wg * denom))), cap);
       const enc = device.createCommandEncoder();
@@ -848,7 +1020,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
       pass.dispatchWorkgroups(wgroups);
       pass.end();
       device.queue.submit([enc.finish()]);
-      done += BigInt(count); batchWork += count; base += chunk;
+      done += BigInt(count); batchWork += count; basePos += BigInt(count);
       r = (r + 1) % RING; inflight++;
       if (inflight >= RING && await drainReport()) break outer;
     }
