@@ -1040,7 +1040,9 @@ function onCrackStop() { if (crackRun.control) crackRun.control.stop(); }
 async function startCrack() {
   const st = $("crackstatus"), out = $("crackout"), prog = $("crackprog");
   out.textContent = "";
-  const targets = $("cracktgts").value.split(/\s+/).filter(Boolean);
+  // Only bare-hash lines are cracked; a line already carrying a plaintext (a
+  // comma and more) is a prior result the crack.js parser skips.
+  const targets = $("cracktgts").value.split("\n").map(s => s.trim()).filter(Boolean);
   if (!targets.length) { crackSay("crackNoTargets", "err"); return; }
   const hash = $("crackalg").value;
   const plan = crackRun.plan || await call("wheelPlan", {});
@@ -1054,10 +1056,10 @@ async function startCrack() {
     st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate);
   };
   try {
-    const res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, control });
+    const res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, onHit: crackWriteHit, control });
     if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
     else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }
-    else                    renderCrackResults(res, res.stopped);
+    else                    renderCrackResults(res);
   } catch (e) {
     st.className = "err"; st.textContent = "Error: " + (e && e.message ? e.message : e);
   } finally {
@@ -1066,18 +1068,40 @@ async function startCrack() {
   }
 }
 
-function renderCrackResults(res, stopped) {
-  const st = $("crackstatus"), out = $("crackout");
-  st.className = "dim";
-  const head = stopped ? t("crackStopped") : t("crackDone");
-  st.textContent = head + " · " + fmtRate(res.rate) + " · " + res.hits.length + " match(es)"
-    + (res.fw && res.bogus ? " (" + res.bogus + " re-checked away)" : "")
-    + (res.capped ? " (of " + res.raw + ", capped)" : "");
-  if (!res.hits.length) { out.textContent = stopped ? "" : t("crackNoMatch"); return; }
-  out.innerHTML = res.hits.map(h =>
-    `<div class="hit">${escHtml(h.hex)}:<span class="pt">${escHtml(h.plaintext)}</span></div>`).join("");
+// A cracked target, streamed in as it is found: replace its bare-hash line in
+// the textarea with "hash,plaintext" -- the results live in the input box, and
+// a re-run skips the now-annotated line. Newlines in the plaintext are escaped
+// so one hit stays one line.
+function crackWriteHit(hit) {
+  const ta = $("cracktgts");
+  const pt = hit.plaintext.replace(/[\r\n]/g, "\\n");
+  const lines = ta.value.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().toLowerCase() === hit.hex) { lines[i] = hit.hex + "," + pt; break; }
+  }
+  ta.value = lines.join("\n");
 }
-function escHtml(s) { return s.replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c])); }
+
+// Strip every line back to its leading hash, dropping any ,plaintext -- so the
+// same set can be cracked again (benchmarking, or a redo).
+function onCrackClear() {
+  const ta = $("cracktgts");
+  ta.value = ta.value.split("\n").map(line => {
+    const m = line.trim().toLowerCase().match(/^[0-9a-f]+/);
+    return m ? m[0] : line.trim();
+  }).join("\n");
+  renderCrack();
+}
+
+function renderCrackResults(res) {
+  const st = $("crackstatus");
+  st.className = "dim";
+  const head = res.stopped ? t("crackStopped") : t("crackDone");
+  st.textContent = head + " · " + fmtRate(res.rate) + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
+    + (res.allFound ? " · " + t("crackAllFound") : "")
+    + (res.fw && res.bogus ? " (" + res.bogus + " re-checked)" : "")
+    + (res.capped ? " (" + res.raw + " raw, capped)" : "");
+}
 
 // The numbering toggle appears in both tabs' controls; both reflect the one
 // state, and flipping either re-renders the visible table under the new offset.
@@ -1928,6 +1952,7 @@ function wire() {
   $("crackgears").onclick = () => $("crackknobs").showModal();
   $("crackgo").onclick = () => onCrackGo();
   $("crackstop").onclick = () => onCrackStop();
+  $("crackclear").onclick = () => onCrackClear();
   $("crackalg").onchange = () => renderCrack();
   // Search as you type, like the other inputs, so there is no button to press.
   const searchSoon = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 200); };

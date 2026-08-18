@@ -315,7 +315,7 @@ function buildA(fp) {
 // between dispatches: control.stopped() ends it, await control.gate() blocks
 // while paused. Resolves to { hits: [{hex, plaintext}], rate, total, supported,
 // stopped } or { supported:false, reason }.
-export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, control }) {
+export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, onHit, control }) {
   const H = HASHES[hash];
   if (!H) return { supported: false, reason: `${hash} not wired yet` };
   const fp = analyzePlan(plan, hash);
@@ -390,7 +390,47 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     }
   };
 
-  let r = 0, stopped = false, pausedMs = 0;
+  const tgtHex = new Set(rows.map(r => r.hex));
+  const hits = [], foundHex = new Set();
+  let processed = 0, bogus = 0, lastNhits = 0;
+
+  // Read the hit buffer, decode records [processed, nhits), confirm (first-word)
+  // and stream each newly-cracked target through onHit. Called at every drain so
+  // results appear as they are found, not at the end -- and so a run can stop the
+  // instant every target is cracked.
+  async function drainHits() {
+    const enc = device.createCommandEncoder();
+    enc.copyBufferToBuffer(bCnt, 0, bReadCnt, 0, 4);
+    device.queue.submit([enc.finish()]);
+    await bReadCnt.mapAsync(GPUMapMode.READ);
+    const nhits = new Uint32Array(bReadCnt.getMappedRange())[0];
+    bReadCnt.unmap();
+    lastNhits = nhits;
+    const got = Math.min(nhits, MAXHITS);
+    if (got <= processed) return;
+    const enc2 = device.createCommandEncoder();
+    enc2.copyBufferToBuffer(bHit, 0, bReadHit, 0, MAXHITS*4*4);
+    device.queue.submit([enc2.finish()]);
+    await bReadHit.mapAsync(GPUMapMode.READ);
+    const hitData = new Uint32Array(bReadHit.getMappedRange().slice(0));
+    bReadHit.unmap();
+    for (let i = processed; i < got; i++) {
+      const p0 = hitData[i*4], p1 = hitData[i*4+1], midx = hitData[i*4+2];
+      let s = "";
+      for (let k = 0; k < A.width; k++) { const wd = k < 4 ? p0 : p1; s += String.fromCharCode((wd >> (8*(k%4))) & 0xff); }
+      let hex;
+      if (fw) { const full = cpuHash(hash, s); if (!tgtHex.has(full)) { bogus++; continue; } hex = full; }
+      else hex = rows[midx].hex;
+      if (foundHex.has(hex)) continue;               // the same target laid twice
+      foundHex.add(hex);
+      const hit = { hex, plaintext: s };
+      hits.push(hit);
+      if (onHit) onHit(hit);
+    }
+    processed = got;
+  }
+
+  let r = 0, stopped = false, allFound = false, pausedMs = 0;
   for (let oi = 0n; oi < outerN; oi++) {
     if (control && control.stopped()) { stopped = true; break; }
     setPrefix(oi);
@@ -403,12 +443,13 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     device.queue.submit([enc.finish()]);
     done += BigInt(innerN);
     r = (r + 1) % RING;
-    // Yield every RING dispatches (or at the end) so the browser stays live and
-    // the GPU queue does not run unbounded ahead of the host. This is also the
-    // pause/stop point: a paused run drains the queue and waits at the gate,
-    // and the paused time is discounted so the reported rate stays honest.
+    // Drain every RING dispatches (or at the end): report progress, stream any
+    // new hits, and honour pause/stop. Also the browser-yield point, so the page
+    // stays live and the GPU queue does not run unbounded ahead of the host.
     if (r === 0 || oi + 1n === outerN) {
       await device.queue.onSubmittedWorkDone();
+      await drainHits();
+      if (foundHex.size >= ntgt) { allFound = true; break; }   // every target cracked -- stop early
       if (onProgress) {
         const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
         onProgress(Number(done * 100000n / total) / 100000, Number(done) / secs);
@@ -426,36 +467,14 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     }
   }
   await device.queue.onSubmittedWorkDone();
+  await drainHits();                                  // catch hits from the final, undrained batch
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
   const rate = Number(done) / secs;
-
-  // Read back the hits.
-  const enc = device.createCommandEncoder();
-  enc.copyBufferToBuffer(bCnt, 0, bReadCnt, 0, 4);
-  enc.copyBufferToBuffer(bHit, 0, bReadHit, 0, MAXHITS*4*4);
-  device.queue.submit([enc.finish()]);
-  await bReadCnt.mapAsync(GPUMapMode.READ); await bReadHit.mapAsync(GPUMapMode.READ);
-  const nhits = new Uint32Array(bReadCnt.getMappedRange())[0];
-  const hitData = new Uint32Array(bReadHit.getMappedRange().slice(0));
-  bReadCnt.unmap(); bReadHit.unmap();
   device.destroy();
 
-  const got = Math.min(nhits, MAXHITS);
-  const hits = []; let bogus = 0;
-  const tgtHex = new Set(rows.map(r => r.hex));
-  for (let i = 0; i < got; i++) {
-    const p0 = hitData[i*4], p1 = hitData[i*4+1], midx = hitData[i*4+2];
-    let s = "";
-    for (let k = 0; k < A.width; k++) { const wd = k < 4 ? p0 : p1; s += String.fromCharCode((wd >> (8*(k%4))) & 0xff); }
-    if (fw) {
-      const full = cpuHash(hash, s);
-      if (tgtHex.has(full)) hits.push({ hex: full, plaintext: s }); else bogus++;
-    } else {
-      hits.push({ hex: rows[midx].hex, plaintext: s });
-    }
-  }
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
-  return { supported: true, hits, rate, total, ntgt, raw: nhits, capped: nhits > MAXHITS, bogus, fw, stopped };
+  return { supported: true, hits, rate, total, ntgt, raw: lastNhits, capped: lastNhits > MAXHITS,
+           bogus, fw, stopped, allFound };
 }
 
 // ---- CPU reference / fallback ------------------------------------------
@@ -480,32 +499,38 @@ function layCandidate(positions, gi) {
 // hashed in JS. Slow (this is the no-WebGPU fallback, and the headless oracle
 // the tests check the GPU path's plan against), but exact. Same result shape as
 // runCrack. Yields every ~200k candidates so the page stays live.
-export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, control }) {
+export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, control }) {
   const H = HASHES[hash];
   if (!H) return { supported: false, reason: `${hash} not wired yet` };
   const fp = analyzePlan(plan, hash);
   if (!fp.ok) return { supported: false, reason: fp.reason };
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
-  const want = new Map(rows.map(r => [r.hex, r.hex]));
+  const want = new Set(rows.map(r => r.hex)), ntgt = rows.length;
   const total = fp.total, positions = fp.positions;
-  const hits = []; const seen = new Set();
+  const hits = [], seen = new Set();
   const t0 = performance.now();
-  let stopped = false;
+  let stopped = false, allFound = false, done = 0n;
   for (let gi = 0n; gi < total; gi++) {
     const s = layCandidate(positions, gi);
     const dg = cpuHash(hash, s);
-    if (want.has(dg) && !seen.has(dg)) { seen.add(dg); hits.push({ hex: dg, plaintext: s }); }
+    if (want.has(dg) && !seen.has(dg)) {
+      seen.add(dg); const hit = { hex: dg, plaintext: s }; hits.push(hit);
+      if (onHit) onHit(hit);
+      if (seen.size >= ntgt) { done = gi + 1n; allFound = true; break; }   // stop the instant all are cracked
+    }
     if ((gi & 0x3ffffn) === 0n) {
+      done = gi;
       if (control && control.stopped()) { stopped = true; break; }
       if (onProgress) onProgress(Number(gi * 100000n / total) / 100000, Number(gi) / ((performance.now()-t0)/1000 || 1));
       await new Promise(res => setTimeout(res));
       if (control && control.paused && control.paused()) { await control.gate(); if (control.stopped()) { stopped = true; break; } }
     }
   }
+  if (!stopped && !allFound) done = total;
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
-  const rate = Number(total) / ((performance.now() - t0) / 1000 || 1);
-  return { supported: true, hits, rate, total, ntgt: rows.length, raw: hits.length, capped: false, bogus: 0, fw: false, stopped };
+  const rate = Number(done) / ((performance.now() - t0) / 1000 || 1);
+  return { supported: true, hits, rate, total, ntgt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound };
 }
 
 // A tiny CPU hash, only to confirm first-word-mode hits (WebCrypto has no MD5).
