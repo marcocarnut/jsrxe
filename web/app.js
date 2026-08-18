@@ -1019,7 +1019,8 @@ async function renderCrack() {
 
 function readKnobs() {
   return { wg: +$("knobwg").value, cap: +$("knobcap").value,
-           mode: $("knobmode").value, ww: +$("knobww").value };
+           mode: $("knobmode").value, ww: +$("knobww").value,
+           backend: $("knobbackend").value };
 }
 
 // A rate in hashes/s as a friendly MH/s or GH/s.
@@ -1075,13 +1076,20 @@ async function startCrack() {
     st.className = "dim";
     st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
   };
+  const knobs = readKnobs();
+  const cpuRun = () => runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
   try {
-    let res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, onHit: crackWriteHit, control });
-    // No GPU (or a pattern the GPU path can't lay yet): fall back to the pure-JS
-    // CPU crack -- slower, but it works and is honest about it.
-    if (!res.supported) {
-      st.className = "dim"; st.textContent = t("crackCPUfallback") + " — " + res.reason;
-      res = await runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
+    let res;
+    if (knobs.backend === "cpu") {
+      res = await cpuRun();
+    } else {
+      res = await runCrack({ plan, hash, targets, knobs, onProgress, onHit: crackWriteHit, control });
+      // No GPU (or a pattern the GPU path can't lay yet): fall back to the pure-JS
+      // CPU crack -- slower, but it works and is honest about it.
+      if (!res.supported) {
+        st.className = "dim"; st.textContent = t("crackCPUfallback") + " — " + res.reason;
+        res = await cpuRun();
+      }
     }
     if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
     else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }

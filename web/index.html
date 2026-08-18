@@ -364,6 +364,12 @@
 <dialog id="crackknobs">
   <form method="dialog">
     <h3 data-t="crackKnobs"></h3>
+    <label><span data-t="crackBackend"></span>
+      <select id="knobbackend">
+        <option value="gpu" selected data-t="crackBackendGpu"></option>
+        <option value="wasm" disabled data-t="crackBackendWasm"></option>
+        <option value="cpu" data-t="crackBackendCpu"></option>
+      </select></label>
     <label><span data-t="crackWorkgroup"></span>
       <select id="knobwg"><option>64</option><option>128</option><option selected>256</option></select></label>
     <label><span data-t="crackCap"></span>
