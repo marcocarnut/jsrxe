@@ -5553,6 +5553,7 @@ const STRINGS = {
     crackDone:        "Done",
     crackStopped:     "Stopped",
     crackPaused:      "paused",
+    crackCPUfallback: "Running on the CPU (slower)",
     crackNoMatch:     "No matches — the plaintext isn't in this set, or the digest is off.",
     fromIndex:        "From index",
     perPage:          "Per page",
@@ -5799,6 +5800,7 @@ const STRINGS = {
     crackDone:        "Concluído",
     crackStopped:     "Parado",
     crackPaused:      "pausado",
+    crackCPUfallback: "Rodando na CPU (mais lento)",
     crackNoMatch:     "Sem correspondências — o texto não está neste conjunto, ou o digest está errado.",
     fromIndex:        "A partir do índice",
     perPage:          "Por página",
@@ -7672,6 +7674,39 @@ function analyzePlan(plan, hash) {
   return { ok: true, positions, width, total };
 }
 
+// The generic path: a product of positions, but a position may be variable
+// width (L=0, alternatives sliced from bytes by off[]/len[]) -- a dictionary,
+// or an alternation like (cat|fish). The candidate is assembled byte by byte
+// and hashed at its actual length, rather than laid at compile-time offsets.
+// Super-wheels (a large repeat, or a {{...}} choice) are still declined here --
+// the diceware step. maxLen bounds each position's contribution.
+function analyzeGeneric(plan, hash) {
+  if (!plan || !plan.ok) return { ok: false, reason: plan && plan.reason || "no plan" };
+  if (plan.hasBackref)   return { ok: false, reason: "a backreference" };
+  if (plan.lr && plan.lr.active)   return { ok: false, reason: "a large variable-count repeat (coming soon)" };
+  if (plan.perm && plan.perm.active) return { ok: false, reason: "a combinatorial {{...}} choice (coming soon)" };
+  if (!plan.wheels || !plan.wheels.length) return { ok: false, reason: "an empty pattern" };
+
+  const positions = [];
+  let maxWidth = 0;
+  for (const w of plan.wheels) {
+    const bytes = Uint8Array.from(w.bytes);
+    if (w.L > 0) { positions.push({ n: w.n, L: w.L, bytes, maxLen: w.L }); maxWidth += w.L; }
+    else {
+      const off = Uint32Array.from(w.off), len = Uint32Array.from(w.len);
+      let ml = 0; for (const x of len) if (x > ml) ml = x;
+      positions.push({ n: w.n, L: 0, bytes, off, len, maxLen: ml });
+      maxWidth += ml;
+    }
+  }
+  const maxW = HASHES[hash].maxWidth;
+  if (maxWidth > maxW) return { ok: false, reason: `up to ${maxWidth} bytes; the GPU ${hash} kernel handles up to ${maxW}` };
+
+  let total = 1n;
+  for (const p of positions) total *= BigInt(p.n);
+  return { ok: true, positions, maxWidth, total, generic: true };
+}
+
 // The host/GPU split: take positions from the end (least significant) until the
 // product of their radii would exceed the GPU's 32-bit budget; those are swept
 // on the device, the rest enumerated on the host. Returns the index of the
@@ -8230,7 +8265,8 @@ function layCandidate(positions, gi) {
   let s = "";
   for (let p = 0; p < positions.length; p++) {
     const pos = positions[p], d = digits[p];
-    for (let k = 0; k < pos.L; k++) s += String.fromCharCode(pos.bytes[d * pos.L + k]);
+    if (pos.L > 0) for (let k = 0; k < pos.L; k++) s += String.fromCharCode(pos.bytes[d * pos.L + k]);
+    else { const o = pos.off[d], l = pos.len[d]; for (let k = 0; k < l; k++) s += String.fromCharCode(pos.bytes[o + k]); }
   }
   return s;
 }
@@ -8242,7 +8278,8 @@ function layCandidate(positions, gi) {
 async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, control }) {
   const H = HASHES[hash];
   if (!H) return { supported: false, reason: `${hash} not wired yet` };
-  const fp = analyzePlan(plan, hash);
+  let fp = analyzePlan(plan, hash);
+  if (!fp.ok) fp = analyzeGeneric(plan, hash);        // variable-width (dicts, alternations)
   if (!fp.ok) return { supported: false, reason: fp.reason };
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
@@ -9355,7 +9392,12 @@ async function renderCrack() {
   const plan = await call("wheelPlan", {});
   if (state.tab !== "crack" || crackRun.state !== "idle") return;   // changed while awaiting
   crackRun.plan = plan;
-  const fp = analyzePlan(plan, $("crackalg").value);
+  const hash = $("crackalg").value;
+  // The fast GPU path if it applies; otherwise the generic path (GPU when built,
+  // CPU meanwhile). Either enables the button; only a set no path handles at all
+  // (infinite, backref, a super-wheel) declines.
+  let fp = analyzePlan(plan, hash);
+  if (!fp.ok) fp = analyzeGeneric(plan, hash);
   if (!fp.ok) {
     go.disabled = true;
     $("crackstatus").className = "dim";
@@ -9426,7 +9468,13 @@ async function startCrack() {
     st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
   };
   try {
-    const res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, onHit: crackWriteHit, control });
+    let res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, onHit: crackWriteHit, control });
+    // No GPU (or a pattern the GPU path can't lay yet): fall back to the pure-JS
+    // CPU crack -- slower, but it works and is honest about it.
+    if (!res.supported) {
+      st.className = "dim"; st.textContent = t("crackCPUfallback") + " — " + res.reason;
+      res = await runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
+    }
     if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
     else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }
     else                    renderCrackResults(res);

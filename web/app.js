@@ -3,7 +3,7 @@ import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
 import { HELPER_DOCS } from "./sandbox.js";
 import { BUILTIN_DICTS } from "./dicts.js";
-import { runCrack, analyzePlan } from "./crack.js";
+import { runCrack, runCrackCPU, analyzePlan, analyzeGeneric } from "./crack.js";
 
 /* --------------------------------------------------------------- transport */
 
@@ -1000,7 +1000,12 @@ async function renderCrack() {
   const plan = await call("wheelPlan", {});
   if (state.tab !== "crack" || crackRun.state !== "idle") return;   // changed while awaiting
   crackRun.plan = plan;
-  const fp = analyzePlan(plan, $("crackalg").value);
+  const hash = $("crackalg").value;
+  // The fast GPU path if it applies; otherwise the generic path (GPU when built,
+  // CPU meanwhile). Either enables the button; only a set no path handles at all
+  // (infinite, backref, a super-wheel) declines.
+  let fp = analyzePlan(plan, hash);
+  if (!fp.ok) fp = analyzeGeneric(plan, hash);
   if (!fp.ok) {
     go.disabled = true;
     $("crackstatus").className = "dim";
@@ -1071,7 +1076,13 @@ async function startCrack() {
     st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
   };
   try {
-    const res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, onHit: crackWriteHit, control });
+    let res = await runCrack({ plan, hash, targets, knobs: readKnobs(), onProgress, onHit: crackWriteHit, control });
+    // No GPU (or a pattern the GPU path can't lay yet): fall back to the pure-JS
+    // CPU crack -- slower, but it works and is honest about it.
+    if (!res.supported) {
+      st.className = "dim"; st.textContent = t("crackCPUfallback") + " — " + res.reason;
+      res = await runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
+    }
     if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
     else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }
     else                    renderCrackResults(res);
