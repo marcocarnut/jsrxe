@@ -8599,11 +8599,17 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
   // while the GPU chews its backlog. Chunks are sized from the running rate to
   // ~CHUNK_SEC of work. `drainEnd` (a bench knob, ?crackdrain=end) skips the
   // mid-run reads to measure raw kernel speed, spike-style.
-  const CHUNK_SEC = 0.1, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30, POLL_MS = 100;
+  // Bigger dispatches amortise the GPU's per-dispatch launch overhead -- which
+  // Firefox pays more of than Chrome -- so aim each chunk at ~CHUNK_SEC of work
+  // (a few tenths of a second: near the spike's one-block-per-dispatch) rather
+  // than a fraction. `drainEnd` dispatches max-size blocks and reads back only at
+  // the end (spike-equivalent). CHUNK_SEC is URL-tunable (?crackchunk=N) to sweep.
+  const CHUNK_SEC = knobs.chunkSec || 0.2, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30, POLL_MS = 100;
   const CAP = RING;                              // chunks in flight == uniform ring slots
   const drainEnd = !!knobs.drainEnd;
   const pollMs = knobs.pollMs || POLL_MS;
-  let chunk = 1 << 24;
+  let chunk = drainEnd ? CHUNK_MAX : (1 << 22);   // small first chunk -> quick first update, then ramp
+  let ramping = !drainEnd;                        // grow geometrically until the first rate-based sizing
   let stopped = false, allFound = false, pausedMs = 0, submitCount = 0;
   let lastPoll = performance.now();
   const gate = new Array(CAP).fill(null);       // per-slot completion promise, for back-pressure
@@ -8621,7 +8627,7 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
   const poll = async () => {
     await drainHits();
     if (foundHex.size >= ntgt) { allFound = true; return true; }
-    sizeChunk();
+    sizeChunk(); ramping = false;
     if (onProgress) {
       const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
       const rate = Number(done) / secs, eta = rate > 0 ? Number(total - done) / rate : Infinity;
@@ -8666,6 +8672,7 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
       device.queue.submit([enc.finish()]);
       gate[slot] = device.queue.onSubmittedWorkDone();
       done += BigInt(count); basePos += BigInt(count); submitCount++;
+      if (ramping) chunk = Math.min(chunk * 4, CHUNK_MAX);   // reach efficient dispatch size in a few submits
 
       // Read hits / report / honour pause+stop on a wall-clock cadence, not every
       // chunk -- the GPU has a full CAP-deep backlog to work while we do.
@@ -9857,14 +9864,17 @@ async function renderCrack() {
 
 function readKnobs() {
   // Bench escape hatches, URL only: ?crackdrain=end drains once at the end
-  // (spike-style, no live hits/early-stop) to measure raw kernel speed;
-  // ?crackpoll=N sets the mid-run readback cadence in ms.
+  // (spike-style, max-size dispatches, no live hits/early-stop) to measure raw
+  // kernel speed; ?crackpoll=N sets the mid-run readback cadence in ms;
+  // ?crackchunk=N sets the per-dispatch work target in seconds (bigger = fewer,
+  // larger dispatches -- sweep it to trade launch overhead vs responsiveness).
   const q = new URLSearchParams(location.search);
   return { wg: +$("knobwg").value, cap: +$("knobcap").value,
            mode: $("knobmode").value, ww: +$("knobww").value,
            backend: $("knobbackend").value,
            drainEnd: q.get("crackdrain") === "end",
-           pollMs: +q.get("crackpoll") || 0 };
+           pollMs: +q.get("crackpoll") || 0,
+           chunkSec: +q.get("crackchunk") || 0 };
 }
 
 // A rate in hashes/s as a friendly MH/s or GH/s.

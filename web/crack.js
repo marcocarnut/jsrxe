@@ -979,11 +979,17 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   // while the GPU chews its backlog. Chunks are sized from the running rate to
   // ~CHUNK_SEC of work. `drainEnd` (a bench knob, ?crackdrain=end) skips the
   // mid-run reads to measure raw kernel speed, spike-style.
-  const CHUNK_SEC = 0.1, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30, POLL_MS = 100;
+  // Bigger dispatches amortise the GPU's per-dispatch launch overhead -- which
+  // Firefox pays more of than Chrome -- so aim each chunk at ~CHUNK_SEC of work
+  // (a few tenths of a second: near the spike's one-block-per-dispatch) rather
+  // than a fraction. `drainEnd` dispatches max-size blocks and reads back only at
+  // the end (spike-equivalent). CHUNK_SEC is URL-tunable (?crackchunk=N) to sweep.
+  const CHUNK_SEC = knobs.chunkSec || 0.2, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30, POLL_MS = 100;
   const CAP = RING;                              // chunks in flight == uniform ring slots
   const drainEnd = !!knobs.drainEnd;
   const pollMs = knobs.pollMs || POLL_MS;
-  let chunk = 1 << 24;
+  let chunk = drainEnd ? CHUNK_MAX : (1 << 22);   // small first chunk -> quick first update, then ramp
+  let ramping = !drainEnd;                        // grow geometrically until the first rate-based sizing
   let stopped = false, allFound = false, pausedMs = 0, submitCount = 0;
   let lastPoll = performance.now();
   const gate = new Array(CAP).fill(null);       // per-slot completion promise, for back-pressure
@@ -1001,7 +1007,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   const poll = async () => {
     await drainHits();
     if (foundHex.size >= ntgt) { allFound = true; return true; }
-    sizeChunk();
+    sizeChunk(); ramping = false;
     if (onProgress) {
       const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
       const rate = Number(done) / secs, eta = rate > 0 ? Number(total - done) / rate : Infinity;
@@ -1046,6 +1052,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
       device.queue.submit([enc.finish()]);
       gate[slot] = device.queue.onSubmittedWorkDone();
       done += BigInt(count); basePos += BigInt(count); submitCount++;
+      if (ramping) chunk = Math.min(chunk * 4, CHUNK_MAX);   // reach efficient dispatch size in a few submits
 
       // Read hits / report / honour pause+stop on a wall-clock cadence, not every
       // chunk -- the GPU has a full CAP-deep backlog to work while we do.
