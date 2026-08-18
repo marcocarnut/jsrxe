@@ -15,6 +15,7 @@
 import { sha256 } from "./sha256.js";
 
 const MAXHITS = 1024;
+const HITW = 16;                // u32 per hit record: [len, targetIdx, 14 plaintext words (56 bytes)]
 const RING = 8;                 // uniform buffers in flight, so the host never stalls the GPU
 const PFX_WORDS = 16;           // prefix (host-enumerated) bytes, as u32 words: 64 bytes, one MD5 block
 
@@ -344,14 +345,24 @@ fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((
 ${H.consts || ""}${tables}`;
 }
 
+// Plaintext to store on a hit: the candidate bytes as little-endian words plus a
+// byte length, from the fast path's compile-time offsets. len<=maxWidth<=55, so
+// at most 14 words.
+function fastPlaintext(A, w, width) {
+  const words = [];
+  for (let k = 0; 4*k < width; k++) words.push(packBytes(A, w, 4*k, 4*k+4, width));
+  return { words, len: `${width}u` };
+}
+
 // Binary-search the sorted targets for lane w's digest words dg{w}_0.. and, on a
-// hit, store the plaintext (two packed words) and the target row. `ndg` words
-// are compared (all, or just word 0 in first-word mode); the digest is stored as
-// H.words per row, so word 0 sits at mid*H.words.
-function searchRecord(A, w, width, ndg, H, guard) {
-  const p0 = packBytes(A, w, 0, 4, width), p1 = packBytes(A, w, 4, 8, width);
+// hit, store the plaintext (pt.len bytes as pt.words little-endian) and the
+// target row. `ndg` words are compared (all, or just word 0 in first-word mode);
+// the digest is stored H.words per row, so word 0 sits at mid*H.words.
+function searchRecord(w, ndg, H, guard, pt) {
+  let store = `hits[slot*${HITW}u + 0u] = ${pt.len}; hits[slot*${HITW}u + 1u] = u32(mid);`;
+  for (let k = 0; k < pt.words.length; k++) store += ` hits[slot*${HITW}u + ${2+k}u] = ${pt.words[k]};`;
   const record = `let slot = atomicAdd(&hitcount, 1u);
-          if (slot < ${MAXHITS}u) { hits[slot*4u + 0u] = ${p0}; hits[slot*4u + 1u] = ${p1}; hits[slot*4u + 2u] = u32(mid); }`;
+          if (slot < ${MAXHITS}u) { ${store} }`;
   let chain = "";
   for (let k = 0; k < ndg; k++) {
     const dg = `dg${w}_${k}`, tg = `targets[base + ${k}u]`;
@@ -374,7 +385,7 @@ ${chain}        if (cmp == 0) { ${record} break; }
 
 function laneKernel(A, w, idxExpr, width, fw, H, guard) {
   const ndg = fw ? 1 : H.words;
-  return laneBuild(A, w, idxExpr, width, H) + H.compress(w, fw) + searchRecord(A, w, width, ndg, H, guard);
+  return laneBuild(A, w, idxExpr, width, H) + H.compress(w, fw) + searchRecord(w, ndg, H, guard, fastPlaintext(A, w, width));
 }
 
 // Serial kernel: one candidate per grid-stride step.
@@ -401,6 +412,115 @@ function interleavedShader(A, wg, W, width, fw, H) {
     body += laneKernel(A, w, `j${w}`, width, fw, H, `j${w} < P.hi`) + "\n";
   }
   return shaderHead(A, H) + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let stride = nwg.x * ${wg}u;
+  var j = P.lo + gid.x;
+  loop {
+    if (j >= P.hi) { break; }
+${jvars}${body}    j = j + ${W}u * stride;
+  }
+}`;
+}
+
+// ---- the generic (variable-width) kernel --------------------------------
+// Lays candidates whose positions vary in width (dictionaries, uneven
+// alternations) that the fast odometer can't: assemble the bytes into a msg[16]
+// array from a pool storage buffer at a runtime length, then reuse the same
+// compress. Slower (the message can't be scalarised), but general. One sweep for
+// now (total <= 2^32); the host prefix split and the {{...}} super-wheel follow.
+
+// GPU data for a generic plan: a flat byte pool (packed u32), a per-position meta
+// table of (off,len) pairs, and each position's radix + base into meta. Every
+// position is normalised to off/len (a fixed L wheel becomes off=i*L,len=L), so
+// the kernel treats them all alike.
+function buildGeneric(fp) {
+  const bytes = [], meta = [], desc = [];
+  for (const p of fp.positions) {
+    const metaBase = meta.length / 2;
+    for (let i = 0; i < p.n; i++) {
+      const o = p.L > 0 ? i * p.L : p.off[i], l = p.L > 0 ? p.L : p.len[i];
+      meta.push(bytes.length, l);
+      for (let k = 0; k < l; k++) bytes.push(p.bytes[o + k]);
+    }
+    desc.push({ n: p.n, metaBase });
+  }
+  const pool = new Uint32Array(Math.ceil(bytes.length / 4) || 1);
+  for (let i = 0; i < bytes.length; i++) pool[i >> 2] |= bytes[i] << ((i & 3) * 8);
+  return { desc, pool, meta: Uint32Array.from(meta.length ? meta : [0]) };
+}
+
+// Decode lane w's index into a per-position alternative, assemble the candidate
+// into msg{w}[] (hash-encoded) and pt{w}[] (canonical little-endian plaintext),
+// track the byte length blen{w}, pad, and expose the message words.
+function genericLane(G, w, idxExpr, H) {
+  const nw = G.desc.length;
+  let s = `\n    var msg${w}: array<u32,16>; var pt${w}: array<u32,14>;\n`;
+  s += `    for (var z=0u; z<16u; z=z+1u){ msg${w}[z]=0u; } for (var z=0u; z<14u; z=z+1u){ pt${w}[z]=0u; }\n`;
+  s += `    var q${w} = ${idxExpr};\n`;
+  for (let p = nw - 1; p >= 0; p--) {
+    s += `    let alt${w}_${p} = q${w} % ${G.desc[p].n}u;`;
+    if (p > 0) s += ` q${w} = q${w} / ${G.desc[p].n}u;`;
+    s += `\n`;
+  }
+  s += `    var blen${w}: u32 = 0u;\n`;
+  for (let p = 0; p < nw; p++) {
+    s += `    { let mb = ${G.desc[p].metaBase * 2}u + alt${w}_${p}*2u; let o = mtab[mb]; let l = mtab[mb+1u];\n`;
+    s += `      for (var k=0u; k<l; k=k+1u) {\n`;
+    s += `        let b = (pool[(o+k)>>2u] >> (((o+k)&3u)*8u)) & 0xffu;\n`;
+    s += `        let cp = blen${w}+k; pt${w}[cp>>2u] |= b << ((cp&3u)*8u);\n`;
+    if (H.widen)               s += `        let mp = 2u*(blen${w}+k); msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
+    else if (H.endian === "le") s += `        let mp = blen${w}+k; msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
+    else                        s += `        let mp = blen${w}+k; msg${w}[mp>>2u] |= b << ((3u-(mp&3u))*8u);\n`;
+    s += `      }\n      blen${w} = blen${w} + l;\n    }\n`;
+  }
+  if (H.widen)                s += `    { let e = 2u*blen${w}; msg${w}[e>>2u] |= 0x80u << ((e&3u)*8u); msg${w}[14] = e*8u; }\n`;
+  else if (H.endian === "le") s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((blen${w}&3u)*8u); msg${w}[14] = blen${w}*8u;\n`;
+  else                        s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((3u-(blen${w}&3u))*8u); msg${w}[15] = blen${w}*8u;\n`;
+  for (let k = 0; k < 16; k++) s += `    let m${w}_${k} = msg${w}[${k}];\n`;
+  return s;
+}
+
+function genericShaderHead(H) {
+  return `
+struct Params { lo: u32, hi: u32, ntgt: u32, _pad: u32, pfx: array<vec4<u32>, 4> };
+@group(0) @binding(0) var<storage, read>       targets : array<u32>;
+@group(0) @binding(1) var<storage, read_write> hitcount: atomic<u32>;
+@group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
+@group(0) @binding(3) var<uniform>             P       : Params;
+@group(0) @binding(4) var<storage, read>       pool    : array<u32>;
+@group(0) @binding(5) var<storage, read>       mtab    : array<u32>;
+fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((x >> 8u) & 0xff00u) | ((x >> 24u) & 0xffu); }
+${H.consts || ""}`;
+}
+
+function genericLaneKernel(G, w, idxExpr, fw, H, guard) {
+  const ndg = fw ? 1 : H.words;
+  const pt = { words: Array.from({ length: 14 }, (_, k) => `pt${w}[${k}]`), len: `blen${w}` };
+  return genericLane(G, w, idxExpr, H) + H.compress(w, fw) + searchRecord(w, ndg, H, guard, pt);
+}
+
+function genericSerialShader(G, wg, fw, H) {
+  return genericShaderHead(H) + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let stride = nwg.x * ${wg}u;
+  var j = P.lo + gid.x;
+  loop {
+    if (j >= P.hi) { break; }
+${genericLaneKernel(G, 0, "j", fw, H, "true")}
+    j = j + stride;
+  }
+}`;
+}
+
+function genericInterleavedShader(G, wg, W, fw, H) {
+  let jvars = "", body = "";
+  for (let w = 0; w < W; w++) {
+    jvars += `    let j${w} = j + ${w}u * stride;\n`;
+    body += genericLaneKernel(G, w, `j${w}`, fw, H, `j${w} < P.hi`) + "\n";
+  }
+  return genericShaderHead(H) + `
 @compute @workgroup_size(${wg})
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
   let stride = nwg.x * ${wg}u;
@@ -445,15 +565,14 @@ function buildA(fp) {
 export function buildShader({ plan, hash = "md5", knobs = {} }) {
   const H = HASHES[hash];
   if (!H) return { error: `${hash} not wired` };
-  const fp = analyzePlan(plan, hash);
+  let fp = analyzePlan(plan, hash), generic = false;
+  if (!fp.ok) { fp = analyzeGeneric(plan, hash); generic = fp.ok; }
   if (!fp.ok) return { error: fp.reason };
-  const A = buildA(fp);
-  const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
-  const wg = knobs.wg || 256, W = knobs.ww || 4;
-  const code = knobs.mode === "interleaved"
-    ? interleavedShader(A, wg, W, A.width, fw, H)
-    : serialShader(A, wg, A.width, fw, H);
-  return { code, A };
+  const fw = H.firstWord, wg = knobs.wg || 256, W = knobs.ww || 4, il = knobs.mode === "interleaved";
+  let code;
+  if (generic) { const G = buildGeneric(fp); code = il ? genericInterleavedShader(G, wg, W, fw, H) : genericSerialShader(G, wg, fw, H); }
+  else { const A = buildA(fp); code = il ? interleavedShader(A, wg, W, A.width, fw, H) : serialShader(A, wg, A.width, fw, H); }
+  return { code, generic };
 }
 
 // Crack a fixed-width odometer pattern on the GPU. `plan` is engine.wheelPlan();
@@ -465,8 +584,11 @@ export function buildShader({ plan, hash = "md5", knobs = {} }) {
 export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, onHit, control }) {
   const H = HASHES[hash];
   if (!H) return { supported: false, reason: `${hash} not wired yet` };
-  const fp = analyzePlan(plan, hash);
+  let fp = analyzePlan(plan, hash), generic = false;
+  if (!fp.ok) { fp = analyzeGeneric(plan, hash); generic = fp.ok; }   // variable-width (dicts, alternations)
   if (!fp.ok) return { supported: false, reason: fp.reason };
+  if (generic && fp.total > 0xffffffffn)
+    return { supported: false, reason: `keyspace ${fp.total} over the generic kernel's 2^32 single-sweep limit (host split coming)` };
   if (!navigator.gpu) return { supported: false, reason: "no WebGPU" };
 
   const adapter = await navigator.gpu.requestAdapter();
@@ -479,12 +601,14 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   const tgtArr = new Uint32Array(ntgt * H.words);
   rows.forEach((r, i) => tgtArr.set(r.w, i * H.words));
 
-  const A = buildA(fp);
+  const A = generic ? null : buildA(fp);
+  const G = generic ? buildGeneric(fp) : null;
   const wg = knobs.wg || 256, cap = knobs.cap || 8192;
   const mode = knobs.mode || "serial", W = knobs.ww || 4;
   const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
-  const code = mode === "serial" ? serialShader(A, wg, A.width, fw, H)
-                                 : interleavedShader(A, wg, W, A.width, fw, H);
+  const code = generic
+    ? (mode === "serial" ? genericSerialShader(G, wg, fw, H) : genericInterleavedShader(G, wg, W, fw, H))
+    : (mode === "serial" ? serialShader(A, wg, A.width, fw, H) : interleavedShader(A, wg, W, A.width, fw, H));
   const module = device.createShaderModule({ code });
   const info = await module.getCompilationInfo();
   const errs = info.messages.filter(m => m.type === "error");
@@ -495,25 +619,32 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   const bTgt = device.createBuffer({ size: tgtArr.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
   device.queue.writeBuffer(bTgt, 0, tgtArr);
   const bCnt = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
-  const bHit = device.createBuffer({ size: MAXHITS*4*4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+  const bHit = device.createBuffer({ size: MAXHITS*HITW*4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
   const bReadCnt = device.createBuffer({ size: 4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-  const bReadHit = device.createBuffer({ size: MAXHITS*4*4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  const bReadHit = device.createBuffer({ size: MAXHITS*HITW*4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
   device.queue.writeBuffer(bCnt, 0, new Uint32Array([0]));
+
+  // The generic kernel reads its pool + meta from storage.
+  const bPool = generic ? device.createBuffer({ size: G.pool.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }) : null;
+  const bMeta = generic ? device.createBuffer({ size: G.meta.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }) : null;
+  if (generic) { device.queue.writeBuffer(bPool, 0, G.pool); device.queue.writeBuffer(bMeta, 0, G.meta); }
 
   const rings = Array.from({ length: RING }, () => {
     const u = device.createBuffer({ size: U, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const b = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
+    const entries = [
       { binding: 0, resource: { buffer: bTgt } }, { binding: 1, resource: { buffer: bCnt } },
-      { binding: 2, resource: { buffer: bHit } }, { binding: 3, resource: { buffer: u } } ] });
+      { binding: 2, resource: { buffer: bHit } }, { binding: 3, resource: { buffer: u } } ];
+    if (generic) entries.push({ binding: 4, resource: { buffer: bPool } }, { binding: 5, resource: { buffer: bMeta } });
+    const b = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries });
     return { u, b };
   });
 
-  const innerN = A.innerN;
+  const innerN = generic ? Number(fp.total) : A.innerN;
   const denom = mode === "serial" ? 1 : W;
 
   // Host outer enumeration: the positions [0, split) as a mixed-radix counter,
-  // most-significant first. outerN is a BigInt (it is the whole keyspace / innerN).
-  const outer = A.positions.slice(0, A.split);
+  // most-significant first. The generic path is a single sweep, so no outer part.
+  const outer = generic ? [] : A.positions.slice(0, A.split);
   let outerN = 1n; for (const p of outer) outerN *= BigInt(p.n);
 
   const ab = new ArrayBuffer(U);
@@ -555,15 +686,15 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     const got = Math.min(nhits, MAXHITS);
     if (got <= processed) return;
     const enc2 = device.createCommandEncoder();
-    enc2.copyBufferToBuffer(bHit, 0, bReadHit, 0, MAXHITS*4*4);
+    enc2.copyBufferToBuffer(bHit, 0, bReadHit, 0, MAXHITS*HITW*4);
     device.queue.submit([enc2.finish()]);
     await bReadHit.mapAsync(GPUMapMode.READ);
     const hitData = new Uint32Array(bReadHit.getMappedRange().slice(0));
     bReadHit.unmap();
     for (let i = processed; i < got; i++) {
-      const p0 = hitData[i*4], p1 = hitData[i*4+1], midx = hitData[i*4+2];
+      const base = i*HITW, len = hitData[base], midx = hitData[base+1];
       let s = "";
-      for (let k = 0; k < A.width; k++) { const wd = k < 4 ? p0 : p1; s += String.fromCharCode((wd >> (8*(k%4))) & 0xff); }
+      for (let k = 0; k < len; k++) s += String.fromCharCode((hitData[base + 2 + (k>>2)] >> ((k&3)*8)) & 0xff);
       let hex;
       if (fw) { const full = cpuHash(hash, s); if (!tgtHex.has(full)) { bogus++; continue; } hex = full; }
       else hex = rows[midx].hex;
