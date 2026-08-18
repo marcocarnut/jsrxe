@@ -7699,7 +7699,7 @@ function analyzeGeneric(plan, hash) {
   if (!plan || !plan.ok) return { ok: false, reason: plan && plan.reason || "no plan" };
   if (plan.hasBackref)   return { ok: false, reason: "a backreference" };
   if (plan.lr && plan.lr.active)   return { ok: false, reason: "a large variable-count repeat (coming soon)" };
-  if (plan.perm && plan.perm.active) return { ok: false, reason: "a combinatorial {{...}} choice (coming soon)" };
+  if (plan.perm && plan.perm.active) return analyzePerm(plan, hash);
   if (!plan.wheels || !plan.wheels.length) return { ok: false, reason: "an empty pattern" };
 
   const positions = [];
@@ -7720,6 +7720,63 @@ function analyzeGeneric(plan, hash) {
   let total = 1n;
   for (const p of positions) total *= BigInt(p.n);
   return { ok: true, positions, maxWidth, total, generic: true };
+}
+
+// A {{...}} combinatorial choice: choose lo..hi of the pool's n members (ordered
+// = permutation, else combination), each a byte slice, concatenated -- diceware.
+// The index unranks to the picks: the combinatorial number system (colex) for a
+// combination, the factorial number system for a permutation. Declines fixed
+// positions around it for now (the bare ([:dict:] ){{k}} shape).
+function analyzePerm(plan, hash) {
+  if (plan.wheels && plan.wheels.length)
+    return { ok: false, reason: "fixed positions around a {{...}} choice (coming soon)" };
+  const pm = plan.perm, pool = pm.pool, n = pool.n;
+  const bytes = Uint8Array.from(pool.bytes);
+  const off = pool.L > 0 ? null : Uint32Array.from(pool.off);
+  const len = pool.L > 0 ? null : Uint32Array.from(pool.len);
+  const itemLen = i => pool.L > 0 ? pool.L : len[i];
+  const itemOff = i => pool.L > 0 ? i * pool.L : off[i];
+  const HI = pm.hi;
+  const B = Array.from({ length: n + 1 }, () => new Array(HI + 1).fill(0n));   // Pascal C(c,k)
+  for (let c = 0; c <= n; c++) { B[c][0] = 1n; for (let k = 1; k <= Math.min(c, HI); k++) B[c][k] = B[c-1][k-1] + B[c-1][k]; }
+  const P = (nn, ss) => { let r = 1n; for (let i = 0; i < ss; i++) r *= BigInt(nn - i); return r; };
+  const block = ss => pm.ordered ? P(n, ss) : (ss < 0 || ss > n ? 0n : B[n][ss]);
+  let total = 0n;
+  for (let ss = pm.lo; ss <= pm.hi; ss++) total += block(ss);
+  const lens = []; for (let i = 0; i < n; i++) lens.push(itemLen(i));
+  lens.sort((a, b) => b - a);
+  let maxWidth = -pm.chop; for (let i = 0; i < pm.hi; i++) maxWidth += lens[i] || 0;
+  const maxW = HASHES[hash].maxWidth;
+  if (maxWidth > maxW) return { ok: false, reason: `up to ${maxWidth} bytes; the GPU ${hash} kernel handles up to ${maxW}` };
+  return { ok: true, perm: { n, bytes, itemOff, itemLen, lo: pm.lo, hi: pm.hi, ordered: !!pm.ordered, chop: pm.chop, B, block }, total, maxWidth, generic: true };
+}
+
+// Lay the candidate at global index gi (BigInt) of a {{...}} choice: decode the
+// size, unrank to the picks, concatenate their bytes, quell the chop.
+function layPerm(pm, gi) {
+  let s = pm.lo, rr = gi;
+  for (;;) { const blk = pm.block(s); if (rr < blk) break; rr -= blk; s++; }
+  const idx = new Array(s);
+  if (pm.ordered) {
+    const used = []; let rem = rr;
+    for (let pp = 0; pp < s; pp++) {
+      let blk = 1n; for (let t = 0; t < s - 1 - pp; t++) blk *= BigInt(pm.n - 1 - pp - t);
+      let actual = Number(rem / blk); rem %= blk;
+      for (const u of used) if (u <= actual) actual++;
+      idx[pp] = actual;
+      let ins = used.length; used.push(0); while (ins > 0 && used[ins-1] > actual) { used[ins] = used[ins-1]; ins--; } used[ins] = actual;
+    }
+  } else {
+    let jj = rr, up = pm.n;
+    for (let k = s; k >= 1; k--) {
+      let lo = k - 1, hi = up - 1;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (pm.B[mid][k] <= jj) lo = mid; else hi = mid - 1; }
+      jj -= pm.B[lo][k]; idx[k-1] = lo; up = lo;
+    }
+  }
+  let str = "";
+  for (let pp = 0; pp < s; pp++) { const it = idx[pp], o = pm.itemOff(it), l = pm.itemLen(it); for (let k = 0; k < l; k++) str += String.fromCharCode(pm.bytes[o + k]); }
+  return pm.chop ? str.slice(0, str.length - pm.chop) : str;
 }
 
 // The host/GPU split: take positions from the end (least significant) until the
@@ -8205,6 +8262,7 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
   let fp = analyzePlan(plan, hash), generic = false;
   if (!fp.ok) { fp = analyzeGeneric(plan, hash); generic = fp.ok; }   // variable-width (dicts, alternations)
   if (!fp.ok) return { supported: false, reason: fp.reason };
+  if (fp.perm) return { supported: false, reason: "a {{...}} combinatorial choice (GPU kernel next; CPU for now)" };
   if (generic && fp.total > 0xffffffffn)
     return { supported: false, reason: `keyspace ${fp.total} over the generic kernel's 2^32 single-sweep limit (host split coming)` };
   if (!navigator.gpu) return { supported: false, reason: "no WebGPU" };
@@ -8430,11 +8488,12 @@ async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, con
   if (!rows.length) return { supported: true, empty: true };
   const want = new Set(rows.map(r => r.hex)), ntgt = rows.length;
   const total = fp.total, positions = fp.positions;
+  const lay = fp.perm ? (gi => layPerm(fp.perm, gi)) : (gi => layCandidate(positions, gi));
   const hits = [], seen = new Set();
   const t0 = performance.now();
   let stopped = false, allFound = false, done = 0n;
   for (let gi = 0n; gi < total; gi++) {
-    const s = layCandidate(positions, gi);
+    const s = lay(gi);
     const dg = cpuHash(hash, s);
     if (want.has(dg) && !seen.has(dg)) {
       seen.add(dg); const hit = { hex: dg, plaintext: s }; hits.push(hit);
