@@ -8590,43 +8590,43 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
     processed = got;
   }
 
-  // Adaptive chunks, pipelined. Each prefix's inner sweep is sub-divided into
-  // chunks aimed at ~CHUNK_SEC of GPU work; RING of them are submitted back to
-  // back before a single drain, so the GPU never idles between chunks (draining
-  // every chunk starved it and cost MD5 4x). A drain reads hits, reports, and
-  // re-sizes the next chunks from the batch's measured rate -- so a fast hash
-  // settles on large chunks and a slow one on small, both refreshing ~RING x
-  // CHUNK_SEC apart, with a tiny first chunk so the first update is near-instant.
-  const CHUNK_SEC = 0.1, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30;
-  let chunk = 1 << 22;
-  let r = 0, inflight = 0, stopped = false, allFound = false, pausedMs = 0;
-  let batchT0 = performance.now(), batchWork = 0;
+  // Continuous submission with a bounded look-ahead. We keep up to CAP chunks in
+  // flight so the GPU never idles: rather than draining the queue every batch and
+  // reading hits inline (a mapAsync round-trip + an event-loop yield with the
+  // queue empty -- cheap on Chrome/Dawn, but on Firefox a big per-batch bubble
+  // that cost it ~35%), each chunk's completion gates only the reuse of its ring
+  // slot CAP submits later, and hits/progress are read on a wall-clock cadence
+  // while the GPU chews its backlog. Chunks are sized from the running rate to
+  // ~CHUNK_SEC of work. `drainEnd` (a bench knob, ?crackdrain=end) skips the
+  // mid-run reads to measure raw kernel speed, spike-style.
+  const CHUNK_SEC = 0.1, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30, POLL_MS = 100;
+  const CAP = RING;                              // chunks in flight == uniform ring slots
+  const drainEnd = !!knobs.drainEnd;
+  const pollMs = knobs.pollMs || POLL_MS;
+  let chunk = 1 << 24;
+  let stopped = false, allFound = false, pausedMs = 0, submitCount = 0;
+  let lastPoll = performance.now();
+  const gate = new Array(CAP).fill(null);       // per-slot completion promise, for back-pressure
 
-  // Wait for the in-flight batch, stream hits, report, and steer the chunk size.
-  // Returns true if the run should end (all found, or stopped).
-  const drainReport = async () => {
-    await device.queue.onSubmittedWorkDone();
-    const dt = performance.now() - batchT0;
+  // Steer the chunk toward ~CHUNK_SEC of GPU work from the run's measured rate.
+  const sizeChunk = () => {
+    const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
+    if (secs > 0 && done > 0n)
+      chunk = Math.max(CHUNK_MIN, Math.min(CHUNK_MAX, Math.round(Number(done) / secs * CHUNK_SEC)));
+  };
+
+  // Read the hit count (and any new records), stream them, update progress, and
+  // report whether every target is now cracked. The GPU keeps running its
+  // in-flight backlog across the awaited map, so this never starves it.
+  const poll = async () => {
     await drainHits();
     if (foundHex.size >= ntgt) { allFound = true; return true; }
-    if (dt > 0 && batchWork > 0)
-      chunk = Math.max(CHUNK_MIN, Math.min(CHUNK_MAX, Math.round(batchWork / (dt/1000) * CHUNK_SEC)));
+    sizeChunk();
     if (onProgress) {
       const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
       const rate = Number(done) / secs, eta = rate > 0 ? Number(total - done) / rate : Infinity;
       onProgress(Number(done * 100000n / total) / 100000, rate, eta);
     }
-    await new Promise(res => setTimeout(res));
-    if (control) {
-      if (control.stopped()) { stopped = true; return true; }
-      if (control.paused && control.paused()) {
-        const pt = performance.now();
-        await control.gate();
-        pausedMs += performance.now() - pt;
-        if (control.stopped()) { stopped = true; return true; }
-      }
-    }
-    inflight = 0; batchWork = 0; batchT0 = performance.now();
     return false;
   };
 
@@ -8639,6 +8639,12 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
     // `count` is always a safe number and the perm base fits two u32 words.
     let basePos = 0n;
     while (basePos < spanTotal) {
+      // Back-pressure: before reusing a ring slot, wait for the chunk that used
+      // it CAP submits ago -- capping in-flight work at CAP while the GPU stays
+      // busy on the CAP-1 chunks still queued. (No-op for the first CAP submits.)
+      const slot = submitCount % CAP;
+      if (gate[slot]) await gate[slot];
+
       const rem = spanTotal - basePos;
       const count = Number(rem < BigInt(chunk) ? rem : BigInt(chunk));
       if (isPerm) {
@@ -8650,23 +8656,40 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
         const b = Number(basePos);
         uScal[0] = b; uScal[1] = b + count;            // lo, hi (ntgt/plen set above)
       }
-      device.queue.writeBuffer(rings[r].u, 0, ab);
+      device.queue.writeBuffer(rings[slot].u, 0, ab);
       const wgroups = Math.min(Math.max(1, Math.ceil(count / (wg * denom))), cap);
       const enc = device.createCommandEncoder();
       const pass = enc.beginComputePass();
-      pass.setPipeline(pipeline); pass.setBindGroup(0, rings[r].b);
+      pass.setPipeline(pipeline); pass.setBindGroup(0, rings[slot].b);
       pass.dispatchWorkgroups(wgroups);
       pass.end();
       device.queue.submit([enc.finish()]);
-      done += BigInt(count); batchWork += count; basePos += BigInt(count);
-      r = (r + 1) % RING; inflight++;
-      if (inflight >= RING && await drainReport()) break outer;
+      gate[slot] = device.queue.onSubmittedWorkDone();
+      done += BigInt(count); basePos += BigInt(count); submitCount++;
+
+      // Read hits / report / honour pause+stop on a wall-clock cadence, not every
+      // chunk -- the GPU has a full CAP-deep backlog to work while we do.
+      if (!drainEnd && performance.now() - lastPoll >= pollMs) {
+        if (await poll()) break outer;
+        lastPoll = performance.now();
+        await new Promise(res => setTimeout(res));    // let the page breathe + UI events land
+        if (control) {
+          if (control.stopped()) { stopped = true; break outer; }
+          if (control.paused && control.paused()) {
+            const pt = performance.now();
+            await control.gate();
+            pausedMs += performance.now() - pt;
+            if (control.stopped()) { stopped = true; break outer; }
+          }
+        }
+      }
     }
   }
   await device.queue.onSubmittedWorkDone();
   await drainHits();                                  // catch any hit from the final chunk
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
   const rate = Number(done) / secs;
+  if (onProgress && !stopped) onProgress(1, rate, 0);  // land the bar at 100% on a clean finish
   device.destroy();
 
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
@@ -9833,9 +9856,15 @@ async function renderCrack() {
 }
 
 function readKnobs() {
+  // Bench escape hatches, URL only: ?crackdrain=end drains once at the end
+  // (spike-style, no live hits/early-stop) to measure raw kernel speed;
+  // ?crackpoll=N sets the mid-run readback cadence in ms.
+  const q = new URLSearchParams(location.search);
   return { wg: +$("knobwg").value, cap: +$("knobcap").value,
            mode: $("knobmode").value, ww: +$("knobww").value,
-           backend: $("knobbackend").value };
+           backend: $("knobbackend").value,
+           drainEnd: q.get("crackdrain") === "end",
+           pollMs: +q.get("crackpoll") || 0 };
 }
 
 // A rate in hashes/s as a friendly MH/s or GH/s.

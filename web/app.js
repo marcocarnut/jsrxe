@@ -1018,9 +1018,15 @@ async function renderCrack() {
 }
 
 function readKnobs() {
+  // Bench escape hatches, URL only: ?crackdrain=end drains once at the end
+  // (spike-style, no live hits/early-stop) to measure raw kernel speed;
+  // ?crackpoll=N sets the mid-run readback cadence in ms.
+  const q = new URLSearchParams(location.search);
   return { wg: +$("knobwg").value, cap: +$("knobcap").value,
            mode: $("knobmode").value, ww: +$("knobww").value,
-           backend: $("knobbackend").value };
+           backend: $("knobbackend").value,
+           drainEnd: q.get("crackdrain") === "end",
+           pollMs: +q.get("crackpoll") || 0 };
 }
 
 // A rate in hashes/s as a friendly MH/s or GH/s.
