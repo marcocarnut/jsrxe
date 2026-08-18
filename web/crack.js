@@ -785,6 +785,21 @@ export function buildShader({ plan, hash = "md5", knobs = {} }) {
   return { code, generic, isPerm };
 }
 
+// Probe the WebGPU adapter the crack would use, so the UI can warn when the
+// browser hands back a software rasteriser (Chrome's SwiftShader/Subzero, Mesa
+// llvmpipe) -- correct but ~100x slower than real hardware, which is why MD5
+// crawls at ~15 MH/s there while Firefox's Vulkan backend does >1 GH/s.
+// Returns { ok, software, name } (name is the adapter's own description).
+export async function gpuAdapterInfo() {
+  if (!navigator.gpu) return { ok: false, reason: "no WebGPU" };
+  const a = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  if (!a) return { ok: false, reason: "no adapter" };
+  const info = a.info || (a.requestAdapterInfo ? await a.requestAdapterInfo() : {});
+  const tag = `${info.vendor || ""} ${info.architecture || ""} ${info.description || ""} ${info.device || ""}`.replace(/\s+/g, " ").trim();
+  const software = !!a.isFallbackAdapter || /swiftshader|subzero|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(tag);
+  return { ok: true, software, name: tag || (a.isFallbackAdapter ? "fallback adapter" : "GPU") };
+}
+
 // Crack a fixed-width odometer pattern on the GPU. `plan` is engine.wheelPlan();
 // `targets` the pasted digest lines; `knobs` the tuning; onProgress(frac, rate)
 // is called between dispatches. `control` (optional) pauses and stops the run
@@ -802,7 +817,10 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     return { supported: false, reason: `keyspace ${fp.total} over the kernel's 2^64 limit` };
   if (!navigator.gpu) return { supported: false, reason: "no WebGPU" };
 
-  const adapter = await navigator.gpu.requestAdapter();
+  // Ask for the discrete/high-performance GPU: on a hybrid machine the default
+  // pick can be the integrated or a software adapter, and MD5 runs ~100x slower
+  // on software (Chrome's SwiftShader) than on real hardware.
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) return { supported: false, reason: "no GPU adapter" };
   const device = await adapter.requestDevice();
 

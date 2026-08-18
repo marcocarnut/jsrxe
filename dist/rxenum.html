@@ -5564,6 +5564,7 @@ const STRINGS = {
     crackStopped:     "Stopped",
     crackPaused:      "paused",
     crackCPUfallback: "Running on the CPU (slower)",
+    crackSoftwareGpu: "⚠ software GPU — enable hardware WebGPU or use Firefox",
     crackNoMatch:     "No matches — the plaintext isn't in this set, or the digest is off.",
     fromIndex:        "From index",
     perPage:          "Per page",
@@ -5815,6 +5816,7 @@ const STRINGS = {
     crackStopped:     "Parado",
     crackPaused:      "pausado",
     crackCPUfallback: "Rodando na CPU (mais lento)",
+    crackSoftwareGpu: "⚠ GPU por software — ative o WebGPU por hardware ou use o Firefox",
     crackNoMatch:     "Sem correspondências — o texto não está neste conjunto, ou o digest está errado.",
     fromIndex:        "A partir do índice",
     perPage:          "Por página",
@@ -8403,6 +8405,21 @@ function buildShader({ plan, hash = "md5", knobs = {} }) {
   return { code, generic, isPerm };
 }
 
+// Probe the WebGPU adapter the crack would use, so the UI can warn when the
+// browser hands back a software rasteriser (Chrome's SwiftShader/Subzero, Mesa
+// llvmpipe) -- correct but ~100x slower than real hardware, which is why MD5
+// crawls at ~15 MH/s there while Firefox's Vulkan backend does >1 GH/s.
+// Returns { ok, software, name } (name is the adapter's own description).
+async function gpuAdapterInfo() {
+  if (!navigator.gpu) return { ok: false, reason: "no WebGPU" };
+  const a = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  if (!a) return { ok: false, reason: "no adapter" };
+  const info = a.info || (a.requestAdapterInfo ? await a.requestAdapterInfo() : {});
+  const tag = `${info.vendor || ""} ${info.architecture || ""} ${info.description || ""} ${info.device || ""}`.replace(/\s+/g, " ").trim();
+  const software = !!a.isFallbackAdapter || /swiftshader|subzero|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(tag);
+  return { ok: true, software, name: tag || (a.isFallbackAdapter ? "fallback adapter" : "GPU") };
+}
+
 // Crack a fixed-width odometer pattern on the GPU. `plan` is engine.wheelPlan();
 // `targets` the pasted digest lines; `knobs` the tuning; onProgress(frac, rate)
 // is called between dispatches. `control` (optional) pauses and stops the run
@@ -8420,7 +8437,10 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
     return { supported: false, reason: `keyspace ${fp.total} over the kernel's 2^64 limit` };
   if (!navigator.gpu) return { supported: false, reason: "no WebGPU" };
 
-  const adapter = await navigator.gpu.requestAdapter();
+  // Ask for the discrete/high-performance GPU: on a hybrid machine the default
+  // pick can be the integrated or a software adapter, and MD5 runs ~100x slower
+  // on software (Chrome's SwiftShader) than on real hardware.
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) return { supported: false, reason: "no GPU adapter" };
   const device = await adapter.requestDevice();
 
@@ -9866,12 +9886,20 @@ async function startCrack() {
   crackRun = { state: "running", control, plan };
   crackButtons();
   show(prog, true); prog.value = 0;
+  const knobs = readKnobs();
+  // A software adapter (Chrome's SwiftShader) is correct but ~100x slower than
+  // real hardware -- warn so a crawling rate isn't a mystery. Kept in front of
+  // every progress line and the final result, since the low rate is the symptom.
+  let gpuNote = "";
+  if (knobs.backend !== "cpu") {
+    const g = await gpuAdapterInfo().catch(() => null);
+    if (g && g.ok && g.software) gpuNote = t("crackSoftwareGpu") + " · ";
+  }
   const onProgress = (frac, rate, eta) => {
     prog.value = Math.round(frac * 1000);
     st.className = "dim";
-    st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
+    st.textContent = gpuNote + (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
   };
-  const knobs = readKnobs();
   const cpuRun = () => runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
   try {
     let res;
@@ -9888,7 +9916,7 @@ async function startCrack() {
     }
     if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
     else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }
-    else                    renderCrackResults(res);
+    else                    renderCrackResults(res, gpuNote);
   } catch (e) {
     st.className = "err"; st.textContent = "Error: " + (e && e.message ? e.message : e);
   } finally {
@@ -9922,11 +9950,11 @@ function onCrackClear() {
   renderCrack();
 }
 
-function renderCrackResults(res) {
+function renderCrackResults(res, note = "") {
   const st = $("crackstatus");
   st.className = "dim";
   const head = res.stopped ? t("crackStopped") : t("crackDone");
-  st.textContent = head + " · " + fmtRate(res.rate) + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
+  st.textContent = note + head + " · " + fmtRate(res.rate) + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
     + (res.allFound ? " · " + t("crackAllFound") : "")
     + (res.fw && res.bogus ? " (" + res.bogus + " re-checked)" : "")
     + (res.capped ? " (" + res.raw + " raw, capped)" : "");

@@ -3,7 +3,7 @@ import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
 import { HELPER_DOCS } from "./sandbox.js";
 import { BUILTIN_DICTS } from "./dicts.js";
-import { runCrack, runCrackCPU, analyzePlan, analyzeGeneric } from "./crack.js";
+import { runCrack, runCrackCPU, analyzePlan, analyzeGeneric, gpuAdapterInfo } from "./crack.js";
 
 /* --------------------------------------------------------------- transport */
 
@@ -1071,12 +1071,20 @@ async function startCrack() {
   crackRun = { state: "running", control, plan };
   crackButtons();
   show(prog, true); prog.value = 0;
+  const knobs = readKnobs();
+  // A software adapter (Chrome's SwiftShader) is correct but ~100x slower than
+  // real hardware -- warn so a crawling rate isn't a mystery. Kept in front of
+  // every progress line and the final result, since the low rate is the symptom.
+  let gpuNote = "";
+  if (knobs.backend !== "cpu") {
+    const g = await gpuAdapterInfo().catch(() => null);
+    if (g && g.ok && g.software) gpuNote = t("crackSoftwareGpu") + " · ";
+  }
   const onProgress = (frac, rate, eta) => {
     prog.value = Math.round(frac * 1000);
     st.className = "dim";
-    st.textContent = (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
+    st.textContent = gpuNote + (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
   };
-  const knobs = readKnobs();
   const cpuRun = () => runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
   try {
     let res;
@@ -1093,7 +1101,7 @@ async function startCrack() {
     }
     if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
     else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }
-    else                    renderCrackResults(res);
+    else                    renderCrackResults(res, gpuNote);
   } catch (e) {
     st.className = "err"; st.textContent = "Error: " + (e && e.message ? e.message : e);
   } finally {
@@ -1127,11 +1135,11 @@ function onCrackClear() {
   renderCrack();
 }
 
-function renderCrackResults(res) {
+function renderCrackResults(res, note = "") {
   const st = $("crackstatus");
   st.className = "dim";
   const head = res.stopped ? t("crackStopped") : t("crackDone");
-  st.textContent = head + " · " + fmtRate(res.rate) + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
+  st.textContent = note + head + " · " + fmtRate(res.rate) + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
     + (res.allFound ? " · " + t("crackAllFound") : "")
     + (res.fw && res.bogus ? " (" + res.bogus + " re-checked)" : "")
     + (res.capped ? " (" + res.raw + " raw, capped)" : "");
