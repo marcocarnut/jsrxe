@@ -8145,20 +8145,52 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
     processed = got;
   }
 
-  // Adaptive dispatch size: sub-divide each prefix's inner sweep into chunks
-  // aimed at ~CHUNK_SEC of GPU work, so progress and hits refresh several times a
-  // second and the first (small) chunk lands almost at once -- while a fast hash
-  // still gets chunks large enough to amortise the per-dispatch overhead. The
-  // size steers itself from the rate the last chunk actually ran at.
-  const CHUNK_SEC = 0.2, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30;
+  // Adaptive chunks, pipelined. Each prefix's inner sweep is sub-divided into
+  // chunks aimed at ~CHUNK_SEC of GPU work; RING of them are submitted back to
+  // back before a single drain, so the GPU never idles between chunks (draining
+  // every chunk starved it and cost MD5 4x). A drain reads hits, reports, and
+  // re-sizes the next chunks from the batch's measured rate -- so a fast hash
+  // settles on large chunks and a slow one on small, both refreshing ~RING x
+  // CHUNK_SEC apart, with a tiny first chunk so the first update is near-instant.
+  const CHUNK_SEC = 0.1, CHUNK_MIN = 1 << 20, CHUNK_MAX = 1 << 30;
   let chunk = 1 << 22;
-  let r = 0, stopped = false, allFound = false, pausedMs = 0;
+  let r = 0, inflight = 0, stopped = false, allFound = false, pausedMs = 0;
+  let batchT0 = performance.now(), batchWork = 0;
+
+  // Wait for the in-flight batch, stream hits, report, and steer the chunk size.
+  // Returns true if the run should end (all found, or stopped).
+  const drainReport = async () => {
+    await device.queue.onSubmittedWorkDone();
+    const dt = performance.now() - batchT0;
+    await drainHits();
+    if (foundHex.size >= ntgt) { allFound = true; return true; }
+    if (dt > 0 && batchWork > 0)
+      chunk = Math.max(CHUNK_MIN, Math.min(CHUNK_MAX, Math.round(batchWork / (dt/1000) * CHUNK_SEC)));
+    if (onProgress) {
+      const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
+      const rate = Number(done) / secs, eta = rate > 0 ? Number(total - done) / rate : Infinity;
+      onProgress(Number(done * 100000n / total) / 100000, rate, eta);
+    }
+    await new Promise(res => setTimeout(res));
+    if (control) {
+      if (control.stopped()) { stopped = true; return true; }
+      if (control.paused && control.paused()) {
+        const pt = performance.now();
+        await control.gate();
+        pausedMs += performance.now() - pt;
+        if (control.stopped()) { stopped = true; return true; }
+      }
+    }
+    inflight = 0; batchWork = 0; batchT0 = performance.now();
+    return false;
+  };
 
   outer:
   for (let oi = 0n; oi < outerN; oi++) {
     if (control && control.stopped()) { stopped = true; break; }
     setPrefix(oi);
-    for (let base = 0; base < innerN; base += chunk) {
+    let base = 0;
+    while (base < innerN) {
       const hi = Math.min(base + chunk, innerN), count = hi - base;
       uScal[0] = base; uScal[1] = hi;
       device.queue.writeBuffer(rings[r].u, 0, ab);
@@ -8169,29 +8201,9 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
       pass.dispatchWorkgroups(wgroups);
       pass.end();
       device.queue.submit([enc.finish()]);
-      const tc = performance.now();
-      await device.queue.onSubmittedWorkDone();
-      const dt = performance.now() - tc;
-      done += BigInt(count);
-      r = (r + 1) % RING;
-      await drainHits();
-      if (foundHex.size >= ntgt) { allFound = true; break outer; }   // every target cracked -- stop early
-      if (dt > 0) chunk = Math.max(CHUNK_MIN, Math.min(CHUNK_MAX, Math.round(count / (dt/1000) * CHUNK_SEC)));
-      if (onProgress) {
-        const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
-        const rate = Number(done) / secs, eta = rate > 0 ? Number(total - done) / rate : Infinity;
-        onProgress(Number(done * 100000n / total) / 100000, rate, eta);
-      }
-      await new Promise(res => setTimeout(res));
-      if (control) {
-        if (control.stopped()) { stopped = true; break outer; }
-        if (control.paused && control.paused()) {
-          const pt = performance.now();
-          await control.gate();
-          pausedMs += performance.now() - pt;
-          if (control.stopped()) { stopped = true; break outer; }
-        }
-      }
+      done += BigInt(count); batchWork += count; base += chunk;
+      r = (r + 1) % RING; inflight++;
+      if (inflight >= RING && await drainReport()) break outer;
     }
   }
   await device.queue.onSubmittedWorkDone();
