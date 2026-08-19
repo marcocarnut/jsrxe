@@ -8724,12 +8724,14 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
   const mode = knobs.mode || "serial", W = knobs.ww || 4;
   const inc = knobs.inc !== false;   // incremental odometer on the fast serial path (?crackinc=off to A/B)
   const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
-  const fastSerial = inc ? serialShaderInc(A, wg, A.width, fw, H) : serialShader(A, wg, A.width, fw, H);
+  // The fast-path kernels read A.width, so build them only in the fast branch --
+  // A is null for the generic and perm paths.
   const code = isPerm
     ? (mode === "serial" ? permSerialShader(PM, wg, fw, H) : permInterleavedShader(PM, wg, W, fw, H))
     : generic
     ? (mode === "serial" ? genericSerialShader(G, wg, fw, H) : genericInterleavedShader(G, wg, W, fw, H))
-    : (mode === "serial" ? fastSerial : interleavedShader(A, wg, W, A.width, fw, H));
+    : (mode === "serial" ? (inc ? serialShaderInc(A, wg, A.width, fw, H) : serialShader(A, wg, A.width, fw, H))
+                         : interleavedShader(A, wg, W, A.width, fw, H));
   const module = device.createShaderModule({ code });
   const info = await module.getCompilationInfo();
   const errs = info.messages.filter(m => m.type === "error");
