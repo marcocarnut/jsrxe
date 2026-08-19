@@ -13,7 +13,7 @@
 // not rxe. The spike it grew from is jsrxe/spike/webgpu-md5.html.
 
 import { sha256 } from "./sha256.js";
-import { buildMd5Fixed, SLICE } from "./crackcpu.js";
+import { buildCpuKernel, cpuSupports, SLICE } from "./crackcpu.js";
 
 const MAXHITS = 1024;
 const HITW = 16;                // u32 per hit record: [len, targetIdx, 14 plaintext words (56 bytes)]
@@ -1113,7 +1113,7 @@ function layCandidate(positions, gi) {
 // (so the caller falls back to the oracle) for non-md5, variable-width/perm
 // plans, or a keyspace past 2^53. Same result shape as runCrack.
 export async function runCpuFast({ plan, hash = "md5", targets, onProgress, onHit, control }) {
-  if (hash !== "md5") return { supported: false, reason: "fast CPU path is md5-only for now" };
+  if (!cpuSupports(hash)) return { supported: false, reason: `fast CPU path has no ${hash} kernel` };
   const H = HASHES[hash];
   const fp = analyzePlan(plan, hash);
   if (!fp.ok) return { supported: false, reason: fp.reason };        // variable-width/perm -> oracle
@@ -1121,8 +1121,8 @@ export async function runCpuFast({ plan, hash = "md5", targets, onProgress, onHi
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
   const nt = rows.length, totalN = Number(fp.total);
-  const T = new Uint32Array(nt * 4); rows.forEach((r, i) => T.set(r.w, i * 4));
-  const kern = buildMd5Fixed(fp.positions);
+  const T = new Uint32Array(nt * H.words); rows.forEach((r, i) => T.set(r.w, i * H.words));
+  const kern = buildCpuKernel(fp.positions, hash);
   const hits = [], found = new Set();
   const onH = (pt, idx) => {
     const hex = rows[idx].hex;
@@ -1193,7 +1193,7 @@ export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onH
 // The CPU hash (WebCrypto has none of these synchronously): confirms a first-
 // word hit, and hashes every candidate in the no-WebGPU fallback. All are single
 // block, which every fast-path candidate is (maxWidth <= 55).
-function cpuHash(hash, str) { return HASHES[hash].cpu(str); }
+export function cpuHash(hash, str) { return HASHES[hash].cpu(str); }
 
 // MD4 of a byte array (NTLM's inner hash), one block.
 function md4hex(bytes) {
