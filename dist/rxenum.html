@@ -8396,21 +8396,18 @@ function buildGeneric(positions) {
 function genericLane(G, w, idxExpr, H) {
   const nw = G.desc.length;
   let s = `\n    var msg${w}: array<u32,16>; var pt${w}: array<u32,14>;\n`;
-  s += `    for (var z=0u; z<16u; z=z+1u){ msg${w}[z]=0u; } for (var z=0u; z<14u; z=z+1u){ pt${w}[z]=0u; }\n`;
+  // The host-enumerated outer wheels are constant for the whole dispatch, so the
+  // host pre-encodes them into message + plaintext word partials (P.pfxMsg /
+  // P.pfxPt) once, and the kernel just loads them -- no per-candidate prefix loop.
+  for (let k = 0; k < 16; k++) s += `    msg${w}[${k}] = P.pfxMsg[${k >> 2}u][${k & 3}u];\n`;
+  for (let k = 0; k < 14; k++) s += `    pt${w}[${k}] = P.pfxPt[${k >> 2}u][${k & 3}u];\n`;
+  s += `    var blen${w}: u32 = P.plen;\n`;
   s += `    var q${w} = ${idxExpr};\n`;
   for (let p = nw - 1; p >= 0; p--) {
     s += `    let alt${w}_${p} = q${w} % ${G.desc[p].n}u;`;
     if (p > 0) s += ` q${w} = q${w} / ${G.desc[p].n}u;`;
     s += `\n`;
   }
-  s += `    var blen${w}: u32 = 0u;\n`;
-  // The host-enumerated outer wheels arrive as a byte prefix; lay it first.
-  s += `    for (var pa=0u; pa<P.plen; pa=pa+1u) { let b = pfxByte(pa);\n`;
-  s += `      pt${w}[blen${w}>>2u] |= b << ((blen${w}&3u)*8u);\n`;
-  if (H.widen)                s += `      { let mp = 2u*blen${w}; msg${w}[mp>>2u] |= b << ((mp&3u)*8u); }\n`;
-  else if (H.endian === "le") s += `      msg${w}[blen${w}>>2u] |= b << ((blen${w}&3u)*8u);\n`;
-  else                        s += `      msg${w}[blen${w}>>2u] |= b << ((3u-(blen${w}&3u))*8u);\n`;
-  s += `      blen${w} = blen${w} + 1u; }\n`;
   for (let p = 0; p < nw; p++) {
     s += `    { let mb = ${G.desc[p].metaBase * 2}u + alt${w}_${p}*2u; let o = mtab[mb]; let l = mtab[mb+1u];\n`;
     s += `      for (var k=0u; k<l; k=k+1u) {\n`;
@@ -8430,7 +8427,7 @@ function genericLane(G, w, idxExpr, H) {
 
 function genericShaderHead(H) {
   return `
-struct Params { lo: u32, hi: u32, ntgt: u32, plen: u32, pfx: array<vec4<u32>, 4> };
+struct Params { lo: u32, hi: u32, ntgt: u32, plen: u32, pfxMsg: array<vec4<u32>, 4>, pfxPt: array<vec4<u32>, 4> };
 @group(0) @binding(0) var<storage, read>       targets : array<u32>;
 @group(0) @binding(1) var<storage, read_write> hitcount: atomic<u32>;
 @group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
@@ -8438,7 +8435,6 @@ struct Params { lo: u32, hi: u32, ntgt: u32, plen: u32, pfx: array<vec4<u32>, 4>
 @group(0) @binding(4) var<storage, read>       pool    : array<u32>;
 @group(0) @binding(5) var<storage, read>       mtab    : array<u32>;
 fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((x >> 8u) & 0xff00u) | ((x >> 24u) & 0xffu); }
-fn pfxByte(a: u32) -> u32 { let w = a >> 2u; return (P.pfx[w >> 2u][w & 3u] >> ((a & 3u) * 8u)) & 0xffu; }
 ${H.consts || ""}`;
 }
 
@@ -8738,7 +8734,11 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
   if (errs.length) return { supported: false, reason: `shader: ${errs[0].message} (line ${errs[0].lineNum})`, code };
   const pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "main" } });
 
-  const U = 16 + PFX_WORDS * 4;         // uniform bytes: 4 scalars + prefix words
+  // Uniform bytes: 4 scalars + the prefix region. The fast path stores raw prefix
+  // bytes there (PFX_WORDS); the generic path stores TWO pre-encoded arrays --
+  // pfxMsg and pfxPt -- so it needs 2x. Size for the larger; the fast path uses
+  // only the first block.
+  const U = 16 + 2 * PFX_WORDS * 4;
   const bTgt = device.createBuffer({ size: tgtArr.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
   device.queue.writeBuffer(bTgt, 0, tgtArr);
   const bCnt = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
@@ -8788,7 +8788,10 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
 
   const ab = new ArrayBuffer(U);
   const uScal = new Uint32Array(ab, 0, 4);
-  const uBytes = new Uint8Array(ab, 16, PFX_WORDS * 4);
+  const uBytes = new Uint8Array(ab, 16, PFX_WORDS * 4);          // fast path: raw prefix bytes
+  const uMsg = new Uint32Array(ab, 16, PFX_WORDS);               // generic: pre-encoded message words
+  const uPt = new Uint32Array(ab, 16 + PFX_WORDS * 4, PFX_WORDS);// generic: pre-encoded plaintext words
+  const pfxScratch = new Uint8Array(PFX_WORDS * 4);
   uScal[2] = ntgt;                       // lo (base) and hi are set per chunk below
 
   const t0 = performance.now();
@@ -8799,17 +8802,27 @@ async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, o
   const setPrefix = (oi) => {
     let x = oi;
     for (let i = outer.length - 1; i >= 0; i--) { const n = BigInt(outer[i].n); digits[i] = Number(x % n); x /= n; }
-    uBytes.fill(0);
     if (generic) {
-      // Assemble the chosen outer members into a byte prefix of length plen.
+      // Assemble the chosen outer members into a byte prefix, then pre-encode it
+      // into the message + plaintext word partials the kernel loads (doing the
+      // per-candidate prefix loop once, on the host).
       let plen = 0;
       for (let i = 0; i < outer.length; i++) {
         const p = outer[i], d = digits[i];
-        if (p.L > 0) for (let k = 0; k < p.L; k++) uBytes[plen++] = p.bytes[d * p.L + k];
-        else { const o = p.off[d], l = p.len[d]; for (let k = 0; k < l; k++) uBytes[plen++] = p.bytes[o + k]; }
+        if (p.L > 0) for (let k = 0; k < p.L; k++) pfxScratch[plen++] = p.bytes[d * p.L + k];
+        else { const o = p.off[d], l = p.len[d]; for (let k = 0; k < l; k++) pfxScratch[plen++] = p.bytes[o + k]; }
       }
       uScal[3] = plen;                     // Params.plen
+      uMsg.fill(0); uPt.fill(0);
+      for (let a = 0; a < plen; a++) {
+        const b = pfxScratch[a];
+        uPt[a >> 2] |= b << ((a & 3) * 8);                         // plaintext, little-endian
+        if (H.widen) { const mp = 2 * a; uMsg[mp >> 2] |= b << ((mp & 3) * 8); }
+        else if (H.endian === "le") uMsg[a >> 2] |= b << ((a & 3) * 8);
+        else uMsg[a >> 2] |= b << ((3 - (a & 3)) * 8);
+      }
     } else {
+      uBytes.fill(0);
       for (let i = 0; i < outer.length; i++) {
         const p = outer[i], d = digits[i];
         for (let k = 0; k < p.L; k++) uBytes[p.off + k] = p.bytes[d * p.L + k];
