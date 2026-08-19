@@ -13,6 +13,7 @@
 // not rxe. The spike it grew from is jsrxe/spike/webgpu-md5.html.
 
 import { sha256 } from "./sha256.js";
+import { buildMd5Fixed, SLICE } from "./crackcpu.js";
 
 const MAXHITS = 1024;
 const HITW = 16;                // u32 per hit record: [len, targetIdx, 14 plaintext words (56 bytes)]
@@ -1107,6 +1108,49 @@ function layCandidate(positions, gi) {
 // hashed in JS. Slow (this is the no-WebGPU fallback, and the headless oracle
 // the tests check the GPU path's plan against), but exact. Same result shape as
 // runCrack. Yields every ~200k candidates so the page stays live.
+// Fast single-thread CPU crack: a JIT'd JS kernel (crackcpu.js) instead of the
+// BigInt/string oracle below -- ~10x+ on the fixed-width product path. Declines
+// (so the caller falls back to the oracle) for non-md5, variable-width/perm
+// plans, or a keyspace past 2^53. Same result shape as runCrack.
+export async function runCpuFast({ plan, hash = "md5", targets, onProgress, onHit, control }) {
+  if (hash !== "md5") return { supported: false, reason: "fast CPU path is md5-only for now" };
+  const H = HASHES[hash];
+  const fp = analyzePlan(plan, hash);
+  if (!fp.ok) return { supported: false, reason: fp.reason };        // variable-width/perm -> oracle
+  if (fp.total > BigInt(Number.MAX_SAFE_INTEGER)) return { supported: false, reason: "keyspace over 2^53 for the CPU path" };
+  const rows = parseTargets(targets, H);
+  if (!rows.length) return { supported: true, empty: true };
+  const nt = rows.length, totalN = Number(fp.total);
+  const T = new Uint32Array(nt * 4); rows.forEach((r, i) => T.set(r.w, i * 4));
+  const kern = buildMd5Fixed(fp.positions);
+  const hits = [], found = new Set();
+  const onH = (pt, idx) => {
+    const hex = rows[idx].hex;
+    if (found.has(hex)) return; found.add(hex);
+    const hit = { hex, plaintext: pt }; hits.push(hit); if (onHit) onHit(hit);
+  };
+  const t0 = performance.now();
+  let done = 0, stopped = false, allFound = false, pausedMs = 0;
+  for (let base = 0; base < totalN; base += SLICE) {
+    const count = Math.min(SLICE, totalN - base);
+    kern(base, count, T, nt, onH);
+    done += count;
+    if (found.size >= nt) { allFound = true; break; }
+    if (onProgress) {
+      const secs = (performance.now() - t0) / 1000 - pausedMs / 1000, rate = done / secs;
+      onProgress(done / totalN, rate, rate > 0 ? (totalN - done) / rate : Infinity);
+    }
+    await new Promise(res => setTimeout(res));               // yield: keep the page live
+    if (control) {
+      if (control.stopped()) { stopped = true; break; }
+      if (control.paused && control.paused()) { const pt = performance.now(); await control.gate(); pausedMs += performance.now() - pt; if (control.stopped()) { stopped = true; break; } }
+    }
+  }
+  const secs = (performance.now() - t0) / 1000 - pausedMs / 1000, rate = done / secs;
+  hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
+  return { supported: true, hits, rate, total: fp.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound };
+}
+
 export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, control }) {
   const H = HASHES[hash];
   if (!H) return { supported: false, reason: `${hash} not wired yet` };

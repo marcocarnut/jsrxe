@@ -3,7 +3,7 @@ import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
 import { HELPER_DOCS } from "./sandbox.js";
 import { BUILTIN_DICTS } from "./dicts.js";
-import { runCrack, runCrackCPU, analyzePlan, analyzeGeneric, gpuAdapterInfo } from "./crack.js";
+import { runCrack, runCrackCPU, runCpuFast, analyzePlan, analyzeGeneric, gpuAdapterInfo } from "./crack.js";
 
 /* --------------------------------------------------------------- transport */
 
@@ -1094,7 +1094,12 @@ async function startCrack() {
     st.className = "dim";
     st.textContent = gpuNote + (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
   };
-  const cpuRun = () => runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
+  // CPU: the JIT'd fast kernel where it applies (md5, fixed-width), else the
+  // pure-JS oracle. The fast path declines by returning { supported:false }.
+  const cpuRun = async () => {
+    const fast = await runCpuFast({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
+    return fast.supported ? fast : runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
+  };
   try {
     let res;
     if (knobs.backend === "cpu") {

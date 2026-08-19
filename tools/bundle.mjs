@@ -32,12 +32,12 @@ function demodule(src) {
     .replace(/^export\s+(?=(?:async\s+)?(?:const|let|var|function|class)\b)/gm, "");
 }
 
-const [libSingle, i18n, patterns, engine, sandbox, sha, dicts, crack, app, css, html,
+const [libSingle, i18n, patterns, engine, sandbox, sha, dicts, crackcpu, crack, app, css, html,
        cyLib, dagreLib, cyDagreLib] = await Promise.all([
   read("build/librxe-single.js"),
   read("web/i18n.js"), read("web/patterns.js"), read("web/engine.js"),
   read("web/sandbox.js"), read("web/sha256.js"), read("web/dicts.js"),
-  read("web/crack.js"),
+  read("web/crackcpu.js"), read("web/crack.js"),
   read("web/app.js"), read("web/style.css"), read("web/index.html"),
   // The Tree tab's drawing libraries. Served, they load from web/vendor on
   // demand; here there is no fetching a neighbour file, so they are inlined --
@@ -84,7 +84,7 @@ const body = html
     `<script>\n${cyDagreLib}\n</script>\n` +
     `<script>\n${direct}\n${demodule(sha)}\n${demodule(sandbox)}\n` +
     `${demodule(dicts)}\n${demodule(i18n)}\n${demodule(patterns)}\n` +
-    `${demodule(engine)}\n${demodule(crack)}\n${demodule(app)}\n${boot}\n</script>`)
+    `${demodule(engine)}\n${demodule(crackcpu)}\n${demodule(crack)}\n${demodule(app)}\n${boot}\n</script>`)
   .replace(/<title>[^<]*<\/title>/, () => "<title>rxenum</title>");
 
 await mkdir(root + "dist", { recursive: true });
