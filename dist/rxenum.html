@@ -10196,7 +10196,13 @@ async function renderCrack() {
   if (state.tab !== "crack") return;
   const go = $("crackgo");
   if (crackRun.state !== "idle") return;         // a run owns the status while active
-  if (!navigator.gpu)  { go.disabled = true; return crackSay("crackNoGpu", "err"); }
+  if (!navigator.gpu) {
+    // No WebGPU: the GPU backend can't run, but the JIT'd multicore/CPU path can.
+    // Make CPU the default, mark GPU unavailable, and keep cracking enabled.
+    const be = $("knobbackend"), gpuOpt = be.querySelector('option[value="gpu"]');
+    if (gpuOpt) gpuOpt.disabled = true;
+    if (be.value === "gpu") be.value = "cpu";
+  }
   if (!state.ok)       { go.disabled = true; return crackSay("crackEmptyPat"); }
   if (state.infinite)  { go.disabled = true; return crackSay("crackNeedsFinite", "err"); }
   const plan = await call("wheelPlan", {});
