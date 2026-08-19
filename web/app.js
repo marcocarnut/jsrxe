@@ -3,7 +3,7 @@ import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
 import { HELPER_DOCS } from "./sandbox.js";
 import { BUILTIN_DICTS } from "./dicts.js";
-import { runCrack, runCrackCPU, runCpuFast, analyzePlan, analyzeGeneric, gpuAdapterInfo } from "./crack.js";
+import { runCrack, runCrackCPU, runCpuFast, runCpuPool, analyzePlan, analyzeGeneric, gpuAdapterInfo } from "./crack.js";
 
 /* --------------------------------------------------------------- transport */
 
@@ -1094,11 +1094,16 @@ async function startCrack() {
     st.className = "dim";
     st.textContent = gpuNote + (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
   };
-  // CPU: the JIT'd fast kernel where it applies (md5, fixed-width), else the
-  // pure-JS oracle. The fast path declines by returning { supported:false }.
+  // CPU: multicore Web Worker pool where it applies, else the JIT'd single-thread
+  // kernel, else the pure-JS oracle. Each declines (supported:false) in turn --
+  // the pool on a file:// origin or spawn failure, the fast path on a variable-
+  // width/perm plan.
   const cpuRun = async () => {
-    const fast = await runCpuFast({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
-    return fast.supported ? fast : runCrackCPU({ plan, hash, targets, onProgress, onHit: crackWriteHit, control });
+    const args = { plan, hash, targets, knobs, onProgress, onHit: crackWriteHit, control };
+    const pool = await runCpuPool(args);
+    if (pool.supported) return pool;
+    const fast = await runCpuFast(args);
+    return fast.supported ? fast : runCrackCPU(args);
   };
   try {
     let res;
@@ -1153,7 +1158,7 @@ function renderCrackResults(res, note = "") {
   const st = $("crackstatus");
   st.className = "dim";
   const head = res.stopped ? t("crackStopped") : t("crackDone");
-  st.textContent = note + head + " · " + fmtRate(res.rate) + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
+  st.textContent = note + head + " · " + fmtRate(res.rate) + (res.cores ? " · " + res.cores + " cores" : "") + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
     + (res.allFound ? " · " + t("crackAllFound") : "")
     + (res.fw && res.bogus ? " (" + res.bogus + " re-checked)" : "")
     + (res.capped ? " (" + res.raw + " raw, capped)" : "");

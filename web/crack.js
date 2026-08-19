@@ -13,7 +13,7 @@
 // not rxe. The spike it grew from is jsrxe/spike/webgpu-md5.html.
 
 import { sha256 } from "./sha256.js";
-import { buildCpuKernel, cpuSupports, SLICE } from "./crackcpu.js";
+import { buildCpuKernel, buildCpuKernelSource, cpuSupports, SLICE } from "./crackcpu.js";
 
 const MAXHITS = 1024;
 const HITW = 16;                // u32 per hit record: [len, targetIdx, 14 plaintext words (56 bytes)]
@@ -1149,6 +1149,99 @@ export async function runCpuFast({ plan, hash = "md5", targets, onProgress, onHi
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000, rate = done / secs;
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
   return { supported: true, hits, rate, total: fp.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound };
+}
+
+// A generic worker: it is handed the generated kernel as TEXT (so it needs no
+// module import), compiles it in its own scope, and sweeps whatever slices the
+// pool assigns, posting back the hits. One Blob of this drives every worker.
+const WORKER_SRC = `"use strict";
+var KERN=null, T=null, NT=0;
+onmessage = function(e){
+  var d = e.data;
+  if (d.t === 'i') { T = d.T; NT = d.nt; KERN = new Function(d.pbArgs, d.src).apply(null, d.pb); postMessage({t:'r'}); return; }
+  if (d.t === 'w') {
+    var hits = [];
+    KERN(d.base, d.count, T, NT, function(pt, idx){ hits.push([pt, idx]); });
+    postMessage({t:'d', base:d.base, count:d.count, hits:hits});
+  }
+};`;
+
+// Multicore CPU crack: spawn hardwareConcurrency Web Workers, each running the
+// JIT'd kernel over disjoint keyspace slices from a shared work queue. Hits and
+// progress cross back by postMessage (no SharedArrayBuffer). Needs a real origin
+// (Workers don't start from a file:// page); declines there (and for non-md5-set
+// hashes / variable-width / perm / keyspace>2^53) so the caller falls back to the
+// single-thread fast path. Same result shape as runCrack.
+export async function runCpuPool({ plan, hash = "md5", targets, knobs = {}, onProgress, onHit, control }) {
+  if (typeof Worker === "undefined" || !(navigator.hardwareConcurrency > 1))
+    return { supported: false, reason: "no Web Workers" };
+  if (!cpuSupports(hash)) return { supported: false, reason: `fast CPU path has no ${hash} kernel` };
+  const H = HASHES[hash];
+  const fp = analyzePlan(plan, hash);
+  if (!fp.ok) return { supported: false, reason: fp.reason };
+  if (fp.total > BigInt(Number.MAX_SAFE_INTEGER)) return { supported: false, reason: "keyspace over 2^53 for the CPU path" };
+  const rows = parseTargets(targets, H);
+  if (!rows.length) return { supported: true, empty: true };
+  const nt = rows.length, totalN = Number(fp.total);
+  const T = new Uint32Array(nt * H.words); rows.forEach((r, i) => T.set(r.w, i * H.words));
+  const { src, pbArgs, pb } = buildCpuKernelSource(fp.positions, hash);
+
+  const nw = Math.max(1, Math.min(knobs.cores || navigator.hardwareConcurrency, 32));
+  let url, workers;
+  try {
+    url = URL.createObjectURL(new Blob([WORKER_SRC], { type: "application/javascript" }));
+    workers = Array.from({ length: nw }, () => new Worker(url));
+  } catch (e) { if (url) URL.revokeObjectURL(url); return { supported: false, reason: "worker spawn failed: " + (e && e.message || e) }; }
+  const cleanup = () => { workers.forEach(w => w.terminate()); URL.revokeObjectURL(url); };
+
+  const hits = [], found = new Set();
+  let done = 0, cursor = 0, stopped = false, allFound = false, pausedMs = 0, failed = null;
+  const t0 = performance.now(); let lastProg = t0;
+  try {
+    // Init every worker with the kernel text + targets; wait until all compiled.
+    await Promise.all(workers.map(w => new Promise((res, rej) => {
+      w.onerror = ev => rej(new Error(ev.message || "worker error"));
+      w.onmessage = e => { if (e.data.t === "r") res(); };
+      w.postMessage({ t: "i", src, pbArgs, pb, T, nt });
+    })));
+
+    await new Promise(resolve => {
+      let live = 0;
+      const nextSlice = () => (stopped || allFound || cursor >= totalN) ? null
+        : (() => { const base = cursor, count = Math.min(SLICE, totalN - base); cursor += count; return { base, count }; })();
+      const tryDone = () => { if (live === 0) resolve(); };
+      const dispatch = w => { const s = nextSlice(); if (!s) { tryDone(); return; } live++; w.postMessage({ t: "w", base: s.base, count: s.count }); };
+      workers.forEach(w => {
+        w.onerror = ev => { failed = new Error(ev.message || "worker error"); stopped = true; tryDone(); };
+        w.onmessage = async e => {
+          if (e.data.t !== "d") return;
+          live--; done += e.data.count;
+          for (const [pt, idx] of e.data.hits) {
+            const hex = rows[idx].hex; if (found.has(hex)) continue; found.add(hex);
+            const hit = { hex, plaintext: pt }; hits.push(hit); if (onHit) onHit(hit);
+          }
+          if (found.size >= nt) allFound = true;
+          const now = performance.now();
+          if (onProgress && now - lastProg > 100) {
+            lastProg = now; const secs = (now - t0) / 1000 - pausedMs / 1000, rate = done / secs;
+            onProgress(done / totalN, rate, rate > 0 ? (totalN - done) / rate : Infinity);
+          }
+          if (control) {
+            if (control.stopped()) stopped = true;
+            else if (control.paused && control.paused()) { const p = performance.now(); await control.gate(); pausedMs += performance.now() - p; if (control.stopped()) stopped = true; }
+          }
+          if (stopped || allFound) tryDone(); else dispatch(w);
+        };
+      });
+      workers.forEach(dispatch);
+      if (live === 0) resolve();
+    });
+  } finally { cleanup(); }
+  if (failed) return { supported: false, reason: failed.message };   // fall back to single thread
+
+  const secs = (performance.now() - t0) / 1000 - pausedMs / 1000, rate = done / secs;
+  hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
+  return { supported: true, hits, rate, total: fp.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound, cores: nw };
 }
 
 export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, control }) {

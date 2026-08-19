@@ -134,7 +134,7 @@ export function cpuSupports(hash) { return !!HASHSPEC[hash]; }
 // position fixed width, the candidate one hash block. We bake each message word
 // from the wheel digits and the position byte tables PB0..; the digits are
 // decoded once from `base` then carried +1 per step.
-export function buildCpuKernel(positions, hash) {
+export function buildCpuKernelSource(positions, hash) {
   const spec = HASHSPEC[hash];
   if (!spec) throw new Error(`cpu kernel: ${hash} not supported`);
   const { words, endian, widen } = spec;
@@ -203,7 +203,15 @@ ${decode}  for (var it = 0; it < count; it++) {
 ${msg}${spec.body()}${search}
 ${carry(P - 1)}  }
 };`;
-  return new Function(pbArgs, src)(...positions.map(p => p.bytes));
+  return { src, pbArgs, pb: positions.map(p => p.bytes) };
+}
+
+// Compile the kernel for use on this thread. A worker instead ships {src,pbArgs}
+// to its own scope and compiles there (the pattern-specific code as text, so no
+// module import is needed inside the worker).
+export function buildCpuKernel(positions, hash) {
+  const { src, pbArgs, pb } = buildCpuKernelSource(positions, hash);
+  return new Function(pbArgs, src)(...pb);
 }
 
 // Work-slice size: ~1M candidates (~0.1s at 10 MH/s), so the main thread yields
