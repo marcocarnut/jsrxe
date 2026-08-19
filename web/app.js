@@ -1035,7 +1035,8 @@ function readKnobs() {
            backend: $("knobbackend").value,
            drainEnd: q.get("crackdrain") === "end",
            pollMs: +q.get("crackpoll") || 0,
-           chunkSec: +q.get("crackchunk") || 0 };
+           chunkSec: +q.get("crackchunk") || 0,
+           inc: q.get("crackinc") !== "off" };   // incremental odometer (fast serial); ?crackinc=off to A/B
 }
 
 // A rate in hashes/s as a friendly MH/s or GH/s.

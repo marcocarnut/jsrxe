@@ -371,17 +371,29 @@ function packBytes(A, w, lo, hi, width) {
   return terms.length ? terms.join(" | ") : `0u`;
 }
 
-// Decode lane w's index into its inner-position digits, then the 16 message
-// words as scalars. The hash's compress() takes it from there.
-function laneBuild(A, w, idxExpr, width, H) {
+// Decode lane w's index into its inner-position digits (least-significant is the
+// last position). `let` for the grid-stride kernel; `var` (incremental odometer)
+// when the digits are carried +1 per step instead of re-divided each candidate.
+function laneDecode(A, w, idxExpr, mutable) {
+  const kw = mutable ? "var" : "let";
   let s = `\n    var q${w} = ${idxExpr};\n`;
   for (let p = A.positions.length - 1; p >= A.split; p--) {
-    s += `    let e${w}_${p} = q${w} % ${A.positions[p].n}u;`;
+    s += `    ${kw} e${w}_${p} = q${w} % ${A.positions[p].n}u;`;
     if (p > A.split) s += ` q${w} = q${w} / ${A.positions[p].n}u;`;
     s += `\n`;
   }
+  return s;
+}
+
+// The 16 message words as scalars from lane w's already-decoded digits.
+function laneMsg(A, w, width, H) {
+  let s = "";
   for (let k = 0; k < 16; k++) s += `    let m${w}_${k} = ${msgWord(A, w, k, width, H)};\n`;
   return s;
+}
+
+function laneBuild(A, w, idxExpr, width, H) {
+  return laneDecode(A, w, idxExpr, false) + laneMsg(A, w, width, H);
 }
 
 // Shader head: bindings, rev(), any hash constants, and a const table per tabled
@@ -457,6 +469,36 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) 
     if (j >= P.hi) { break; }
 ${laneKernel(A, 0, "j", width, fw, H, "true")}
     j = j + stride;
+  }
+}`;
+}
+
+// Serial kernel, incremental odometer: each thread sweeps a CONTIGUOUS run of the
+// chunk, decodes its start once, then advances the base-n wheels by +1 with carry
+// per step instead of re-dividing every candidate. Same set, same grid; measured
+// ~+9% on [a-z]{8} MD5 (the base-26 div/mod isn't free). Carry runs from the
+// least-significant wheel; the top never overflows since idx < P.hi.
+function serialShaderInc(A, wg, width, fw, H) {
+  const ndg = fw ? 1 : H.words;
+  const body = laneMsg(A, 0, width, H) + H.compress(0, fw) + searchRecord(0, ndg, H, "true", fastPlaintext(A, 0, width));
+  const carry = p => {
+    let s = `      e0_${p} = e0_${p} + 1u;\n`;
+    if (p > A.split) s += `      if (e0_${p} == ${A.positions[p].n}u) { e0_${p} = 0u;\n` + carry(p - 1) + `      }\n`;
+    return s;
+  };
+  return shaderHead(A, H) + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let nthreads = nwg.x * ${wg}u;
+  let per = (P.hi - P.lo + nthreads - 1u) / nthreads;
+  let start = P.lo + gid.x * per;
+  if (start >= P.hi) { return; }
+  let end = min(start + per, P.hi);
+${laneDecode(A, 0, "start", true)}  var idx = start;
+  loop {
+    if (idx >= end) { break; }
+${body}
+${carry(A.positions.length - 1)}    idx = idx + 1u;
   }
 }`;
 }
@@ -782,7 +824,7 @@ export function buildShader({ plan, hash = "md5", knobs = {} }) {
   let code;
   if (isPerm) { const PM = buildPerm(fp); code = il ? permInterleavedShader(PM, wg, W, fw, H) : permSerialShader(PM, wg, fw, H); }
   else if (generic) { const G = buildGeneric(buildGA(fp).inner); code = il ? genericInterleavedShader(G, wg, W, fw, H) : genericSerialShader(G, wg, fw, H); }
-  else { const A = buildA(fp); code = il ? interleavedShader(A, wg, W, A.width, fw, H) : serialShader(A, wg, A.width, fw, H); }
+  else { const A = buildA(fp); code = il ? interleavedShader(A, wg, W, A.width, fw, H) : (knobs.inc !== false ? serialShaderInc(A, wg, A.width, fw, H) : serialShader(A, wg, A.width, fw, H)); }
   return { code, generic, isPerm };
 }
 
@@ -840,12 +882,14 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   const PM = isPerm ? buildPerm(fp) : null;
   const wg = knobs.wg || 256, cap = knobs.cap || 8192;
   const mode = knobs.mode || "serial", W = knobs.ww || 4;
+  const inc = knobs.inc !== false;   // incremental odometer on the fast serial path (?crackinc=off to A/B)
   const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
+  const fastSerial = inc ? serialShaderInc(A, wg, A.width, fw, H) : serialShader(A, wg, A.width, fw, H);
   const code = isPerm
     ? (mode === "serial" ? permSerialShader(PM, wg, fw, H) : permInterleavedShader(PM, wg, W, fw, H))
     : generic
     ? (mode === "serial" ? genericSerialShader(G, wg, fw, H) : genericInterleavedShader(G, wg, W, fw, H))
-    : (mode === "serial" ? serialShader(A, wg, A.width, fw, H) : interleavedShader(A, wg, W, A.width, fw, H));
+    : (mode === "serial" ? fastSerial : interleavedShader(A, wg, W, A.width, fw, H));
   const module = device.createShaderModule({ code });
   const info = await module.getCompilationInfo();
   const errs = info.messages.filter(m => m.type === "error");
