@@ -9090,6 +9090,10 @@ async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, con
   let fp = analyzePlan(plan, hash);
   if (!fp.ok) fp = analyzeGeneric(plan, hash);        // variable-width (dicts, alternations)
   if (!fp.ok) return { supported: false, reason: fp.reason };
+  // Even the oracle can't outrun physics: > 2^53 candidates is decades of CPU at
+  // best, and past a JS number's exact range. Decline rather than spin forever.
+  if (fp.total > BigInt(Number.MAX_SAFE_INTEGER))
+    return { supported: false, reason: "over 2^53 candidates — too large to crack on the CPU" };
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
   const want = new Set(rows.map(r => r.hex)), ntgt = rows.length;
