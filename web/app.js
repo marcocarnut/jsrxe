@@ -674,6 +674,9 @@ function selectExample(ex) {
   $("code").value = exampleCode(ex);
   setCodeVisible(!!exampleCode(ex));
   refreshCodeToggle();
+  // A Brute Force example ships a demo hash and target digest, so opening it and
+  // switching to the Brute Force tab lands on a crack that is ready to run.
+  if (ex.crack) { $("crackalg").value = ex.crack.hash; $("cracktgts").value = ex.crack.targets || ""; }
   state.from = 0n;
   renderLibrary();
   renderNote();
@@ -1704,6 +1707,16 @@ function currentShareState() {
   // The Tree tab has no query of its own; the link just names it so it reopens
   // on the tree rather than the enumeration.
   if (state.tab === "tree") s.tab = "tree";
+  // The Brute Force tab carries its own inputs -- the chosen hash and the
+  // target digests -- so a shared link reopens on the same crack, ready to run.
+  // The targets ride along verbatim (they can be a whole list); an empty box is
+  // left off to keep a bare link short.
+  if (state.tab === "crack") {
+    s.tab = "crack";
+    s.ca = $("crackalg").value;
+    const tg = $("cracktgts").value.trim();
+    if (tg) s.ct = tg;
+  }
   // A link to an example carries its id and the language it was read in, so
   // the receiver lands on the same example -- note, bookmarks and all -- and,
   // for one whose regex differs by language (Powerball vs Mega-Sena), on the
@@ -1738,6 +1751,13 @@ function applyShareState(s) {
     $("code").value = typeof s.c === "string" ? s.c : "";
   }
   setCodeVisible(!!$("code").value); refreshCodeToggle();
+  // Brute Force inputs. An example may ship a demo hash and targets; a link may
+  // carry the user's own. The example's defaults go in first, then the link's
+  // own fields win over them, so a shared crack reopens exactly as it was sent.
+  const cr = ex && ex.crack;
+  if (cr) { $("crackalg").value = cr.hash; $("cracktgts").value = cr.targets || ""; }
+  if (typeof s.ca === "string") $("crackalg").value = s.ca;
+  if (typeof s.ct === "string") $("cracktgts").value = s.ct;
   // The shuffle now lives in the pattern (its (?~key:...) wrapper), so the
   // separate global key stays empty.
   state.key = "";
@@ -1755,6 +1775,8 @@ function applyShareState(s) {
     setTab("search");
   } else if (s.tab === "tree") {
     setTab("tree");
+  } else if (s.tab === "crack") {
+    setTab("crack");
   } else {
     setTab("elements");
   }
@@ -1790,15 +1812,17 @@ function readShareHash() {
 
 function setShareLabel() {
   // The button is an icon now; its label lives in the tooltip.
-  $("share").title = $("share2").title =
+  $("share").title = $("share2").title = $("share3").title = $("share4").title =
     navigator.share ? t("share") : t("shareCopy");
 }
 
 let flashTimer = null;
 function flashCopied() {
   // Flash the share button of whichever tab is showing -- each has its own.
-  const c = $(state.tab === "search" ? "copied2" : state.tab === "tree" ? "copied3" : "copied");
-  const btn = $(state.tab === "search" ? "share2" : state.tab === "tree" ? "share3" : "share");
+  const c = $(state.tab === "search" ? "copied2" : state.tab === "tree" ? "copied3"
+              : state.tab === "crack" ? "copied4" : "copied");
+  const btn = $(state.tab === "search" ? "share2" : state.tab === "tree" ? "share3"
+                : state.tab === "crack" ? "share4" : "share");
   c.textContent = t("shareCopied");
   c.hidden = false;
   btn.classList.add("done");
@@ -2030,6 +2054,7 @@ function wire() {
   $("share").onclick = doShare;
   $("share2").onclick = doShare;
   $("share3").onclick = doShare;
+  $("share4").onclick = doShare;
 
   // Tree controls. The index field and its nav mirror Elements; Fit re-frames
   // the whole tree; Rotate swaps top-down for left-right; Associativity overlays

@@ -1300,5 +1300,106 @@ export const BUILTIN = [
           "painel de comprimentos é zero. Uma boa ilustração de que as " +
           "contagens são mesmo por comprimento e não uma curva suave."
     }
+  },
+
+  // ------------------------------------------------------------ brute force
+  // These are meant to be opened on the Brute Force tab: each ships a real
+  // target digest whose plaintext lives inside the set, so selecting one and
+  // pressing Crack recovers it. The point is that a finite regex IS a keyspace
+  // -- the same expression that counts and enumerates also drives the search.
+
+  {
+    id: "bf-pin4",
+    highlight: true,
+    family: { en: "Brute Force", pt: "Força Bruta" },
+    pattern: "[0-9]{4}",
+    flags: "",
+    crack: { hash: "md5", targets: "c5b2cebf15b205503560c4e8e6d1ea78" },
+    name: { en: "Four-Digit PIN (MD5)", pt: "PIN de Quatro Dígitos (MD5)" },
+    note: {
+      en: "Ten thousand PINs, and one MD5 digest. Open the Brute Force tab and " +
+          "press Crack: the whole space is hashed and the match is found before " +
+          "you let go of the mouse. This is why an unsalted four-digit PIN is " +
+          "no secret at all -- the answer here is a year.",
+      pt: "Dez mil PINs e um digest MD5. Abra a aba Força Bruta e clique em " +
+          "Quebrar: o espaço inteiro é calculado e o acerto aparece antes de " +
+          "você soltar o mouse. É por isso que um PIN de quatro dígitos sem sal " +
+          "não é segredo nenhum -- a resposta aqui é um ano."
+    }
+  },
+  {
+    id: "bf-otp6",
+    family: { en: "Brute Force", pt: "Força Bruta" },
+    pattern: "[0-9]{6}",
+    flags: "",
+    crack: { hash: "sha256", targets: "c5b389beb081fe1e43ae92e895deca086b4eed5cf9efc7b78eebbbc9dc75c3f0" },
+    name: { en: "Six-Digit Code (SHA-256)", pt: "Código de Seis Dígitos (SHA-256)" },
+    note: {
+      en: "A million six-digit codes, the size of a one-time password, behind a " +
+          "SHA-256 digest. SHA-256 is far heavier than MD5, yet a million of " +
+          "anything is still nothing to a GPU -- the search finishes in an " +
+          "instant. Short numeric codes rely on a rate limit, never on the hash.",
+      pt: "Um milhão de códigos de seis dígitos, do tamanho de uma senha " +
+          "de uso único, atrás de um digest SHA-256. O SHA-256 é bem mais " +
+          "pesado que o MD5, mas um milhão de qualquer coisa não é nada para " +
+          "uma GPU -- a busca termina num instante. Códigos numéricos curtos " +
+          "dependem de um limite de tentativas, nunca do hash."
+    }
+  },
+  {
+    id: "bf-alpha5",
+    family: { en: "Brute Force", pt: "Força Bruta" },
+    pattern: "[a-z]{5}",
+    flags: "",
+    crack: { hash: "ntlm", targets: "066ddfd4ef0e9cd7c256fe77191ef43c" },
+    name: { en: "Five Lowercase Letters (NTLM)", pt: "Cinco Letras Minúsculas (NTLM)" },
+    note: {
+      en: "Every five-letter word, about 11.9 million of them, against a " +
+          "Windows NTLM hash. NTLM is unsalted MD4 over the UTF-16 password -- " +
+          "the format still guarding domain logins -- and it is the fastest of " +
+          "all to attack. The recovered word is a greeting.",
+      pt: "Toda palavra de cinco letras, cerca de 11,9 milhões delas, contra " +
+          "um hash NTLM do Windows. O NTLM é MD4 sem sal sobre a senha em " +
+          "UTF-16 -- o formato que ainda protege logins de domínio -- e é o " +
+          "mais rápido de todos de atacar. A palavra recuperada é uma saudação."
+    }
+  },
+  {
+    id: "bf-plate",
+    family: { en: "Brute Force", pt: "Força Bruta" },
+    pattern: "[A-Z]{3}\\d[A-Z]\\d{2}",
+    flags: "",
+    crack: { hash: "md5", targets: "f8368510b9a79e30422877cd953299d5" },
+    name: { en: "Mercosul Plate (MD5)", pt: "Placa Mercosul (MD5)" },
+    note: {
+      en: "The 456,976,000 Mercosul license plates, hashed with MD5. This is " +
+          "the same set the License Plates family counts, seen from the other " +
+          "side: given the digest of one plate, recover the plate. Half a " +
+          "billion candidates is a few seconds on the GPU.",
+      pt: "As 456.976.000 placas Mercosul, com hash MD5. É o mesmo conjunto " +
+          "que a família Placas conta, visto do outro lado: dado o digest de " +
+          "uma placa, recupere a placa. Meio bilhão de candidatos são alguns " +
+          "segundos na GPU."
+    }
+  },
+  {
+    id: "bf-passphrase",
+    family: { en: "Brute Force", pt: "Força Bruta" },
+    pattern: "([:effshort1:] ){3}[:effshort1:]",
+    flags: "",
+    crack: { hash: "md5", targets: "276b8e3abb1cfd4fad6d739c0726b7ab" },
+    name: { en: "Four-Word Passphrase (MD5)", pt: "Frase-Senha de Quatro Palavras (MD5)" },
+    note: {
+      en: "Four words drawn from the EFF short list, the shape a diceware " +
+          "passphrase takes: 1296^4, about 2.8 trillion combinations. That is " +
+          "the honest measure of a passphrase's strength -- a number this tab " +
+          "reports exactly. This particular digest was chosen to fall early, so " +
+          "it cracks fast; a random four-word phrase would not.",
+      pt: "Quatro palavras da lista curta da EFF, o formato de uma frase-senha " +
+          "diceware: 1296^4, cerca de 2,8 trilhões de combinações. Essa é a " +
+          "medida honesta da força de uma frase-senha -- um número que esta aba " +
+          "informa com exatidão. Este digest foi escolhido para cair cedo, e " +
+          "por isso quebra rápido; uma frase de quatro palavras aleatória não."
+    }
   }
 ];
