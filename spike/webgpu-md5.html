@@ -32,6 +32,7 @@ on the host, the low ≤6 swept on the GPU (26⁶ &lt; 2³²) — all 32-bit, no
   <span><label>Interleave</label>
     <select id="ww"><option>2</option><option selected>4</option><option>8</option></select></span>
   <span><label><input type="checkbox" id="fw"> 1st-word only</label></span>
+  <span><label><input type="checkbox" id="inc"> incremental odometer (serial)</label></span>
 </div>
 
 <label>Target MD5 digests (one 32-hex per line)</label>
@@ -184,6 +185,46 @@ ${rounds}${digest(0, fw)}${rec}
 }`;
 }
 
+// ---- kernel: SERIAL + INCREMENTAL ODOMETER ------------------------------
+// Same hashes and same set, but instead of decoding the index with g div/mod
+// EVERY candidate (serialShader), each thread owns a CONTIGUOUS run, decodes its
+// start once, then advances the base-26 wheels by +1 with carry per step. The
+// A/B: "divide every candidate" vs "divide once + radix-26 increments". Grid is
+// identical (same wgroups); only the kernel differs.
+function serialShaderInc(n, g, plen, wg, fw) {
+  let rounds = ""; for (let i = 0; i < 64; i++) rounds += round1(i, 0);
+  const rec = searchRecord("dg0", packBytes(n,g,plen,0,0,4), packBytes(n,g,plen,0,4,8), "true", fw);
+  // message words + state init, rebuilt each step from the current wheel digits.
+  let msgInit = "";
+  for (let k = 0; k < 16; k++) msgInit += `      let m0_${k} = ${msgWord(n,g,plen,0,k)};\n`;
+  msgInit += `      var A0: u32 = 0x67452301u; var B0: u32 = 0xefcdab89u; var C0: u32 = 0x98badcfeu; var D0: u32 = 0x10325476u;\n`;
+  // decode `start` into the wheels once (e0_0 = least significant = last char).
+  let decode = `    var qd = start;\n`;
+  for (let c = 0; c < g; c++) { decode += `    var e0_${c} = qd % 26u;`; if (c < g - 1) decode += ` qd = qd / 26u;`; decode += `\n`; }
+  // +1 with base-26 carry, unrolled as a nested if (the top wheel never overflows
+  // because idx < loN = 26^g). Only the low byte usually changes.
+  const carry = c => {
+    let s = `      e0_${c} = e0_${c} + 1u;\n`;
+    if (c < g - 1) s += `      if (e0_${c} == 26u) { e0_${c} = 0u;\n` + carry(c + 1) + `      }\n`;
+    return s;
+  };
+  return head() + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let nthreads = nwg.x * ${wg}u;
+  let per = (P.loN + nthreads - 1u) / nthreads;   // contiguous run per thread
+  let start = gid.x * per;
+  if (start >= P.loN) { return; }
+  let end = min(start + per, P.loN);
+${decode}  var idx = start;
+  loop {
+    if (idx >= end) { break; }
+${msgInit}${rounds}${digest(0, fw)}${rec}
+${carry(0)}    idx = idx + 1u;
+  }
+}`;
+}
+
 // ---- kernel: INTERLEAVED (W independent hashes per loop step) ------------
 // The W chains are advanced round-by-round together, so the GPU overlaps their
 // dependency chains (ILP) instead of stalling on one MD5's serial rounds.
@@ -246,6 +287,7 @@ async function crack() {
   const mode = $("mode").value;
   const W = parseInt($("ww").value);
   const fw = $("fw").checked;
+  const inc = $("inc").checked;
 
   const lines = $("tgts").value.split(/\s+/).map(s => s.trim().toLowerCase()).filter(s => /^[0-9a-f]{32}$/.test(s));
   if (!lines.length) { status("Paste at least one 32-hex MD5 digest.", "err"); return; }
@@ -257,7 +299,9 @@ async function crack() {
   const tgtArr = new Uint32Array(ntgt*4);
   tg.forEach((w,i) => tgtArr.set(w, i*4));
 
-  const code = mode === "serial" ? serialShader(n, g, plen, wg, fw) : interleavedShader(n, g, plen, wg, W, fw);
+  const code = mode === "serial"
+    ? (inc ? serialShaderInc(n, g, plen, wg, fw) : serialShader(n, g, plen, wg, fw))
+    : interleavedShader(n, g, plen, wg, W, fw);
   const module = device.createShaderModule({ code });
   const info = await module.getCompilationInfo();
   const errs = info.messages.filter(m => m.type === "error");
@@ -288,7 +332,7 @@ async function crack() {
   const wgroups = Math.min(Math.ceil(loN / (wg * denom)), cap);
 
   const total = 26 ** n;
-  const modeStr = mode === "serial" ? "serial" : `interleaved×${W}`;
+  const modeStr = mode === "serial" ? (inc ? "serial+inc-odo" : "serial") : `interleaved×${W}`;
   status(`[a-z]{${n}} = ${total.toLocaleString()} candidates · ${modeStr} · wg ${wg} · ${wgroups} groups · ${ntgt} target(s)…`);
   const uni = new Uint32Array(8);
   const t0 = performance.now();
