@@ -82,6 +82,21 @@ main {
   .etab { font-size: 1rem; margin-right: .35rem; }
   /* The masthead "::" is decoration; drop it on a phone to save the width. */
   header .sep { display: none; }
+  /* Search row on a phone: keep the three on one line -- a short "Max" field, a
+     Find box that shrinks (min-width:0 over the 7rem default), and no wrap. */
+  #search-view .controls { flex-wrap: nowrap; align-items: end; }
+  #search-view #findcap { min-width: 0; width: 3.3rem; }
+  #search-view #findtext { min-width: 0; }
+  /* Tree: shrink the eight icon buttons so they all share one row on a phone.
+     Scoped to #tree-view so these win over the base .treenav rules, which come
+     later in the file. */
+  #tree-view .treenav { gap: .18rem; }
+  #tree-view .treenav .iconbtn { padding: .24rem .28rem; }
+  #tree-view .treenav .iconbtn svg { width: 15px; height: 15px; }
+  #tree-view .treenav .zerotgl { padding: .26rem .4rem; font-size: .8rem; }
+  /* On a phone the Items nav wraps naturally (perfect as is); the desktop rule
+     below keeps it one line only there. */
+  #elements-view .nav { flex-wrap: wrap; }
 }
 
 .panel {
@@ -318,11 +333,13 @@ main {
    results table rather than sitting above it, so it wants real height. --- */
 #tree-view .controls { margin-bottom: .1rem; }
 #treeunroll { min-width: 0; width: 4.5rem; }
-.treenav { margin-top: .4rem; align-items: center; }
+/* Eight buttons: a slightly tighter gap + padding lets Rotate join the row on a
+   narrow phone instead of dropping to a second line. */
+.treenav { margin-top: .4rem; align-items: center; gap: .25rem; }
 /* Associativity is an icon toggle; the .on state fills like Zero offset does. */
 #treeassoc.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 #treeassoc.on:hover { color: #fff; }
-.treenav .iconbtn { background: var(--bg); }
+.treenav .iconbtn { background: var(--bg); padding: .3rem .4rem; }
 #treehint { margin: .5rem 0 .5rem; }
 #cywrap { position: relative; height: min(68vh, 620px); border: 1px solid var(--line);
     border-radius: 9px; background: var(--panel); overflow: hidden; }
@@ -368,6 +385,9 @@ main {
 .ctl em { font-family: var(--mono); font-style: normal; }
 
 .nav { display: flex; gap: .4rem; flex-wrap: wrap; margin: .7rem 0 .5rem; }
+/* On a wide screen the Items nav and its export button share one line (the phone
+   is free to wrap; see the mobile block). */
+#elements-view .nav { flex-wrap: nowrap; }
 .nav button { background: var(--bg); color: var(--fg);
               border: 1px solid var(--line); border-radius: 6px;
               padding: .32rem .75rem; cursor: pointer; font: inherit;
@@ -5490,7 +5510,7 @@ const STRINGS = {
     searchTab:        "Search",
     searchFind:       "Find element",
     searchPlace:      "a string to locate in the set",
-    searchCap:        "Max results",
+    searchCap:        "Max",
     searchGo:         "Search",
     searchFound:      "at index",          // "at index 4,524,476"
     searchCopies:     "copies",            // "3 copies" -> a duplicate
@@ -5528,7 +5548,7 @@ const STRINGS = {
     crackStop:        "Stop",
     crackClear:       "Clear",
     crackCracked:     "cracked",
-    crackAllFound:    "all found, stopped early",
+    crackRechecked:   "re-checked",
     crackTargets:     "Target hashes (one hex digest per line)",
     crackTargetsPlace:"5d41402abc4b2a76b9719d911017c592",
     crackKnobs:       "Tuning",
@@ -5556,9 +5576,10 @@ const STRINGS = {
     crackUnsupported: "GPU cracking does not yet handle this pattern's shape.",
     crackEmptyPat:    "Enter a valid expression to crack.",
     crackNoTargets:   "Paste at least one hex digest to search for.",
-    crackReady:       "Ready — paste target hashes and press Crack.",
+    crackReady:       "Ready — paste target hashes and press Start (▶).",
     crackComing:      "GPU pipeline is wired in the next step.",
     crackStarting:    "starting…",
+    crackCompiling:   "compiling WGSL…",
     crackDone:        "Done",
     crackStopped:     "Stopped",
     crackPaused:      "paused",
@@ -5742,7 +5763,7 @@ const STRINGS = {
     searchTab:        "Busca",
     searchFind:       "Achar elemento",
     searchPlace:      "uma string para localizar no conjunto",
-    searchCap:        "Máx. resultados",
+    searchCap:        "Máx",
     searchGo:         "Buscar",
     searchFound:      "no índice",
     searchCopies:     "cópias",
@@ -5781,7 +5802,7 @@ const STRINGS = {
     crackStop:        "Parar",
     crackClear:       "Limpar",
     crackCracked:     "quebrado(s)",
-    crackAllFound:    "todos achados, parou cedo",
+    crackRechecked:   "reconferidos",
     crackTargets:     "Hashes-alvo (um digest hex por linha)",
     crackTargetsPlace:"5d41402abc4b2a76b9719d911017c592",
     crackKnobs:       "Ajustes",
@@ -5809,9 +5830,10 @@ const STRINGS = {
     crackUnsupported: "A quebra na GPU ainda não trata a forma deste padrão.",
     crackEmptyPat:    "Digite uma expressão válida para quebrar.",
     crackNoTargets:   "Cole ao menos um digest hex para procurar.",
-    crackReady:       "Pronto — cole os hashes-alvo e pressione Quebrar.",
+    crackReady:       "Pronto — cole os hashes-alvo e pressione Iniciar (▶).",
     crackComing:      "O pipeline de GPU entra no próximo passo.",
     crackStarting:    "iniciando…",
+    crackCompiling:   "compilando WGSL…",
     crackDone:        "Concluído",
     crackStopped:     "Parado",
     crackPaused:      "pausado",
@@ -10141,6 +10163,7 @@ function applyLanguage() {
   renderCount();
   renderOrder();
   renderRows(lastRows);
+  renderCrack();          // the Crack tab's status line is language-dependent too
   // A selected example whose regex or helper code has a language variant
   // follows the language: swap the text and re-read from the top. Code alone
   // can vary (the pattern stays the same but the members map to translated
@@ -10847,9 +10870,10 @@ async function startCrack() {
   crackButtons();
   show(prog, true); prog.value = 0;
   // Show a status line the instant the run starts -- the first real progress can
-  // be a couple of seconds away (shader compile + first dispatch), and a blank
-  // bar reads as "nothing happened".
-  st.className = "dim"; st.textContent = "0.0% · " + t("crackStarting");
+  // be a couple of seconds away (on the GPU that beat is the WGSL shader
+  // compile), and a blank bar reads as "nothing happened".
+  const onGpu = $("knobbackend").value !== "cpu" && navigator.gpu;
+  st.className = "dim"; st.textContent = "0.0% · " + t(onGpu ? "crackCompiling" : "crackStarting");
   const startedAt = performance.now();
   const knobs = readKnobs();
   // A software adapter (Chrome's SwiftShader) is correct but ~100x slower than
@@ -10931,8 +10955,7 @@ function renderCrackResults(res, note = "", elapsed = 0) {
   const head = res.stopped ? t("crackStopped") : t("crackDone");
   st.textContent = note + head + " · " + fmtRate(res.rate) + " · " + fmtDur(elapsed)
     + (res.cores ? " · " + res.cores + " cores" : "") + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
-    + (res.allFound ? " · " + t("crackAllFound") : "")
-    + (res.fw && res.bogus ? " (" + res.bogus + " re-checked)" : "")
+    + (res.fw && res.bogus ? " (" + res.bogus + " " + t("crackRechecked") + ")" : "")
     + (res.capped ? " (" + res.raw + " raw, capped)" : "");
 }
 

@@ -413,6 +413,7 @@ function applyLanguage() {
   renderCount();
   renderOrder();
   renderRows(lastRows);
+  renderCrack();          // the Crack tab's status line is language-dependent too
   // A selected example whose regex or helper code has a language variant
   // follows the language: swap the text and re-read from the top. Code alone
   // can vary (the pattern stays the same but the members map to translated
@@ -1119,9 +1120,10 @@ async function startCrack() {
   crackButtons();
   show(prog, true); prog.value = 0;
   // Show a status line the instant the run starts -- the first real progress can
-  // be a couple of seconds away (shader compile + first dispatch), and a blank
-  // bar reads as "nothing happened".
-  st.className = "dim"; st.textContent = "0.0% · " + t("crackStarting");
+  // be a couple of seconds away (on the GPU that beat is the WGSL shader
+  // compile), and a blank bar reads as "nothing happened".
+  const onGpu = $("knobbackend").value !== "cpu" && navigator.gpu;
+  st.className = "dim"; st.textContent = "0.0% · " + t(onGpu ? "crackCompiling" : "crackStarting");
   const startedAt = performance.now();
   const knobs = readKnobs();
   // A software adapter (Chrome's SwiftShader) is correct but ~100x slower than
@@ -1203,8 +1205,7 @@ function renderCrackResults(res, note = "", elapsed = 0) {
   const head = res.stopped ? t("crackStopped") : t("crackDone");
   st.textContent = note + head + " · " + fmtRate(res.rate) + " · " + fmtDur(elapsed)
     + (res.cores ? " · " + res.cores + " cores" : "") + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
-    + (res.allFound ? " · " + t("crackAllFound") : "")
-    + (res.fw && res.bogus ? " (" + res.bogus + " re-checked)" : "")
+    + (res.fw && res.bogus ? " (" + res.bogus + " " + t("crackRechecked") + ")" : "")
     + (res.capped ? " (" + res.raw + " raw, capped)" : "");
 }
 
