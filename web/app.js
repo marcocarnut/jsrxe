@@ -984,13 +984,20 @@ function makeControl() {
   };
 }
 
-// Reflect the run state on the two buttons: Crack toggles to Pause/Resume, Stop
-// shows only while a run is live.
+const ICON_PLAY  = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="5" width="3.6" height="14" rx="1" fill="currentColor"/><rect x="13.4" y="5" width="3.6" height="14" rx="1" fill="currentColor"/></svg>';
+const ICON_STOP  = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
+const ICON_BROOM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 4.5 11 13"/><path d="M9 11l4 4"/><path d="M13 15l-3.5 3.5a2 2 0 0 1-2.8 0l-1.2-1.2a2 2 0 0 1 0-2.8L9 11"/><path d="M6.2 15.2l2.6 2.6"/></svg>';
+
+// Reflect the run state on the two icon buttons: Start toggles play/pause, and
+// the second is Stop (square) while a run is live, Clear (broom) when idle.
 function crackButtons() {
-  const go = $("crackgo"), stop = $("crackstop");
-  go.textContent = t(crackRun.state === "running" ? "crackPause"
-                    : crackRun.state === "paused" ? "crackResume" : "crackGo");
-  show(stop, crackRun.state !== "idle");
+  const go = $("crackgo"), sc = $("crackstopclear");
+  const running = crackRun.state === "running", idle = crackRun.state === "idle";
+  go.innerHTML = running ? ICON_PAUSE : ICON_PLAY;
+  go.title = t(running ? "crackPause" : crackRun.state === "paused" ? "crackResume" : "crackGo");
+  sc.innerHTML = idle ? ICON_BROOM : ICON_STOP;
+  sc.title = t(idle ? "crackClear" : "crackStop");
 }
 
 async function renderCrack() {
@@ -1023,7 +1030,7 @@ async function renderCrack() {
   }
   go.disabled = false;
   $("crackstatus").className = "dim";
-  $("crackstatus").textContent = t("crackReady") + " · " + fmtBig(fp.total) + " candidates";
+  $("crackstatus").textContent = t("crackReady");   // the set size is shown by the count above
 }
 
 function readKnobs() {
@@ -1049,20 +1056,30 @@ function fmtRate(r) {
 }
 // A BigInt candidate count with thousands separators (locale-aware).
 function fmtBig(n) { return n.toLocaleString(DECSEP === "," ? "en" : "pt"); }
-// A duration in seconds as d/h/m/s, dropping units above the largest that is
-// needed (45s; 1m 30s; 1h 1m 1s; 2d 3h 0m 0s).
+// A duration in seconds as y/d/h/m/s, dropping units above the largest that is
+// needed (45s; 1m 30s; 1h 1m 1s; 2d 3h 0m 0s; 3y 12d 5h 0m 0s). Years appear once
+// the span passes 365 days, so astronomical ETAs read as years, not huge day
+// counts.
 function fmtEta(sec) {
   if (!isFinite(sec) || sec < 0) return "…";
   sec = Math.round(sec);
-  const d = Math.floor(sec / 86400); sec -= d*86400;
-  const h = Math.floor(sec / 3600);  sec -= h*3600;
-  const m = Math.floor(sec / 60);    const s = sec - m*60;
+  const y = Math.floor(sec / 31536000); sec -= y*31536000;   // 365-day years
+  const d = Math.floor(sec / 86400);    sec -= d*86400;
+  const h = Math.floor(sec / 3600);     sec -= h*3600;
+  const m = Math.floor(sec / 60);       const s = sec - m*60;
   const parts = [];
-  if (d) parts.push(d + "d");
-  if (d || h) parts.push(h + "h");
-  if (d || h || m) parts.push(m + "m");
+  if (y) parts.push(y + "y");
+  if (y || d) parts.push(d + "d");
+  if (y || d || h) parts.push(h + "h");
+  if (y || d || h || m) parts.push(m + "m");
   parts.push(s + "s");
   return parts.join(" ");
+}
+// Elapsed run time: sub-second precision under 10s (a mask can fall in 0.3s),
+// then the same y/d/h/m/s breakdown as the ETA.
+function fmtDur(sec) {
+  if (!isFinite(sec) || sec < 0) return "…";
+  return sec < 10 ? sec.toFixed(1) + "s" : fmtEta(sec);
 }
 
 // The Crack button, by state: idle -> start; running -> pause; paused -> resume.
@@ -1090,6 +1107,11 @@ async function startCrack() {
   crackRun = { state: "running", control, plan };
   crackButtons();
   show(prog, true); prog.value = 0;
+  // Show a status line the instant the run starts -- the first real progress can
+  // be a couple of seconds away (shader compile + first dispatch), and a blank
+  // bar reads as "nothing happened".
+  st.className = "dim"; st.textContent = "0.0% · " + t("crackStarting");
+  const startedAt = performance.now();
   const knobs = readKnobs();
   // A software adapter (Chrome's SwiftShader) is correct but ~100x slower than
   // real hardware -- warn so a crawling rate isn't a mystery. Kept in front of
@@ -1130,7 +1152,7 @@ async function startCrack() {
     }
     if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
     else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }
-    else                    renderCrackResults(res, gpuNote);
+    else                    renderCrackResults(res, gpuNote, (performance.now() - startedAt) / 1000);
   } catch (e) {
     st.className = "err"; st.textContent = "Error: " + (e && e.message ? e.message : e);
   } finally {
@@ -1164,11 +1186,12 @@ function onCrackClear() {
   renderCrack();
 }
 
-function renderCrackResults(res, note = "") {
+function renderCrackResults(res, note = "", elapsed = 0) {
   const st = $("crackstatus");
   st.className = "dim";
   const head = res.stopped ? t("crackStopped") : t("crackDone");
-  st.textContent = note + head + " · " + fmtRate(res.rate) + (res.cores ? " · " + res.cores + " cores" : "") + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
+  st.textContent = note + head + " · " + fmtRate(res.rate) + " · " + fmtDur(elapsed)
+    + (res.cores ? " · " + res.cores + " cores" : "") + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
     + (res.allFound ? " · " + t("crackAllFound") : "")
     + (res.fw && res.bogus ? " (" + res.bogus + " re-checked)" : "")
     + (res.capped ? " (" + res.raw + " raw, capped)" : "");
@@ -2043,8 +2066,8 @@ function wire() {
     b.onclick = () => setTab(b.dataset.etab);
   $("crackgears").onclick = () => $("crackknobs").showModal();
   $("crackgo").onclick = () => onCrackGo();
-  $("crackstop").onclick = () => onCrackStop();
-  $("crackclear").onclick = () => onCrackClear();
+  // One button: Stop while a run is live, Clear when idle.
+  $("crackstopclear").onclick = () => { if (crackRun.state === "idle") onCrackClear(); else onCrackStop(); };
   $("crackalg").onchange = () => renderCrack();
   // Search as you type, like the other inputs, so there is no button to press.
   const searchSoon = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 200); };

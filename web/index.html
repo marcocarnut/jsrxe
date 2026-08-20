@@ -160,12 +160,12 @@
         </div>
 
         <div class="nav">
-          <button id="first" data-t="first"></button>
-          <button id="prev" data-t="prev"></button>
-          <button id="next" data-t="next"></button>
-          <button id="last" data-t="last"></button>
-          <button id="random" data-t="random"></button>
-          <button type="button" class="zerotgl" aria-pressed="true" data-t="zeroOffset"></button>
+          <button id="first" class="iconbtn" data-ttip="first" aria-label="first"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6v12"/><path d="M16 7l-6 5 6 5"/></svg></button>
+          <button id="prev" class="iconbtn" data-ttip="prev" aria-label="previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <button id="random" class="iconbtn" data-ttip="random" aria-label="random"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"/></svg></button>
+          <button id="next" class="iconbtn" data-ttip="next" aria-label="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button id="last" class="iconbtn" data-ttip="last" aria-label="last"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l6 5-6 5"/><path d="M18 6v12"/></svg></button>
+          <button type="button" class="zerotgl" aria-pressed="true" data-ttip="zeroOffset" aria-label="numbering">0/1</button>
           <button id="export" class="iconbtn" data-ttip="exportBtn" aria-label="export">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 9.5 12 14l4.5-4.5"/><path d="M4 20h16"/></svg>
           </button>
@@ -188,7 +188,7 @@
             <input id="findtext" type="text" data-tplace="searchPlace"></label>
           <label class="ctl"><span data-t="searchCap"></span>
             <input id="findcap" type="number" min="1" max="1000" value="50"></label>
-          <button type="button" class="zerotgl" aria-pressed="true" data-t="zeroOffset"></button>
+          <button type="button" class="zerotgl" aria-pressed="true" data-ttip="zeroOffset" aria-label="numbering">0/1</button>
           <button id="share2" class="iconbtn" aria-label="share">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
           </button>
@@ -208,14 +208,14 @@
             <input id="treeunroll" type="number" min="0" max="50" value="0"></label>
         </div>
         <div class="nav treenav">
-          <button id="treefirst" data-t="first"></button>
-          <button id="treeprev" data-t="prev"></button>
-          <button id="treenext" data-t="next"></button>
-          <button id="treelast" data-t="last"></button>
-          <button type="button" class="zerotgl" aria-pressed="true" data-t="zeroOffset"></button>
-          <button type="button" id="treeassoc" aria-pressed="false" data-t="treeAssoc"></button>
-          <button id="treefit" type="button" data-t="treeFit"></button>
-          <button id="treedir" type="button" data-t="treeDir"></button>
+          <button id="treefirst" class="iconbtn" data-ttip="first" aria-label="first"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6v12"/><path d="M16 7l-6 5 6 5"/></svg></button>
+          <button id="treeprev" class="iconbtn" data-ttip="prev" aria-label="previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <button id="treenext" class="iconbtn" data-ttip="next" aria-label="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button id="treelast" class="iconbtn" data-ttip="last" aria-label="last"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l6 5-6 5"/><path d="M18 6v12"/></svg></button>
+          <button type="button" class="zerotgl" aria-pressed="true" data-ttip="zeroOffset" aria-label="numbering">0/1</button>
+          <button type="button" id="treeassoc" class="iconbtn" aria-pressed="false" data-ttip="treeAssoc" aria-label="associativity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 8H6"/><path d="M10 4 6 8l4 4"/><path d="M4 16h14"/><path d="M14 12l4 4-4 4"/></svg></button>
+          <button id="treefit" class="iconbtn" type="button" data-ttip="treeFit" aria-label="fit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
+          <button id="treedir" class="iconbtn" type="button" data-ttip="treeDir" aria-label="rotate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/></svg></button>
           <button id="share3" class="iconbtn" aria-label="share">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
           </button>
@@ -240,9 +240,8 @@
               <option value="ntlm">NTLM</option>
               <option value="sha1">SHA-1</option>
             </select></label>
-          <button id="crackgo" data-t="crackGo"></button>
-          <button id="crackstop" data-t="crackStop" hidden></button>
-          <button id="crackclear" data-t="crackClear"></button>
+          <button id="crackgo" class="iconbtn" data-ttip="crackGo" aria-label="start"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
+          <button id="crackstopclear" class="iconbtn" data-ttip="crackClear" aria-label="clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 4.5 11 13"/><path d="M9 11l4 4"/><path d="M13 15l-3.5 3.5a2 2 0 0 1-2.8 0l-1.2-1.2a2 2 0 0 1 0-2.8L9 11"/><path d="M6.2 15.2l2.6 2.6"/></svg></button>
           <button id="crackgears" class="iconbtn" data-ttip="crackKnobs" aria-label="knobs">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>

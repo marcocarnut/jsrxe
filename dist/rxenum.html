@@ -317,11 +317,7 @@ main {
 #tree-view .controls { margin-bottom: .1rem; }
 #treeunroll { min-width: 0; width: 4.5rem; }
 .treenav { margin-top: .4rem; align-items: center; }
-/* Associativity is a toggle button styled like Zero offset. */
-#treeassoc { background: var(--bg); color: var(--fg); border: 1px solid var(--line);
-    border-radius: 6px; padding: .32rem .75rem; cursor: pointer; font: inherit;
-    font-size: .88rem; }
-#treeassoc:hover { border-color: var(--accent); color: var(--accent); }
+/* Associativity is an icon toggle; the .on state fills like Zero offset does. */
 #treeassoc.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 #treeassoc.on:hover { color: #fff; }
 .treenav .iconbtn { background: var(--bg); }
@@ -460,9 +456,10 @@ dialog menu button { background: var(--bg); color: var(--fg);
 
 /* --- Crack tab --------------------------------------------------------- */
 #crack-view .controls { align-items: center; }
+/* Start/Pause is an accent-filled icon button (play triangle / pause bars). */
 #crack-view #crackgo { background: var(--accent-bg); color: var(--accent);
-          border: 1px solid var(--accent); border-radius: 6px;
-          padding: .35rem 1rem; cursor: pointer; font: inherit; }
+          border-color: var(--accent); }
+#crack-view #crackgo:hover { color: var(--accent); }
 #crack-view #crackgo[disabled] { opacity: .5; cursor: default;
           background: var(--bg); color: var(--dim); border-color: var(--line); }
 #crack-view .iconbtn { padding: .3rem .5rem; display: inline-flex;
@@ -474,10 +471,6 @@ dialog menu button { background: var(--bg); color: var(--fg);
           font-family: ui-monospace, monospace; font-size: .85rem;
           background: var(--bg); color: var(--fg);
           border: 1px solid var(--line); border-radius: 6px; padding: .5rem; }
-#crack-view #crackstop, #crack-view #crackclear { background: var(--bg); color: var(--fg);
-          border: 1px solid var(--line); border-radius: 6px;
-          padding: .35rem 1rem; cursor: pointer; font: inherit; }
-#crack-view #crackstop:hover, #crack-view #crackclear:hover { border-color: var(--accent); color: var(--accent); }
 #crackprog { width: 100%; height: .5rem; margin-top: .6rem; display: block;
           appearance: none; -webkit-appearance: none; border: 0;
           background: var(--bg); border-radius: 4px; overflow: hidden; }
@@ -646,12 +639,12 @@ dialog menu button { background: var(--bg); color: var(--fg);
         </div>
 
         <div class="nav">
-          <button id="first" data-t="first"></button>
-          <button id="prev" data-t="prev"></button>
-          <button id="next" data-t="next"></button>
-          <button id="last" data-t="last"></button>
-          <button id="random" data-t="random"></button>
-          <button type="button" class="zerotgl" aria-pressed="true" data-t="zeroOffset"></button>
+          <button id="first" class="iconbtn" data-ttip="first" aria-label="first"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6v12"/><path d="M16 7l-6 5 6 5"/></svg></button>
+          <button id="prev" class="iconbtn" data-ttip="prev" aria-label="previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <button id="random" class="iconbtn" data-ttip="random" aria-label="random"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"/></svg></button>
+          <button id="next" class="iconbtn" data-ttip="next" aria-label="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button id="last" class="iconbtn" data-ttip="last" aria-label="last"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l6 5-6 5"/><path d="M18 6v12"/></svg></button>
+          <button type="button" class="zerotgl" aria-pressed="true" data-ttip="zeroOffset" aria-label="numbering">0/1</button>
           <button id="export" class="iconbtn" data-ttip="exportBtn" aria-label="export">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 9.5 12 14l4.5-4.5"/><path d="M4 20h16"/></svg>
           </button>
@@ -674,7 +667,7 @@ dialog menu button { background: var(--bg); color: var(--fg);
             <input id="findtext" type="text" data-tplace="searchPlace"></label>
           <label class="ctl"><span data-t="searchCap"></span>
             <input id="findcap" type="number" min="1" max="1000" value="50"></label>
-          <button type="button" class="zerotgl" aria-pressed="true" data-t="zeroOffset"></button>
+          <button type="button" class="zerotgl" aria-pressed="true" data-ttip="zeroOffset" aria-label="numbering">0/1</button>
           <button id="share2" class="iconbtn" aria-label="share">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
           </button>
@@ -694,14 +687,14 @@ dialog menu button { background: var(--bg); color: var(--fg);
             <input id="treeunroll" type="number" min="0" max="50" value="0"></label>
         </div>
         <div class="nav treenav">
-          <button id="treefirst" data-t="first"></button>
-          <button id="treeprev" data-t="prev"></button>
-          <button id="treenext" data-t="next"></button>
-          <button id="treelast" data-t="last"></button>
-          <button type="button" class="zerotgl" aria-pressed="true" data-t="zeroOffset"></button>
-          <button type="button" id="treeassoc" aria-pressed="false" data-t="treeAssoc"></button>
-          <button id="treefit" type="button" data-t="treeFit"></button>
-          <button id="treedir" type="button" data-t="treeDir"></button>
+          <button id="treefirst" class="iconbtn" data-ttip="first" aria-label="first"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6v12"/><path d="M16 7l-6 5 6 5"/></svg></button>
+          <button id="treeprev" class="iconbtn" data-ttip="prev" aria-label="previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <button id="treenext" class="iconbtn" data-ttip="next" aria-label="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button id="treelast" class="iconbtn" data-ttip="last" aria-label="last"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l6 5-6 5"/><path d="M18 6v12"/></svg></button>
+          <button type="button" class="zerotgl" aria-pressed="true" data-ttip="zeroOffset" aria-label="numbering">0/1</button>
+          <button type="button" id="treeassoc" class="iconbtn" aria-pressed="false" data-ttip="treeAssoc" aria-label="associativity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 8H6"/><path d="M10 4 6 8l4 4"/><path d="M4 16h14"/><path d="M14 12l4 4-4 4"/></svg></button>
+          <button id="treefit" class="iconbtn" type="button" data-ttip="treeFit" aria-label="fit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
+          <button id="treedir" class="iconbtn" type="button" data-ttip="treeDir" aria-label="rotate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/></svg></button>
           <button id="share3" class="iconbtn" aria-label="share">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
           </button>
@@ -726,9 +719,8 @@ dialog menu button { background: var(--bg); color: var(--fg);
               <option value="ntlm">NTLM</option>
               <option value="sha1">SHA-1</option>
             </select></label>
-          <button id="crackgo" data-t="crackGo"></button>
-          <button id="crackstop" data-t="crackStop" hidden></button>
-          <button id="crackclear" data-t="crackClear"></button>
+          <button id="crackgo" class="iconbtn" data-ttip="crackGo" aria-label="start"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
+          <button id="crackstopclear" class="iconbtn" data-ttip="crackClear" aria-label="clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 4.5 11 13"/><path d="M9 11l4 4"/><path d="M13 15l-3.5 3.5a2 2 0 0 1-2.8 0l-1.2-1.2a2 2 0 0 1 0-2.8L9 11"/><path d="M6.2 15.2l2.6 2.6"/></svg></button>
           <button id="crackgears" class="iconbtn" data-ttip="crackKnobs" aria-label="knobs">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
@@ -5573,6 +5565,7 @@ const STRINGS = {
     crackNoTargets:   "Paste at least one hex digest to search for.",
     crackReady:       "Ready — paste target hashes and press Crack.",
     crackComing:      "GPU pipeline is wired in the next step.",
+    crackStarting:    "starting…",
     crackDone:        "Done",
     crackStopped:     "Stopped",
     crackPaused:      "paused",
@@ -5825,6 +5818,7 @@ const STRINGS = {
     crackNoTargets:   "Cole ao menos um digest hex para procurar.",
     crackReady:       "Pronto — cole os hashes-alvo e pressione Quebrar.",
     crackComing:      "O pipeline de GPU entra no próximo passo.",
+    crackStarting:    "iniciando…",
     crackDone:        "Concluído",
     crackStopped:     "Parado",
     crackPaused:      "pausado",
@@ -10701,13 +10695,20 @@ function makeControl() {
   };
 }
 
-// Reflect the run state on the two buttons: Crack toggles to Pause/Resume, Stop
-// shows only while a run is live.
+const ICON_PLAY  = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="5" width="3.6" height="14" rx="1" fill="currentColor"/><rect x="13.4" y="5" width="3.6" height="14" rx="1" fill="currentColor"/></svg>';
+const ICON_STOP  = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
+const ICON_BROOM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 4.5 11 13"/><path d="M9 11l4 4"/><path d="M13 15l-3.5 3.5a2 2 0 0 1-2.8 0l-1.2-1.2a2 2 0 0 1 0-2.8L9 11"/><path d="M6.2 15.2l2.6 2.6"/></svg>';
+
+// Reflect the run state on the two icon buttons: Start toggles play/pause, and
+// the second is Stop (square) while a run is live, Clear (broom) when idle.
 function crackButtons() {
-  const go = $("crackgo"), stop = $("crackstop");
-  go.textContent = t(crackRun.state === "running" ? "crackPause"
-                    : crackRun.state === "paused" ? "crackResume" : "crackGo");
-  show(stop, crackRun.state !== "idle");
+  const go = $("crackgo"), sc = $("crackstopclear");
+  const running = crackRun.state === "running", idle = crackRun.state === "idle";
+  go.innerHTML = running ? ICON_PAUSE : ICON_PLAY;
+  go.title = t(running ? "crackPause" : crackRun.state === "paused" ? "crackResume" : "crackGo");
+  sc.innerHTML = idle ? ICON_BROOM : ICON_STOP;
+  sc.title = t(idle ? "crackClear" : "crackStop");
 }
 
 async function renderCrack() {
@@ -10740,7 +10741,7 @@ async function renderCrack() {
   }
   go.disabled = false;
   $("crackstatus").className = "dim";
-  $("crackstatus").textContent = t("crackReady") + " · " + fmtBig(fp.total) + " candidates";
+  $("crackstatus").textContent = t("crackReady");   // the set size is shown by the count above
 }
 
 function readKnobs() {
@@ -10766,20 +10767,30 @@ function fmtRate(r) {
 }
 // A BigInt candidate count with thousands separators (locale-aware).
 function fmtBig(n) { return n.toLocaleString(DECSEP === "," ? "en" : "pt"); }
-// A duration in seconds as d/h/m/s, dropping units above the largest that is
-// needed (45s; 1m 30s; 1h 1m 1s; 2d 3h 0m 0s).
+// A duration in seconds as y/d/h/m/s, dropping units above the largest that is
+// needed (45s; 1m 30s; 1h 1m 1s; 2d 3h 0m 0s; 3y 12d 5h 0m 0s). Years appear once
+// the span passes 365 days, so astronomical ETAs read as years, not huge day
+// counts.
 function fmtEta(sec) {
   if (!isFinite(sec) || sec < 0) return "…";
   sec = Math.round(sec);
-  const d = Math.floor(sec / 86400); sec -= d*86400;
-  const h = Math.floor(sec / 3600);  sec -= h*3600;
-  const m = Math.floor(sec / 60);    const s = sec - m*60;
+  const y = Math.floor(sec / 31536000); sec -= y*31536000;   // 365-day years
+  const d = Math.floor(sec / 86400);    sec -= d*86400;
+  const h = Math.floor(sec / 3600);     sec -= h*3600;
+  const m = Math.floor(sec / 60);       const s = sec - m*60;
   const parts = [];
-  if (d) parts.push(d + "d");
-  if (d || h) parts.push(h + "h");
-  if (d || h || m) parts.push(m + "m");
+  if (y) parts.push(y + "y");
+  if (y || d) parts.push(d + "d");
+  if (y || d || h) parts.push(h + "h");
+  if (y || d || h || m) parts.push(m + "m");
   parts.push(s + "s");
   return parts.join(" ");
+}
+// Elapsed run time: sub-second precision under 10s (a mask can fall in 0.3s),
+// then the same y/d/h/m/s breakdown as the ETA.
+function fmtDur(sec) {
+  if (!isFinite(sec) || sec < 0) return "…";
+  return sec < 10 ? sec.toFixed(1) + "s" : fmtEta(sec);
 }
 
 // The Crack button, by state: idle -> start; running -> pause; paused -> resume.
@@ -10807,6 +10818,11 @@ async function startCrack() {
   crackRun = { state: "running", control, plan };
   crackButtons();
   show(prog, true); prog.value = 0;
+  // Show a status line the instant the run starts -- the first real progress can
+  // be a couple of seconds away (shader compile + first dispatch), and a blank
+  // bar reads as "nothing happened".
+  st.className = "dim"; st.textContent = "0.0% · " + t("crackStarting");
+  const startedAt = performance.now();
   const knobs = readKnobs();
   // A software adapter (Chrome's SwiftShader) is correct but ~100x slower than
   // real hardware -- warn so a crawling rate isn't a mystery. Kept in front of
@@ -10847,7 +10863,7 @@ async function startCrack() {
     }
     if (!res.supported)     { st.className = "err"; st.textContent = t("crackUnsupported") + " — " + res.reason; }
     else if (res.empty)     { st.className = "err"; st.textContent = t("crackNoTargets"); }
-    else                    renderCrackResults(res, gpuNote);
+    else                    renderCrackResults(res, gpuNote, (performance.now() - startedAt) / 1000);
   } catch (e) {
     st.className = "err"; st.textContent = "Error: " + (e && e.message ? e.message : e);
   } finally {
@@ -10881,11 +10897,12 @@ function onCrackClear() {
   renderCrack();
 }
 
-function renderCrackResults(res, note = "") {
+function renderCrackResults(res, note = "", elapsed = 0) {
   const st = $("crackstatus");
   st.className = "dim";
   const head = res.stopped ? t("crackStopped") : t("crackDone");
-  st.textContent = note + head + " · " + fmtRate(res.rate) + (res.cores ? " · " + res.cores + " cores" : "") + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
+  st.textContent = note + head + " · " + fmtRate(res.rate) + " · " + fmtDur(elapsed)
+    + (res.cores ? " · " + res.cores + " cores" : "") + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
     + (res.allFound ? " · " + t("crackAllFound") : "")
     + (res.fw && res.bogus ? " (" + res.bogus + " re-checked)" : "")
     + (res.capped ? " (" + res.raw + " raw, capped)" : "");
@@ -11760,8 +11777,8 @@ function wire() {
     b.onclick = () => setTab(b.dataset.etab);
   $("crackgears").onclick = () => $("crackknobs").showModal();
   $("crackgo").onclick = () => onCrackGo();
-  $("crackstop").onclick = () => onCrackStop();
-  $("crackclear").onclick = () => onCrackClear();
+  // One button: Stop while a run is live, Clear when idle.
+  $("crackstopclear").onclick = () => { if (crackRun.state === "idle") onCrackClear(); else onCrackStop(); };
   $("crackalg").onchange = () => renderCrack();
   // Search as you type, like the other inputs, so there is no button to press.
   const searchSoon = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 200); };
