@@ -778,18 +778,32 @@ function permLane(pm, w, idxExpr, H) {
     s += `        loop { if (loc >= hic) { break; } let mid = (loc + hic + 1u) >> 1u; if (!u64lt(jj${w}, binomAt(mid, k))) { loc = mid; } else { hic = mid - 1u; } }\n`;
     s += `        jj${w} = u64sub(jj${w}, binomAt(loc, k)); idx${w}[k-1u] = loc; up = loc; } }\n`;
   }
-  // assemble the chosen items into msg + pt (endian / NTLM-widen aware), pad.
+  return s + permAssemble(pm, w, H);
+}
+
+// Assemble the chosen items (idx{w}[0..s{w})) into the message + plaintext words,
+// endian / NTLM-widen aware, padded. Gathers the bytes into a scratch first, then
+// emits only the kept prefix -- so a chop (trailing-separator quell) drops those
+// bytes cleanly rather than leaving them stranded in msg after the 0x80 pad (the
+// bug the old inline packer had: the pad OR'd onto a live separator byte, so every
+// chopped candidate hashed wrong and never matched -- so a {{...?}} pattern found
+// nothing on the GPU). Used by permLane (both the serial and interleaved kernels).
+function permAssemble(pm, w, H) {
+  let maxItemLen = 1;
+  for (let i = 1; i < pm.meta.length; i += 2) if (pm.meta[i] > maxItemLen) maxItemLen = pm.meta[i];
+  const maxbytes = maxItemLen * Math.max(pm.hi, 1) + 1;
+  let s = `    var by${w}: array<u32, ${maxbytes}>; var blen${w}: u32 = 0u;\n`;
+  s += `    for (var pp${w}: u32 = 0u; pp${w} < s${w}; pp${w} = pp${w} + 1u) { let it = idx${w}[pp${w}]; let o = mtab[it*2u]; let l = mtab[it*2u+1u];\n`;
+  s += `      for (var kk=0u; kk<l; kk=kk+1u) { by${w}[blen${w}] = (pool[(o+kk)>>2u] >> (((o+kk)&3u)*8u)) & 0xffu; blen${w} = blen${w} + 1u; } }\n`;
+  if (pm.chop) s += `    if (s${w} > 0u) { blen${w} = blen${w} - ${pm.chop}u; }\n`;
   s += `    var msg${w}: array<u32,16>; var pt${w}: array<u32,14>;\n`;
   s += `    for (var z=0u; z<16u; z=z+1u){ msg${w}[z]=0u; } for (var z=0u; z<14u; z=z+1u){ pt${w}[z]=0u; }\n`;
-  s += `    var blen${w}: u32 = 0u;\n`;
-  s += `    for (var pp${w}: u32 = 0u; pp${w} < s${w}; pp${w} = pp${w} + 1u) { let it = idx${w}[pp${w}]; let o = mtab[it*2u]; let l = mtab[it*2u+1u];\n`;
-  s += `      for (var k=0u; k<l; k=k+1u) { let b = (pool[(o+k)>>2u] >> (((o+k)&3u)*8u)) & 0xffu;\n`;
-  s += `        let cp = blen${w}+k; pt${w}[cp>>2u] |= b << ((cp&3u)*8u);\n`;
-  if (H.widen)                s += `        let mp = 2u*(blen${w}+k); msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
-  else if (H.endian === "le") s += `        let mp = blen${w}+k; msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
-  else                        s += `        let mp = blen${w}+k; msg${w}[mp>>2u] |= b << ((3u-(mp&3u))*8u);\n`;
-  s += `      }\n      blen${w} = blen${w} + l; }\n`;
-  if (pm.chop) s += `    if (s${w} > 0u) { blen${w} = blen${w} - ${pm.chop}u; }\n`;
+  s += `    for (var cp=0u; cp<blen${w}; cp=cp+1u) { let b = by${w}[cp];\n`;
+  s += `      pt${w}[cp>>2u] |= b << ((cp&3u)*8u);\n`;
+  if (H.widen)                s += `      let mp = 2u*cp; msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
+  else if (H.endian === "le") s += `      msg${w}[cp>>2u] |= b << ((cp&3u)*8u);\n`;
+  else                        s += `      msg${w}[cp>>2u] |= b << ((3u-(cp&3u))*8u);\n`;
+  s += `    }\n`;
   if (H.widen)                s += `    { let e = 2u*blen${w}; msg${w}[e>>2u] |= 0x80u << ((e&3u)*8u); msg${w}[14] = e*8u; }\n`;
   else if (H.endian === "le") s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((blen${w}&3u)*8u); msg${w}[14] = blen${w}*8u;\n`;
   else                        s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((3u-(blen${w}&3u))*8u); msg${w}[15] = blen${w}*8u;\n`;
@@ -835,6 +849,17 @@ ${jvars}${body}    g = g + ${W}u * stride;
   }
 }`;
 }
+
+// Note: a perm/combo INCREMENTAL kernel (the sibling of policyIncShader) was
+// built and GPU-measured this session -- and it REGRESSES perm, so it isn't
+// shipped. Two reasons, both real on the GPU: (1) a pick's per-candidate divide is
+// already cheap (u64divmod by a small radix n-pp <= 65536, not the emulated 64-
+// iteration u64/u64 that made policy's incremental a 2.5x win); removing it saves
+// nothing. (2) The incremental's per-thread contiguous run makes adjacent lanes
+// read indices `per` apart, losing the coalescing that grid-stride's adjacent-
+// lane/adjacent-index sweep gets. Measured on Intel Arc: [a-z0-9]{{6}} 209->151
+// MH/s, an 11-item {{*}} 226->184. So perm stays grid-stride. (The chop fix in
+// permAssemble above -- which the incremental work surfaced -- does ship.)
 
 // ---- the policy {{n,m!floors}} GPU kernel -------------------------------
 // Sweeps the whole policy space on the GPU, each lane unranking its 64-bit index
