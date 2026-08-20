@@ -47,6 +47,7 @@ export function analyzePlan(plan, hash) {
   if (plan.hasBackref)   return { ok: false, reason: "a backreference" };
   if (plan.lr && plan.lr.active)   return { ok: false, reason: "a large variable-count repeat (hybrid path, coming soon)" };
   if (plan.perm && plan.perm.active) return { ok: false, reason: "a combinatorial {{...}} choice (hybrid path, coming soon)" };
+  if (plan.policy && plan.policy.active) return { ok: false, reason: "a policy composition {{...!...}} (hybrid path, coming soon)" };
   if (!plan.wheels || !plan.wheels.length) return { ok: false, reason: "an empty pattern" };
 
   const positions = [];
@@ -83,6 +84,7 @@ export function analyzeGeneric(plan, hash) {
   if (plan.hasBackref)   return { ok: false, reason: "a backreference" };
   if (plan.lr && plan.lr.active)   return { ok: false, reason: "a large variable-count repeat (coming soon)" };
   if (plan.perm && plan.perm.active) return analyzePerm(plan, hash);
+  if (plan.policy && plan.policy.active) return analyzePolicy(plan, hash);
   if (!plan.wheels || !plan.wheels.length) return { ok: false, reason: "an empty pattern" };
 
   const positions = [];
@@ -160,6 +162,68 @@ function layPerm(pm, gi) {
   let str = "";
   for (let pp = 0; pp < s; pp++) { const it = idx[pp], o = pm.itemOff(it), l = pm.itemLen(it); for (let k = 0; k < l; k++) str += String.fromCharCode(pm.bytes[o + k]); }
   return pm.chop ? str.slice(0, str.length - pm.chop) : str;
+}
+
+// A policy composition (A|B|...){{lo,hi!floors}}: every length lo..hi string over
+// the width-1 union of the k branches with branch i appearing at least floor_i
+// times, in minimal-compliance-first order. The library (rxe_policy_segments)
+// bakes the segment table -- one (length, count-vector) block, with its
+// cumulative offset, in that order -- into the plan; the kernel binary-searches a
+// 64-bit index into a segment and unranks the arrangement (a multiset
+// permutation) and the characters (a mixed radix) within it. Declines fixed
+// positions around it for now (the bare shape), the same as the {{...}} choice.
+function analyzePolicy(plan, hash) {
+  if (plan.wheels && plan.wheels.length)
+    return { ok: false, reason: "fixed positions around a {{...}} policy (coming soon)" };
+  const po = plan.policy;
+  if (po.big) return { ok: false, reason: "a policy whose keyspace exceeds the kernel's 2^64 limit" };
+  const pool = po.pool, bytes = Uint8Array.from(pool.bytes);   // width-1 union
+  const k = po.k, hi = po.hi, H1 = hi + 1;
+  const segOff = po.segOff.map(x => BigInt(x));                // nseg+1 cumulative
+  // Pascal C(a,b) for a,b <= hi -- the multiset-permutation unrank's binomials.
+  const B = Array.from({ length: H1 }, () => new Array(H1).fill(0n));
+  for (let a = 0; a < H1; a++) { B[a][0] = 1n; for (let b = 1; b <= a; b++) B[a][b] = B[a-1][b-1] + B[a-1][b]; }
+  const total = segOff[po.nseg];
+  const maxWidth = hi;                                          // width-1: at most hi bytes
+  const maxW = HASHES[hash].maxWidth;
+  if (maxWidth > maxW) return { ok: false, reason: `up to ${maxWidth} bytes; the GPU ${hash} kernel handles up to ${maxW}` };
+  // The multiset-permutation unrank multiplies binomials C(a,b) with a <= hi as
+  // 32-bit values; past length 32 one of them can exceed 2^32, so decline (the
+  // interpreter oracle still handles it). No realistic password policy is longer.
+  if (hi > 32) return { ok: false, reason: `a policy longer than 32 (the GPU kernel's binomials would overflow 32 bits)` };
+  const policy = { k, hi, lo: po.lo, bytes, nseg: po.nseg, segOff,
+                   segL: po.segL, segCV: po.segCV, s: po.s, cstart: po.cstart, B, H1 };
+  return { ok: true, policy, total, maxWidth, generic: true };
+}
+
+// Lay the candidate at global index gi (BigInt) of a policy: the exact inverse
+// the interpreter's policy_decode / rxejit's emit_policy_core run, in BigInt --
+// the reference the WGSL kernel mirrors (and the CPU oracle for a policy).
+function layPolicy(po, gi) {
+  let lo = 0, hi = po.nseg - 1;                                // binary-search the segment
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (po.segOff[mid] <= gi) lo = mid; else hi = mid - 1; }
+  const seg = lo, L = po.segL[seg];
+  const loc = gi - po.segOff[seg];
+  const cv = new Array(po.k), rem = new Array(po.k);
+  let charSize = 1n;
+  for (let t = 0; t < po.k; t++) { cv[t] = po.segCV[seg*po.k + t]; rem[t] = cv[t]; for (let c = 0; c < cv[t]; c++) charSize *= BigInt(po.s[t]); }
+  let arr = loc / charSize, chr = loc % charSize;
+  const cls = new Array(L);
+  for (let pp = 0; pp < L; pp++) {
+    for (let t = 0; t < po.k; t++) {
+      if (rem[t] === 0) continue;
+      rem[t]--;
+      let ways = 1n, avail = L - pp - 1;                       // multinom(avail; rem) as a product of binomials
+      for (let u = 0; u < po.k; u++) { ways *= po.B[avail][rem[u]]; avail -= rem[u]; }
+      if (arr < ways) { cls[pp] = t; break; }
+      arr -= ways; rem[t]++;
+    }
+  }
+  const uni = new Array(L);
+  for (let pp = L - 1; pp >= 0; pp--) { const cl = cls[pp]; const ci = chr % BigInt(po.s[cl]); chr /= BigInt(po.s[cl]); uni[pp] = po.cstart[cl] + Number(ci); }
+  let str = "";
+  for (let pp = 0; pp < L; pp++) str += String.fromCharCode(po.bytes[uni[pp]]);
+  return str;
 }
 
 // The host/GPU split: take positions from the end (least significant) until the
@@ -772,6 +836,152 @@ ${jvars}${body}    g = g + ${W}u * stride;
 }`;
 }
 
+// ---- the policy {{n,m!floors}} GPU kernel -------------------------------
+// Sweeps the whole policy space on the GPU, each lane unranking its 64-bit index
+// into a member: binary-search a (length, count-vector) segment, split the
+// within-segment offset into an arrangement rank and a character rank (a u64/u64
+// divide), unrank the arrangement as a multiset permutation and the characters
+// as a mixed radix -- the exact steps layPolicy / emit_policy_core run. The
+// index and the unrank arithmetic are 64-bit (two u32); the pool is width-1, so
+// each position lays one byte. The segment table (offsets, lengths, count
+// vectors) rides in storage; the small tables (the union pool, branch sizes,
+// union starts, a Pascal triangle) are baked as constants.
+
+// GPU data for a policy plan: the segment table as storage arrays, and the small
+// constant tables the kernel bakes into its source.
+export function buildPolicy(fp) {
+  const po = fp.policy, k = po.k, H1 = po.H1, nseg = po.nseg;
+  const segOff = new Uint32Array(2 * (nseg + 1));
+  for (let i = 0; i <= nseg; i++) { const v = po.segOff[i]; segOff[2*i] = Number(v & 0xffffffffn); segOff[2*i+1] = Number(v >> 32n); }
+  const segL = Uint32Array.from(po.segL);
+  const segCV = Uint32Array.from(po.segCV.slice(0, nseg * k));
+  const pool = Array.from(po.bytes);                                   // width-1 union bytes
+  const sVal = Array.from(po.s), cstart = Array.from(po.cstart);
+  const binomP = new Array(H1 * H1).fill(0);                           // C(a,b), saturating past u32
+  for (let a = 0; a < H1; a++) for (let b = 0; b < H1; b++) binomP[a*H1 + b] = Number(po.B[a][b] > 0xffffffffn ? 0xffffffffn : po.B[a][b]);
+  return { k, hi: po.hi, lo: po.lo, nseg, H1, segOff, segL, segCV, pool, sVal, cstart, binomP };
+}
+
+function policyHead(po, H) {
+  const cArr = (name, arr) => `const ${name} = array<u32, ${arr.length || 1}>(${(arr.length ? arr : [0]).map(x => x + "u").join(",")});\n`;
+  const consts = cArr("POOL", po.pool) + cArr("SVAL", po.sVal) + cArr("CSTART", po.cstart) + cArr("BINOMP", po.binomP);
+  return `
+struct Params { baseLo: u32, baseHi: u32, count: u32, ntgt: u32 };
+@group(0) @binding(0) var<storage, read>       targets : array<u32>;
+@group(0) @binding(1) var<storage, read_write> hitcount: atomic<u32>;
+@group(0) @binding(2) var<storage, read_write> hits    : array<u32>;
+@group(0) @binding(3) var<uniform>             P       : Params;
+@group(0) @binding(4) var<storage, read>       segOff  : array<u32>;
+@group(0) @binding(5) var<storage, read>       segL    : array<u32>;
+@group(0) @binding(6) var<storage, read>       segCV   : array<u32>;
+fn rev(x: u32) -> u32 { return ((x & 0xffu) << 24u) | ((x & 0xff00u) << 8u) | ((x >> 8u) & 0xff00u) | ((x >> 24u) & 0xffu); }
+fn u64lt(a: vec2<u32>, b: vec2<u32>) -> bool { return a.y < b.y || (a.y == b.y && a.x < b.x); }
+fn u64sub(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> { let bw = select(0u, 1u, a.x < b.x); return vec2<u32>(a.x - b.x, a.y - b.y - bw); }
+fn u64add32(a: vec2<u32>, b: u32) -> vec2<u32> { let lo = a.x + b; let c = select(0u, 1u, lo < a.x); return vec2<u32>(lo, a.y + c); }
+fn u64divmod(a: vec2<u32>, d: u32) -> vec3<u32> { let qh = a.y / d; var r = a.y % d; let t1 = (r << 16u) | (a.x >> 16u); let q1 = t1 / d; r = t1 % d; let t0 = (r << 16u) | (a.x & 0xffffu); let q0 = t0 / d; r = t0 % d; return vec3<u32>((q1 << 16u) | q0, qh, r); }
+fn mul32wide(a: u32, b: u32) -> vec2<u32> {
+  let a0 = a & 0xffffu; let a1 = a >> 16u; let b0 = b & 0xffffu; let b1 = b >> 16u;
+  let ll = a0*b0; let lh = a0*b1; let hl = a1*b0; let hh = a1*b1;
+  let cross = lh + hl; let crossC = select(0u, 1u, cross < lh);
+  let lo = ll + (cross << 16u); let loC = select(0u, 1u, lo < ll);
+  return vec2<u32>(lo, hh + (cross >> 16u) + (crossC << 16u) + loC);
+}
+fn u64mul32(a: vec2<u32>, b: u32) -> vec2<u32> { let lo = mul32wide(a.x, b); return vec2<u32>(lo.x, lo.y + a.y*b); }
+fn u64divmod64(a: vec2<u32>, b: vec2<u32>) -> vec4<u32> {   // .xy = quotient, .zw = remainder
+  var q = vec2<u32>(0u, 0u); var r = vec2<u32>(0u, 0u);
+  for (var i: i32 = 63; i >= 0; i = i - 1) {
+    r = vec2<u32>(r.x << 1u, (r.y << 1u) | (r.x >> 31u));
+    let bit = (select(a.x, a.y, i >= 32) >> u32(i & 31)) & 1u;
+    r.x = r.x | bit;
+    if (!u64lt(r, b)) { r = u64sub(r, b);
+      if (i >= 32) { q.y = q.y | (1u << u32(i - 32)); } else { q.x = q.x | (1u << u32(i)); } }
+  }
+  return vec4<u32>(q.x, q.y, r.x, r.y);
+}
+${consts}${H.consts || ""}`;
+}
+
+// Unrank lane w's 64-bit index into the member, assemble + pad the candidate.
+function policyLane(po, w, idxExpr, H) {
+  const K = po.k, HI = Math.max(po.hi, 1), H1 = po.H1, NSEG = po.nseg;
+  let s = `\n    var gi${w} = ${idxExpr};\n`;
+  s += `    var slo${w} = 0u; var shi${w} = ${NSEG - 1}u;\n`;
+  if (NSEG > 1)
+    s += `    loop { if (slo${w} >= shi${w}) { break; } let sm = (slo${w} + shi${w} + 1u) >> 1u;\n`
+       + `      if (!u64lt(gi${w}, vec2<u32>(segOff[sm*2u], segOff[sm*2u+1u]))) { slo${w} = sm; } else { shi${w} = sm - 1u; } }\n`;
+  s += `    let seg${w} = slo${w}; let L${w} = segL[seg${w}];\n`;
+  s += `    var loc${w} = u64sub(gi${w}, vec2<u32>(segOff[seg${w}*2u], segOff[seg${w}*2u+1u]));\n`;
+  s += `    var cv${w}: array<u32, ${K}>; var rem${w}: array<u32, ${K}>; var cs${w} = vec2<u32>(1u, 0u);\n`;
+  s += `    for (var t = 0u; t < ${K}u; t = t + 1u) { cv${w}[t] = segCV[seg${w}*${K}u + t]; rem${w}[t] = cv${w}[t];\n`;
+  s += `      for (var c = 0u; c < cv${w}[t]; c = c + 1u) { cs${w} = u64mul32(cs${w}, SVAL[t]); } }\n`;
+  s += `    let dm${w} = u64divmod64(loc${w}, cs${w}); var arr${w} = dm${w}.xy; var chr${w} = dm${w}.zw;\n`;
+  s += `    var cls${w}: array<u32, ${HI}>;\n`;
+  s += `    for (var pp = 0u; pp < L${w}; pp = pp + 1u) {\n`;
+  s += `      for (var t = 0u; t < ${K}u; t = t + 1u) {\n`;
+  s += `        if (rem${w}[t] == 0u) { continue; }\n`;
+  s += `        rem${w}[t] = rem${w}[t] - 1u;\n`;
+  s += `        var ways = vec2<u32>(1u, 0u); var avail = L${w} - pp - 1u;\n`;
+  s += `        for (var u = 0u; u < ${K}u; u = u + 1u) { ways = u64mul32(ways, BINOMP[avail*${H1}u + rem${w}[u]]); avail = avail - rem${w}[u]; }\n`;
+  s += `        if (u64lt(arr${w}, ways)) { cls${w}[pp] = t; break; }\n`;
+  s += `        arr${w} = u64sub(arr${w}, ways); rem${w}[t] = rem${w}[t] + 1u;\n`;
+  s += `      }\n    }\n`;
+  s += `    var uni${w}: array<u32, ${HI}>;\n`;
+  s += `    for (var pp: i32 = i32(L${w}) - 1; pp >= 0; pp = pp - 1) { let cl = cls${w}[u32(pp)]; let dq = u64divmod(chr${w}, SVAL[cl]); chr${w} = vec2<u32>(dq.x, dq.y); uni${w}[u32(pp)] = CSTART[cl] + dq.z; }\n`;
+  // assemble bytes: the width-1 pool lays one byte per position.
+  s += `    var msg${w}: array<u32,16>; var pt${w}: array<u32,14>;\n`;
+  s += `    for (var z=0u; z<16u; z=z+1u){ msg${w}[z]=0u; } for (var z=0u; z<14u; z=z+1u){ pt${w}[z]=0u; }\n`;
+  s += `    for (var pp = 0u; pp < L${w}; pp = pp + 1u) { let b = POOL[uni${w}[pp]];\n`;
+  s += `      pt${w}[pp>>2u] |= b << ((pp&3u)*8u);\n`;
+  if (H.widen)                s += `      let mp = 2u*pp; msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
+  else if (H.endian === "le") s += `      msg${w}[pp>>2u] |= b << ((pp&3u)*8u);\n`;
+  else                        s += `      msg${w}[pp>>2u] |= b << ((3u-(pp&3u))*8u);\n`;
+  s += `    }\n    let blen${w} = L${w};\n`;
+  if (H.widen)                s += `    { let e = 2u*blen${w}; msg${w}[e>>2u] |= 0x80u << ((e&3u)*8u); msg${w}[14] = e*8u; }\n`;
+  else if (H.endian === "le") s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((blen${w}&3u)*8u); msg${w}[14] = blen${w}*8u;\n`;
+  else                        s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((3u-(blen${w}&3u))*8u); msg${w}[15] = blen${w}*8u;\n`;
+  for (let k = 0; k < 16; k++) s += `    let m${w}_${k} = msg${w}[${k}];\n`;
+  return s;
+}
+
+function policyLaneKernel(po, w, idxExpr, fw, H, guard) {
+  const ndg = fw ? 1 : H.words;
+  const pt = { words: Array.from({ length: 14 }, (_, k) => `pt${w}[${k}]`), len: `blen${w}` };
+  return policyLane(po, w, idxExpr, H) + H.compress(w, fw) + searchRecord(w, ndg, H, guard, pt);
+}
+
+function policySerialShader(po, wg, fw, H) {
+  return policyHead(po, H) + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let stride = nwg.x * ${wg}u;
+  var g = gid.x;
+  loop {
+    if (g >= P.count) { break; }
+    let j = u64add32(vec2<u32>(P.baseLo, P.baseHi), g);
+${policyLaneKernel(po, 0, "j", fw, H, "true")}
+    g = g + stride;
+  }
+}`;
+}
+
+function policyInterleavedShader(po, wg, W, fw, H) {
+  let jvars = "", body = "";
+  for (let w = 0; w < W; w++) {
+    jvars += `    let g${w} = g + ${w}u * stride;\n    let j${w} = u64add32(vec2<u32>(P.baseLo, P.baseHi), g${w});\n`;
+    body += policyLaneKernel(po, w, `j${w}`, fw, H, `g${w} < P.count`) + "\n";
+  }
+  return policyHead(po, H) + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let stride = nwg.x * ${wg}u;
+  var g = gid.x;
+  loop {
+    if (g >= P.count) { break; }
+${jvars}${body}    g = g + ${W}u * stride;
+  }
+}`;
+}
+
 // ---- host driver --------------------------------------------------------
 
 const cmpWords = (x, y) => { for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
@@ -816,12 +1026,13 @@ export function buildShader({ plan, hash = "md5", knobs = {} }) {
   if (!fp.ok) { fp = analyzeGeneric(plan, hash); generic = fp.ok; }
   if (!fp.ok) return { error: fp.reason };
   const fw = H.firstWord, wg = knobs.wg || 256, W = knobs.ww || 4, il = knobs.mode === "interleaved";
-  const isPerm = !!fp.perm;
+  const isPerm = !!fp.perm, isPolicy = !!fp.policy;
   let code;
-  if (isPerm) { const PM = buildPerm(fp); code = il ? permInterleavedShader(PM, wg, W, fw, H) : permSerialShader(PM, wg, fw, H); }
+  if (isPolicy) { const PO = buildPolicy(fp); code = il ? policyInterleavedShader(PO, wg, W, fw, H) : policySerialShader(PO, wg, fw, H); }
+  else if (isPerm) { const PM = buildPerm(fp); code = il ? permInterleavedShader(PM, wg, W, fw, H) : permSerialShader(PM, wg, fw, H); }
   else if (generic) { const G = buildGeneric(buildGA(fp).inner); code = il ? genericInterleavedShader(G, wg, W, fw, H) : genericSerialShader(G, wg, fw, H); }
   else { const A = buildA(fp); code = il ? interleavedShader(A, wg, W, A.width, fw, H) : (knobs.inc !== false ? serialShaderInc(A, wg, A.width, fw, H) : serialShader(A, wg, A.width, fw, H)); }
-  return { code, generic, isPerm };
+  return { code, generic, isPerm, isPolicy };
 }
 
 // Probe the WebGPU adapter the crack would use, so the UI can warn when the
@@ -852,7 +1063,8 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   if (!fp.ok) { fp = analyzeGeneric(plan, hash); generic = fp.ok; }   // variable-width (dicts, alternations)
   if (!fp.ok) return { supported: false, reason: fp.reason };
   const isPerm = !!fp.perm;                          // a {{...}} choice: u64 unrank kernel
-  if (isPerm && fp.total > 0xffffffffffffffffn)
+  const isPolicy = !!fp.policy;                      // a {{...!...}} policy: u64 unrank kernel
+  if ((isPerm || isPolicy) && fp.total > 0xffffffffffffffffn)
     return { supported: false, reason: `keyspace ${fp.total} over the kernel's 2^64 limit` };
   if (!navigator.gpu) return { supported: false, reason: "no WebGPU" };
 
@@ -871,18 +1083,21 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
 
   // A perm plan also satisfies analyzeGeneric (it returns the {{...}} choice), so
   // `generic` is true for it too; `gen` is the strictly variable-width path.
-  const gen = generic && !isPerm;
-  const A = generic || isPerm ? null : buildA(fp);
+  const gen = generic && !isPerm && !isPolicy;
+  const A = generic || isPerm || isPolicy ? null : buildA(fp);
   const GA = gen ? buildGA(fp) : null;
   const G = gen ? buildGeneric(GA.inner) : null;
   const PM = isPerm ? buildPerm(fp) : null;
+  const PO = isPolicy ? buildPolicy(fp) : null;
   const wg = knobs.wg || 256, cap = knobs.cap || 8192;
   const mode = knobs.mode || "serial", W = knobs.ww || 4;
   const inc = knobs.inc !== false;   // incremental odometer on the fast serial path (?crackinc=off to A/B)
   const fw = H.firstWord;   // always on -- helps MD5/NTLM, ignored by SHA
   // The fast-path kernels read A.width, so build them only in the fast branch --
   // A is null for the generic and perm paths.
-  const code = isPerm
+  const code = isPolicy
+    ? (mode === "serial" ? policySerialShader(PO, wg, fw, H) : policyInterleavedShader(PO, wg, W, fw, H))
+    : isPerm
     ? (mode === "serial" ? permSerialShader(PM, wg, fw, H) : permInterleavedShader(PM, wg, W, fw, H))
     : generic
     ? (mode === "serial" ? genericSerialShader(G, wg, fw, H) : genericInterleavedShader(G, wg, W, fw, H))
@@ -919,6 +1134,13 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   if (bMeta) device.queue.writeBuffer(bMeta, 0, metaSrc);
   if (bBinom) device.queue.writeBuffer(bBinom, 0, PM.binom);
 
+  // The policy kernel reads its segment table from storage (bindings 4-6); the
+  // small tables ride as constants in the shader source.
+  const mkStore = a => { const b = device.createBuffer({ size: a.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST }); device.queue.writeBuffer(b, 0, a); return b; };
+  const bSegOff = isPolicy ? mkStore(PO.segOff) : null;
+  const bSegL   = isPolicy ? mkStore(PO.segL)   : null;
+  const bSegCV  = isPolicy ? mkStore(PO.segCV)  : null;
+
   const rings = Array.from({ length: RING }, () => {
     const u = device.createBuffer({ size: U, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const entries = [
@@ -929,6 +1151,9 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
       entries.push({ binding: 4, resource: { buffer: bPool } }, { binding: 5, resource: { buffer: bMeta } });
       if (usesBinom) entries.push({ binding: 6, resource: { buffer: bBinom } });
     }
+    if (isPolicy)
+      entries.push({ binding: 4, resource: { buffer: bSegOff } }, { binding: 5, resource: { buffer: bSegL } },
+                   { binding: 6, resource: { buffer: bSegCV } });
     const b = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries });
     return { u, b };
   });
@@ -940,11 +1165,11 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   // generic path the outer wheels are variable width, so they become a byte
   // prefix of length plen rather than fixed cells. The perm path sweeps its
   // whole 64-bit choice space linearly (no outer wheels yet), so outerN = 1.
-  const outer = isPerm ? [] : generic ? GA.outer : A.positions.slice(0, A.split);
+  const outer = isPerm || isPolicy ? [] : generic ? GA.outer : A.positions.slice(0, A.split);
   let outerN = 1n; for (const p of outer) outerN *= BigInt(p.n);
   // The inner span the GPU sweeps per prefix: 2^32-bounded for fast/generic (a
-  // JS number), the full 64-bit keyspace for perm (a BigInt).
-  const spanTotal = isPerm ? fp.total : BigInt(generic ? GA.innerN : A.innerN);
+  // JS number), the full 64-bit keyspace for perm/policy (a BigInt).
+  const spanTotal = isPerm || isPolicy ? fp.total : BigInt(generic ? GA.innerN : A.innerN);
 
   const ab = new ArrayBuffer(U);
   const uScal = new Uint32Array(ab, 0, 4);
@@ -1093,7 +1318,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
 
       const rem = spanTotal - basePos;
       const count = Number(rem < BigInt(chunk) ? rem : BigInt(chunk));
-      if (isPerm) {
+      if (isPerm || isPolicy) {
         uScal[0] = Number(basePos & 0xffffffffn);      // baseLo
         uScal[1] = Number(basePos >> 32n);             // baseHi
         uScal[2] = count;                              // Params.count

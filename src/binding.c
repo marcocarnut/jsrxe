@@ -36,6 +36,7 @@
 #include "lens.h"
 #include "rxe_graph.h"
 #include "rxe_lay.h"
+#include "policy.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -299,6 +300,14 @@ static void jputi(struct jbuf *b, int v)
     char t[16];
     jput(b, t, snprintf(t, sizeof t, "%d", v));
 }
+// A 64-bit unsigned as a bare JSON number. Values past 2^53 lose precision as a
+// JS number, so the crack tab reads the big ones (segment offsets, the total) as
+// BigInt(String(...)); a decimal literal round-trips through that exactly.
+static void jputu64(struct jbuf *b, unsigned long long v)
+{
+    char t[24];
+    jput(b, t, snprintf(t, sizeof t, "%llu", v));
+}
 // A JSON string literal: the quotes, and the escapes JSON insists on inside.
 static void jputq(struct jbuf *b, const char *s)
 {
@@ -520,6 +529,54 @@ char *rxe_js_wheel_plan(struct rxe *rxe)
         jputs(&out, ",\"ordered\":"); jputs(&out, b.perm_ordered ? "true" : "false");
         jputs(&out, ",\"chop\":");    jputi(&out, b.perm_chop);
         jputs(&out, ",\"pool\":");    jput_wheel(&out, &b.perm_pool);
+    }
+    jput(&out, "}", 1);
+
+    // A policy composition (A|B|...){{lo,hi!floors}}: the shape, plus the segment
+    // table (one (length, count-vector) block, in minimal-compliance-first order,
+    // with the cumulative offset) that the WGSL kernel binary-searches an index
+    // into. Built by the library's rxe_policy_segments, the same order rxejit's
+    // OpenCL bakes, so the browser and the native cracker agree. Too large for a
+    // 64-bit index (or the bake cap) sets big:true, and the crack tab declines to
+    // the interpreter oracle.
+    jputs(&out, ",\"policy\":{\"active\":"); jputs(&out, b.policy_active ? "true" : "false");
+    if (b.policy_active) {
+        int k = b.policy_k, cap = 8192;
+        jputs(&out, ",\"at\":");     jputi(&out, b.policy_at);
+        jputs(&out, ",\"lo\":");     jputi(&out, b.policy_lo);
+        jputs(&out, ",\"hi\":");     jputi(&out, b.policy_hi);
+        jputs(&out, ",\"k\":");      jputi(&out, k);
+        jputs(&out, ",\"soaker\":"); jputi(&out, b.policy_soaker);
+        jputs(&out, ",\"floors\":[");
+        for (int i = 0; i < k; i++) { if (i) jput(&out, ",", 1); jputi(&out, b.policy_floor[i]); }
+        jputs(&out, "],\"s\":[");
+        for (int i = 0; i < k; i++) { if (i) jput(&out, ",", 1); jputu64(&out, b.policy_s[i]); }
+        jputs(&out, "],\"cstart\":[");
+        for (int i = 0; i < k; i++) { if (i) jput(&out, ",", 1); jputu64(&out, b.policy_cstart[i]); }
+        jputs(&out, "],\"pool\":");   jput_wheel(&out, &b.policy_pool);
+
+        int *segL = malloc((size_t)(cap + 1) * sizeof *segL);
+        int *segCV = malloc((size_t)(cap + 1) * (size_t)k * sizeof *segCV);
+        unsigned long long *segOFF = malloc((size_t)(cap + 1) * sizeof *segOFF);
+        const char *why = NULL;
+        int nseg = (segL && segCV && segOFF)
+            ? rxe_policy_segments(b.policy_s, k, b.policy_lo, b.policy_hi,
+                                  b.policy_floor, b.policy_soaker, cap, segL, segCV, segOFF, &why)
+            : -1;
+        if (nseg < 0) {
+            jputs(&out, ",\"big\":true");
+        } else {
+            jputs(&out, ",\"nseg\":");  jputi(&out, nseg);
+            jputs(&out, ",\"npol\":");  jputu64(&out, segOFF[nseg]);
+            jputs(&out, ",\"segOff\":[");
+            for (int i = 0; i <= nseg; i++) { if (i) jput(&out, ",", 1); jputu64(&out, segOFF[i]); }
+            jputs(&out, "],\"segL\":[");
+            for (int i = 0; i < nseg; i++) { if (i) jput(&out, ",", 1); jputi(&out, segL[i]); }
+            jputs(&out, "],\"segCV\":[");
+            for (int i = 0; i < nseg * k; i++) { if (i) jput(&out, ",", 1); jputi(&out, segCV[i]); }
+            jput(&out, "]", 1);
+        }
+        free(segL); free(segCV); free(segOFF);
     }
     jput(&out, "}", 1);
 
