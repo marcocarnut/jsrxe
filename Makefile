@@ -26,6 +26,7 @@ GMP_LIB  := $(GMP)/.libs/libgmp.a
 # The library's sources, minus its demo program, plus ours.
 RXE_SRC  := $(RXE)/rxe.c $(RXE)/rxe_alt.c $(RXE)/rxe_node.c $(RXE)/parse.c \
             $(RXE)/bkreftbl.c $(RXE)/permute.c $(RXE)/repeat.c $(RXE)/comb.c \
+            $(RXE)/policy.c \
             $(RXE)/pair.c $(RXE)/lens.c $(RXE)/dict.c $(RXE)/rank.c $(RXE)/graph.c \
             $(RXE)/rxe_lay.c
 
