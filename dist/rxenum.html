@@ -7983,6 +7983,196 @@ function buildCpuKernel(positions, hash) {
   return new Function(pbArgs, src)(...pb);
 }
 
+// ---- the variable-width kernels (perm/combo, policy) --------------------
+// The fixed-mask kernel above bakes each message word from compile-time byte
+// offsets. A {{...}} choice or a policy composition instead varies its width per
+// candidate (different picks, different lengths), so these assemble the bytes
+// into a scratch buffer at run time -- the CPU siblings of crack.js's genericLane
+// / permLane / policyLane WGSL. Both are INCREMENTAL: the expensive unrank of the
+// slice's start index runs once (in BigInt, so the divides are exact), then each
+// step advances the odometer by +1 (a next-combination, a factorial-digit carry,
+// or a character carry) in plain Number arithmetic -- the same trick the WGSL
+// serialShaderInc / policyIncShader kernels use, killing the ~1 MH/s BigInt oracle.
+
+// Shared tail, emitted where pbuf[0..flen) already holds the candidate's bytes:
+// pack the message words (endian / NTLM-widen aware), run the hash unrolled, and
+// binary-search the sorted targets, calling onHit(plaintext, idx) on a match.
+// Uses only its own locals (pk/pby/zz/lo/hi/mid/bi/c{i}), disjoint from the hash
+// bodies' registers, so it composes after them.
+function packHashSearch(hash) {
+  const spec = HASHSPEC[hash];
+  const { words, endian, widen } = spec;
+  const packA = widen
+    ? `      var mp=2*pk; msg[mp>>2] |= pby << ((mp&3)*8);\n`
+    : endian === "le"
+      ? `      msg[pk>>2] |= pby << ((pk&3)*8);\n`
+      : `      msg[pk>>2] |= pby << ((3-(pk&3))*8);\n`;
+  let s = "    for (var zz=0;zz<16;zz++) msg[zz]=0;\n";
+  s += `    for (var pk=0;pk<flen;pk++){ var pby=pbuf[pk];\n${packA}    }\n`;
+  if (widen)                s += `    { var e=2*flen; msg[e>>2] |= 0x80 << ((e&3)*8); msg[14]=e*8; }\n`;
+  else if (endian === "le") s += `    msg[flen>>2] |= 0x80 << ((flen&3)*8); msg[14]=flen*8;\n`;
+  else                      s += `    msg[flen>>2] |= 0x80 << ((3-(flen&3))*8); msg[15]=flen*8;\n`;
+  for (let k = 0; k < 16; k++) s += `    var m${k}=msg[${k}];\n`;
+  s += spec.body();
+  let cmp = "";
+  for (let i = 0; i < words; i++)
+    cmp += `        var c${i}=T[bi+${i}]; if(w${i}<c${i}){hi=mid-1;continue;} if(w${i}>c${i}){lo=mid+1;continue;}\n`;
+  s += `    { var lo=0, hi=nt-1;
+      while(lo<=hi){ var mid=(lo+hi)>>1, bi=mid*${words};
+${cmp}        onHit(String.fromCharCode.apply(null, pbuf.subarray(0, flen)), mid); break;
+      } }\n`;
+  return s;
+}
+
+// The policy kernel. P carries the segment table (segOff cumulative counts, segL
+// lengths, segCV count-vectors) plus the small tables (pool bytes, branch sizes
+// SVAL, union starts CSTART, a full-precision Pascal triangle BINOM). Mirrors
+// crack.js's policyIncShader: unrank the start once, then carry the character
+// digits, re-unranking the arrangement only when they wrap and stepping the
+// segment only when the arrangement wraps.
+function buildPolicyKernelSource(P, hash) {
+  if (!HASHSPEC[hash]) throw new Error(`cpu policy kernel: ${hash} not supported`);
+  const K = P.k, HI = Math.max(P.hi, 1), H1 = P.H1, NSEG = P.nseg, maxW = Math.max(P.hi, 1);
+  const pbArgs = "SEGOFF, SEGL, SEGCV, POOL, SVAL, CSTART, BINOM";
+  const pb = [P.segOff, P.segL, P.segCV, P.pool, P.sVal, P.cstart, P.binom];
+
+  const segSearch = NSEG > 1
+    ? `  var slo=0, shi=${NSEG - 1};
+  while (slo<shi){ var sm=(slo+shi+1)>>1; if (BigInt(SEGOFF[sm])<=giB) slo=sm; else shi=sm-1; }
+  var seg=slo;\n`
+    : "  var seg=0;\n";
+  // multiset-permutation unrank of arrangement rank `a` (a Number < arrCount, so
+  // exact) into cls[0..L) -- division-free, only binomial products/compares.
+  const unrankArr = `  function unrankArr(a){
+    for (var t=0;t<${K};t++) rem[t]=cv[t];
+    for (var pp=0;pp<L;pp++){
+      for (var t=0;t<${K};t++){
+        if (rem[t]===0) continue;
+        rem[t]--;
+        var ways=1, avail=L-pp-1;
+        for (var u=0;u<${K};u++){ ways*=BINOM[avail*${H1}+rem[u]]; avail-=rem[u]; }
+        if (a<ways){ cls[pp]=t; break; }
+        a-=ways; rem[t]++;
+      }
+    }
+  }\n`;
+  const loadSeg = `    L=SEGL[seg];
+    for (var t=0;t<${K};t++) cv[t]=SEGCV[seg*${K}+t];
+    { var ac=1, av=L; for (var t=0;t<${K};t++){ ac*=BINOM[av*${H1}+cv[t]]; av-=cv[t]; } arrCount=ac; }\n`;
+
+  const src = `"use strict";
+return function crack(base, count, T, nt, onHit) {
+  var msg=new Int32Array(16), pbuf=new Uint8Array(${maxW});
+  var cls=new Int32Array(${HI}), cd=new Int32Array(${HI});
+  var cv=new Int32Array(${K}), rem=new Int32Array(${K});
+  var L=0, arrIdx=0, arrCount=0;
+${unrankArr}  // decode the run's start index once (BigInt keeps the divides exact)
+  var giB=BigInt(base);
+${segSearch}${loadSeg}  var locB=giB-BigInt(SEGOFF[seg]);
+  var csB=1n;
+  for (var t=0;t<${K};t++){ var sB=BigInt(SVAL[t]); for (var c=0;c<cv[t];c++) csB*=sB; }
+  arrIdx=Number(locB/csB);
+  var chrB=locB%csB;
+  unrankArr(arrIdx);
+  for (var pp=L-1; pp>=0; pp--){ var sv=SVAL[cls[pp]]; cd[pp]=Number(chrB%BigInt(sv)); chrB=chrB/BigInt(sv); }
+  var it=0;
+  for (;;) {
+    for (var pp=0;pp<L;pp++) pbuf[pp]=POOL[CSTART[cls[pp]]+cd[pp]];
+    var flen=L;
+${packHashSearch(hash)}    it++; if (it>=count) break;
+    // advance one member: carry the characters, else the arrangement, else the segment
+    var carry=1;
+    for (var pp=L-1; pp>=0; pp--){ cd[pp]++; if (cd[pp]<SVAL[cls[pp]]){ carry=0; break; } cd[pp]=0; }
+    if (carry){
+      arrIdx++;
+      if (arrIdx<arrCount){ unrankArr(arrIdx); }
+      else { seg++;
+${loadSeg}        arrIdx=0; unrankArr(0);
+        for (var pp=0;pp<L;pp++) cd[pp]=0;
+      }
+    }
+  }
+};`;
+  return { src, pbArgs, pb };
+}
+
+// The perm/combo kernel. P carries the pool (POOL bytes + META (off,len) per
+// item), a full-precision Pascal BINOM (unordered colex unrank) and the per-size
+// block counts BLOCKS. Ordered picks carry factorial digits + re-expand; unordered
+// picks step by next-combination in colex order -- the same order layPerm ranks.
+function buildPermKernelSource(P, hash) {
+  if (!HASHSPEC[hash]) throw new Error(`cpu perm kernel: ${hash} not supported`);
+  const n = P.n, lo = P.lo, hi = P.hi, ordered = !!P.ordered, chop = P.chop | 0, HI1 = hi + 1;
+  const HI = Math.max(hi, 1), maxW = Math.max(P.maxWidth, 1) + chop + 4;
+  const pbArgs = "POOL, META, BINOM, BLOCKS";
+  const pb = [P.pool, P.meta, P.binom, P.blocks];
+
+  const sizeScan = lo < hi
+    ? `  var s=${lo}, rrB=giB;
+  while (true){ var blkB=BigInt(BLOCKS[s-${lo}]); if (rrB<blkB) break; rrB-=blkB; s++; }\n`
+    : `  var s=${lo}, rrB=giB;\n`;
+
+  // decode rrB (BigInt) into the current pick, and the stepping helpers.
+  let decode, helpers;
+  if (ordered) {
+    decode = `  var remB=rrB;
+  for (var pp=0; pp<s; pp++){ var blkB=1n; for (var tt=0; tt<s-1-pp; tt++) blkB*=BigInt(${n}-1-pp-tt);
+    cd[pp]=Number(remB/blkB); remB=remB%blkB; }
+  expand(0);\n`;
+    helpers = `  function expand(from){
+    var uc=0, i, a, ins;
+    for (i=0;i<from;i++){ a=idx[i]; ins=uc; while(ins>0 && used[ins-1]>a){ used[ins]=used[ins-1]; ins--; } used[ins]=a; uc++; }
+    for (var pp=from; pp<s; pp++){ a=cd[pp];
+      for (var u=0;u<uc;u++){ if (used[u]<=a) a++; }
+      idx[pp]=a; ins=uc; while(ins>0 && used[ins-1]>a){ used[ins]=used[ins-1]; ins--; } used[ins]=a; uc++;
+    }
+  }
+  function nextPick(){
+    for (var pp=s-1; pp>=0; pp--){ cd[pp]++; if (cd[pp]<=${n}-1-pp){ expand(pp); return true; } cd[pp]=0; }
+    return false;
+  }
+  function firstPick(){ for (var i=0;i<s;i++) cd[i]=0; expand(0); }\n`;
+  } else {
+    decode = `  var jj=rrB, up=${n};
+  for (var k=s; k>=1; k--){ var loC=k-1, hiC=up-1;
+    while (loC<hiC){ var mid=(loC+hiC+1)>>1; if (BigInt(BINOM[mid*${HI1}+k])<=jj) loC=mid; else hiC=mid-1; }
+    jj-=BigInt(BINOM[loC*${HI1}+k]); idx[k-1]=loC; up=loC; }\n`;
+    helpers = `  function nextPick(){
+    for (var j=0;j<s;j++){ var lim=(j===s-1)?${n}:idx[j+1]; if (idx[j]+1<lim){ idx[j]++; for (var i=0;i<j;i++) idx[i]=i; return true; } }
+    return false;
+  }
+  function firstPick(){ for (var i=0;i<s;i++) idx[i]=i; }\n`;
+  }
+  const chopExpr = chop > 0 ? `(s>0 ? blen-${chop} : blen)` : "blen";
+
+  const src = `"use strict";
+return function crack(base, count, T, nt, onHit) {
+  var msg=new Int32Array(16), pbuf=new Uint8Array(${maxW});
+  var idx=new Int32Array(${HI}), cd=new Int32Array(${HI}), used=new Int32Array(${HI});
+${helpers}  // decode the run's start index once (BigInt), then step incrementally
+  var giB=BigInt(base);
+${sizeScan}${decode}  var it=0;
+  for (;;) {
+    var blen=0;
+    for (var pp=0; pp<s; pp++){ var iti=idx[pp], o=META[iti*2], l=META[iti*2+1];
+      for (var q=0;q<l;q++) pbuf[blen++]=POOL[o+q]; }
+    var flen=${chopExpr};
+${packHashSearch(hash)}    it++; if (it>=count) break;
+    if (!nextPick()){ s++; firstPick(); }
+  }
+};`;
+  return { src, pbArgs, pb };
+}
+
+function buildPolicyKernel(P, hash) {
+  const { src, pbArgs, pb } = buildPolicyKernelSource(P, hash);
+  return new Function(pbArgs, src)(...pb);
+}
+function buildPermKernel(P, hash) {
+  const { src, pbArgs, pb } = buildPermKernelSource(P, hash);
+  return new Function(pbArgs, src)(...pb);
+}
+
 // Work-slice size: ~1M candidates (~0.1s at 10 MH/s), so the main thread yields
 // between slices to stay live; a worker uses it as its message granularity.
 const SLICE = 1 << 20;
@@ -8765,18 +8955,32 @@ function permLane(pm, w, idxExpr, H) {
     s += `        loop { if (loc >= hic) { break; } let mid = (loc + hic + 1u) >> 1u; if (!u64lt(jj${w}, binomAt(mid, k))) { loc = mid; } else { hic = mid - 1u; } }\n`;
     s += `        jj${w} = u64sub(jj${w}, binomAt(loc, k)); idx${w}[k-1u] = loc; up = loc; } }\n`;
   }
-  // assemble the chosen items into msg + pt (endian / NTLM-widen aware), pad.
+  return s + permAssemble(pm, w, H);
+}
+
+// Assemble the chosen items (idx{w}[0..s{w})) into the message + plaintext words,
+// endian / NTLM-widen aware, padded. Gathers the bytes into a scratch first, then
+// emits only the kept prefix -- so a chop (trailing-separator quell) drops those
+// bytes cleanly rather than leaving them stranded in msg after the 0x80 pad (the
+// bug the old inline packer had: the pad OR'd onto a live separator byte, so every
+// chopped candidate hashed wrong and never matched -- so a {{...?}} pattern found
+// nothing on the GPU). Used by permLane (both the serial and interleaved kernels).
+function permAssemble(pm, w, H) {
+  let maxItemLen = 1;
+  for (let i = 1; i < pm.meta.length; i += 2) if (pm.meta[i] > maxItemLen) maxItemLen = pm.meta[i];
+  const maxbytes = maxItemLen * Math.max(pm.hi, 1) + 1;
+  let s = `    var by${w}: array<u32, ${maxbytes}>; var blen${w}: u32 = 0u;\n`;
+  s += `    for (var pp${w}: u32 = 0u; pp${w} < s${w}; pp${w} = pp${w} + 1u) { let it = idx${w}[pp${w}]; let o = mtab[it*2u]; let l = mtab[it*2u+1u];\n`;
+  s += `      for (var kk=0u; kk<l; kk=kk+1u) { by${w}[blen${w}] = (pool[(o+kk)>>2u] >> (((o+kk)&3u)*8u)) & 0xffu; blen${w} = blen${w} + 1u; } }\n`;
+  if (pm.chop) s += `    if (s${w} > 0u) { blen${w} = blen${w} - ${pm.chop}u; }\n`;
   s += `    var msg${w}: array<u32,16>; var pt${w}: array<u32,14>;\n`;
   s += `    for (var z=0u; z<16u; z=z+1u){ msg${w}[z]=0u; } for (var z=0u; z<14u; z=z+1u){ pt${w}[z]=0u; }\n`;
-  s += `    var blen${w}: u32 = 0u;\n`;
-  s += `    for (var pp${w}: u32 = 0u; pp${w} < s${w}; pp${w} = pp${w} + 1u) { let it = idx${w}[pp${w}]; let o = mtab[it*2u]; let l = mtab[it*2u+1u];\n`;
-  s += `      for (var k=0u; k<l; k=k+1u) { let b = (pool[(o+k)>>2u] >> (((o+k)&3u)*8u)) & 0xffu;\n`;
-  s += `        let cp = blen${w}+k; pt${w}[cp>>2u] |= b << ((cp&3u)*8u);\n`;
-  if (H.widen)                s += `        let mp = 2u*(blen${w}+k); msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
-  else if (H.endian === "le") s += `        let mp = blen${w}+k; msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
-  else                        s += `        let mp = blen${w}+k; msg${w}[mp>>2u] |= b << ((3u-(mp&3u))*8u);\n`;
-  s += `      }\n      blen${w} = blen${w} + l; }\n`;
-  if (pm.chop) s += `    if (s${w} > 0u) { blen${w} = blen${w} - ${pm.chop}u; }\n`;
+  s += `    for (var cp=0u; cp<blen${w}; cp=cp+1u) { let b = by${w}[cp];\n`;
+  s += `      pt${w}[cp>>2u] |= b << ((cp&3u)*8u);\n`;
+  if (H.widen)                s += `      let mp = 2u*cp; msg${w}[mp>>2u] |= b << ((mp&3u)*8u);\n`;
+  else if (H.endian === "le") s += `      msg${w}[cp>>2u] |= b << ((cp&3u)*8u);\n`;
+  else                        s += `      msg${w}[cp>>2u] |= b << ((3u-(cp&3u))*8u);\n`;
+  s += `    }\n`;
   if (H.widen)                s += `    { let e = 2u*blen${w}; msg${w}[e>>2u] |= 0x80u << ((e&3u)*8u); msg${w}[14] = e*8u; }\n`;
   else if (H.endian === "le") s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((blen${w}&3u)*8u); msg${w}[14] = blen${w}*8u;\n`;
   else                        s += `    msg${w}[blen${w}>>2u] |= 0x80u << ((3u-(blen${w}&3u))*8u); msg${w}[15] = blen${w}*8u;\n`;
@@ -8822,6 +9026,17 @@ ${jvars}${body}    g = g + ${W}u * stride;
   }
 }`;
 }
+
+// Note: a perm/combo INCREMENTAL kernel (the sibling of policyIncShader) was
+// built and GPU-measured this session -- and it REGRESSES perm, so it isn't
+// shipped. Two reasons, both real on the GPU: (1) a pick's per-candidate divide is
+// already cheap (u64divmod by a small radix n-pp <= 65536, not the emulated 64-
+// iteration u64/u64 that made policy's incremental a 2.5x win); removing it saves
+// nothing. (2) The incremental's per-thread contiguous run makes adjacent lanes
+// read indices `per` apart, losing the coalescing that grid-stride's adjacent-
+// lane/adjacent-index sweep gets. Measured on Intel Arc: [a-z0-9]{{6}} 209->151
+// MH/s, an 11-item {{*}} 226->184. So perm stays grid-stride. (The chop fix in
+// permAssemble above -- which the incremental work surfaced -- does ship.)
 
 // ---- the policy {{n,m!floors}} GPU kernel -------------------------------
 // Sweeps the whole policy space on the GPU, each lane unranking its 64-bit index
@@ -9492,21 +9707,80 @@ function layCandidate(positions, gi) {
 // hashed in JS. Slow (this is the no-WebGPU fallback, and the headless oracle
 // the tests check the GPU path's plan against), but exact. Same result shape as
 // runCrack. Yields every ~200k candidates so the page stays live.
+// Full-precision CPU data for a policy plan: the segment table and small tables
+// as plain Numbers (exact on the CPU path, total <= 2^53) -- unlike buildPolicy,
+// whose BINOMP saturates at u32 for the GPU. Cloneable to a Worker as-is.
+function policyCpuData(fp) {
+  const po = fp.policy, K = po.k, H1 = po.H1, nseg = po.nseg;
+  const segOff = new Array(nseg + 1);
+  for (let i = 0; i <= nseg; i++) segOff[i] = Number(po.segOff[i]);
+  const binom = new Array(H1 * H1);
+  for (let a = 0; a < H1; a++) for (let b = 0; b < H1; b++) binom[a*H1 + b] = Number(po.B[a][b]);
+  return { k: K, hi: po.hi, lo: po.lo, nseg, H1,
+           segOff, segL: Array.from(po.segL.slice(0, nseg)),
+           segCV: Array.from(po.segCV.slice(0, nseg * K)),
+           pool: Array.from(po.bytes), sVal: Array.from(po.s), cstart: Array.from(po.cstart), binom };
+}
+
+// CPU data for a {{...}} choice: the pool flattened to bytes + (off,len) meta, a
+// full-precision Pascal (unordered colex unrank only) and the per-size blocks.
+function permCpuData(fp) {
+  const pm = fp.perm, n = pm.n, HI1 = pm.hi + 1, ordered = !!pm.ordered;
+  const poolArr = [], meta = new Int32Array(2 * n);
+  for (let i = 0; i < n; i++) {
+    const o = pm.itemOff(i), l = pm.itemLen(i);
+    meta[2*i] = poolArr.length; meta[2*i+1] = l;
+    for (let k = 0; k < l; k++) poolArr.push(pm.bytes[o + k]);
+  }
+  const binom = ordered ? [] : new Array((n + 1) * HI1);
+  if (!ordered) for (let c = 0; c <= n; c++) for (let k = 0; k < HI1; k++) binom[c*HI1 + k] = Number(pm.B[c][k]);
+  const blocks = [];
+  for (let s = pm.lo; s <= pm.hi; s++) blocks.push(Number(pm.block(s)));
+  return { n, lo: pm.lo, hi: pm.hi, ordered, chop: pm.chop | 0, maxWidth: fp.maxWidth,
+           pool: Uint8Array.from(poolArr), meta, binom, blocks };
+}
+
+// Pick the CPU kernel builder for a plan: the fixed-mask product, else a policy
+// composition or a {{...}} choice (all incremental). Returns { total, build() ->
+// {src,pbArgs,pb} } or { reason } (variable-width generics still fall to the
+// oracle). The 2^53 ceiling is the CPU path's (an exact JS number index).
+function cpuKernelFor(plan, hash) {
+  const MAXSAFE = BigInt(Number.MAX_SAFE_INTEGER);
+  const fp = analyzePlan(plan, hash);
+  if (fp.ok) {
+    if (fp.total > MAXSAFE) return { reason: "keyspace over 2^53 for the CPU path" };
+    return { total: fp.total, build: () => buildCpuKernelSource(fp.positions, hash) };
+  }
+  const g = analyzeGeneric(plan, hash);
+  if (g.ok && g.policy) {
+    if (g.total > MAXSAFE) return { reason: "keyspace over 2^53 for the CPU path" };
+    const P = policyCpuData(g);
+    return { total: g.total, build: () => buildPolicyKernelSource(P, hash) };
+  }
+  if (g.ok && g.perm) {
+    if (g.total > MAXSAFE) return { reason: "keyspace over 2^53 for the CPU path" };
+    const P = permCpuData(g);
+    return { total: g.total, build: () => buildPermKernelSource(P, hash) };
+  }
+  return { reason: fp.reason };        // a variable-width dict/alternation -> oracle
+}
+
 // Fast single-thread CPU crack: a JIT'd JS kernel (crackcpu.js) instead of the
-// BigInt/string oracle below -- ~10x+ on the fixed-width product path. Declines
-// (so the caller falls back to the oracle) for non-md5, variable-width/perm
-// plans, or a keyspace past 2^53. Same result shape as runCrack.
+// BigInt/string oracle below -- ~10x+ on the fixed-width product path, and the
+// incremental odometer for a {{...}} choice or policy (killing the ~1 MH/s
+// oracle there). Declines (so the caller falls back to the oracle) for non-md5-
+// set hashes, a variable-width dict, or a keyspace past 2^53. Same shape as runCrack.
 async function runCpuFast({ plan, hash = "md5", targets, onProgress, onHit, control }) {
   if (!cpuSupports(hash)) return { supported: false, reason: `fast CPU path has no ${hash} kernel` };
   const H = HASHES[hash];
-  const fp = analyzePlan(plan, hash);
-  if (!fp.ok) return { supported: false, reason: fp.reason };        // variable-width/perm -> oracle
-  if (fp.total > BigInt(Number.MAX_SAFE_INTEGER)) return { supported: false, reason: "keyspace over 2^53 for the CPU path" };
+  const sel = cpuKernelFor(plan, hash);
+  if (!sel.build) return { supported: false, reason: sel.reason };   // variable-width -> oracle
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
-  const nt = rows.length, totalN = Number(fp.total);
+  const nt = rows.length, totalN = Number(sel.total);
   const T = new Uint32Array(nt * H.words); rows.forEach((r, i) => T.set(r.w, i * H.words));
-  const kern = buildCpuKernel(fp.positions, hash);
+  const { src, pbArgs, pb } = sel.build();
+  const kern = new Function(pbArgs, src)(...pb);
   const hits = [], found = new Set();
   const onH = (pt, idx) => {
     const hex = rows[idx].hex;
@@ -9532,7 +9806,7 @@ async function runCpuFast({ plan, hash = "md5", targets, onProgress, onHit, cont
   }
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000, rate = done / secs;
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
-  return { supported: true, hits, rate, total: fp.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound };
+  return { supported: true, hits, rate, total: sel.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound };
 }
 
 // A generic worker: it is handed the generated kernel as TEXT (so it needs no
@@ -9561,14 +9835,13 @@ async function runCpuPool({ plan, hash = "md5", targets, knobs = {}, onProgress,
     return { supported: false, reason: "no Web Workers" };
   if (!cpuSupports(hash)) return { supported: false, reason: `fast CPU path has no ${hash} kernel` };
   const H = HASHES[hash];
-  const fp = analyzePlan(plan, hash);
-  if (!fp.ok) return { supported: false, reason: fp.reason };
-  if (fp.total > BigInt(Number.MAX_SAFE_INTEGER)) return { supported: false, reason: "keyspace over 2^53 for the CPU path" };
+  const sel = cpuKernelFor(plan, hash);
+  if (!sel.build) return { supported: false, reason: sel.reason };
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
-  const nt = rows.length, totalN = Number(fp.total);
+  const nt = rows.length, totalN = Number(sel.total);
   const T = new Uint32Array(nt * H.words); rows.forEach((r, i) => T.set(r.w, i * H.words));
-  const { src, pbArgs, pb } = buildCpuKernelSource(fp.positions, hash);
+  const { src, pbArgs, pb } = sel.build();
 
   const nw = Math.max(1, Math.min(knobs.cores || navigator.hardwareConcurrency, 32));
   let url, workers;
@@ -9625,7 +9898,7 @@ async function runCpuPool({ plan, hash = "md5", targets, knobs = {}, onProgress,
 
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000, rate = done / secs;
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
-  return { supported: true, hits, rate, total: fp.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound, cores: nw };
+  return { supported: true, hits, rate, total: sel.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound, cores: nw };
 }
 
 async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, control }) {
@@ -9642,7 +9915,9 @@ async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, con
   if (!rows.length) return { supported: true, empty: true };
   const want = new Set(rows.map(r => r.hex)), ntgt = rows.length;
   const total = fp.total, positions = fp.positions;
-  const lay = fp.perm ? (gi => layPerm(fp.perm, gi)) : (gi => layCandidate(positions, gi));
+  const lay = fp.perm ? (gi => layPerm(fp.perm, gi))
+            : fp.policy ? (gi => layPolicy(fp.policy, gi))
+            : (gi => layCandidate(positions, gi));
   const hits = [], seen = new Set();
   const t0 = performance.now();
   let stopped = false, allFound = false, done = 0n;
