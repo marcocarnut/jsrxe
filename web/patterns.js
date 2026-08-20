@@ -1383,6 +1383,40 @@ export const BUILTIN = [
     }
   },
   {
+    id: "bf-policy7",
+    highlight: true,
+    family: { en: "Brute Force", pt: "Força Bruta" },
+    pattern: "([:lower:]|[:digit:]){{7!+,1}}",
+    flags: "",
+    crack: { hash: "md5",
+             targets: { en: "6ad9cf3b48767777a935a93d58ce3d81",
+                        pt: "5a385c9c1f0981aefa411e4579f59f1b" } },
+    name: { en: "Password Policy (MD5)", pt: "Política de Senha (MD5)" },
+    note: {
+      en: "Seven lowercase-or-digit characters, but with a rule: at least one " +
+          "digit. The {{7!+,1}} says exactly that -- a floor of one on the " +
+          "digits, and the + marks lowercase as the soaker that takes up the " +
+          "slack. This is the policy operator, a password composition rule that " +
+          "a plain regex can only fake with a lookahead. Better still, the set " +
+          "is walked minimal-compliance-first, so the passwords people actually " +
+          "choose -- mostly letters with a digit tucked in -- come first. The " +
+          "whole space is about 70 billion, hours to exhaust, yet this password " +
+          "sits in the first fraction of a percent, so it falls almost as soon " +
+          "as you press Crack.",
+      pt: "Sete caracteres minúsculos ou dígitos, mas com uma regra: pelo menos " +
+          "um dígito. É o que diz o {{7!+,1}} -- piso de um nos dígitos, e o + " +
+          "marca as minúsculas como o soaker que absorve o resto. Este é o " +
+          "operador de política, uma regra de composição de senha que uma " +
+          "regex comum só consegue imitar com um lookahead. Melhor ainda: o " +
+          "conjunto é percorrido em ordem de conformidade-mínima-primeiro, " +
+          "então as senhas que as pessoas realmente escolhem -- quase tudo " +
+          "letra com um dígito no meio -- vêm primeiro. O espaço inteiro tem " +
+          "cerca de 70 bilhões, horas para esgotar, mas esta senha está na " +
+          "primeira fração de um por cento, então cai quase assim que você " +
+          "aperta Quebrar."
+    }
+  },
+  {
     id: "bf-passphrase",
     family: { en: "Brute Force", pt: "Força Bruta" },
     pattern: "([:effshort1:] ){3}[:effshort1:]",

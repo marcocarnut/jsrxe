@@ -457,6 +457,13 @@ function examplePattern(ex) {
   return typeof ex.pattern === "string" ? ex.pattern
                                         : (ex.pattern[lang] || ex.pattern.en);
 }
+// An example's crack targets, resolving a per-language {en,pt} form (a demo may
+// hide a different plaintext in each language) or a plain shared string.
+function crackTargets(cr) {
+  if (!cr || !cr.targets) return "";
+  return typeof cr.targets === "string" ? cr.targets
+                                        : (cr.targets[lang] || cr.targets.en || "");
+}
 
 // The helper code can carry language variants too, like the pattern and note:
 // an example whose members are letters standing for people wants the names
@@ -676,7 +683,7 @@ function selectExample(ex) {
   refreshCodeToggle();
   // A Brute Force example ships a demo hash and target digest, so opening it and
   // switching to the Brute Force tab lands on a crack that is ready to run.
-  if (ex.crack) { $("crackalg").value = ex.crack.hash; $("cracktgts").value = ex.crack.targets || ""; }
+  if (ex.crack) { $("crackalg").value = ex.crack.hash; $("cracktgts").value = crackTargets(ex.crack); }
   state.from = 0n;
   renderLibrary();
   renderNote();
@@ -1740,6 +1747,9 @@ function currentShareState() {
     const tg = $("cracktgts").value.trim();
     if (tg) s.ct = tg;
   }
+  // The timing pane (the hourglass) and its speed slider ride along, so a link
+  // reopens showing the same "how long would it take" estimate.
+  if (!$("timebox").hidden) { s.tm = 1; if ($("timespeed").value !== "0") s.ts = $("timespeed").value; }
   // A link to an example carries its id and the language it was read in, so
   // the receiver lands on the same example -- note, bookmarks and all -- and,
   // for one whose regex differs by language (Powerball vs Mega-Sena), on the
@@ -1778,9 +1788,13 @@ function applyShareState(s) {
   // carry the user's own. The example's defaults go in first, then the link's
   // own fields win over them, so a shared crack reopens exactly as it was sent.
   const cr = ex && ex.crack;
-  if (cr) { $("crackalg").value = cr.hash; $("cracktgts").value = cr.targets || ""; }
+  if (cr) { $("crackalg").value = cr.hash; $("cracktgts").value = crackTargets(cr); }
   if (typeof s.ca === "string") $("crackalg").value = s.ca;
   if (typeof s.ct === "string") $("cracktgts").value = s.ct;
+  // Reopen the timing pane at the saved speed if the link carried it (reparse,
+  // below, renders the estimate once the box is visible).
+  if (typeof s.ts === "string") $("timespeed").value = s.ts;
+  if (s.tm) { show($("timebox"), true); $("timebtn").classList.add("on"); }
   // The shuffle now lives in the pattern (its (?~key:...) wrapper), so the
   // separate global key stays empty.
   state.key = "";
@@ -1835,17 +1849,13 @@ function readShareHash() {
 
 function setShareLabel() {
   // The button is an icon now; its label lives in the tooltip.
-  $("share").title = $("share2").title = $("share3").title = $("share4").title =
-    navigator.share ? t("share") : t("shareCopy");
+  $("share").title = navigator.share ? t("share") : t("shareCopy");
 }
 
 let flashTimer = null;
 function flashCopied() {
-  // Flash the share button of whichever tab is showing -- each has its own.
-  const c = $(state.tab === "search" ? "copied2" : state.tab === "tree" ? "copied3"
-              : state.tab === "crack" ? "copied4" : "copied");
-  const btn = $(state.tab === "search" ? "share2" : state.tab === "tree" ? "share3"
-                : state.tab === "crack" ? "share4" : "share");
+  // One share button now, up on the tab row.
+  const c = $("copied"), btn = $("share");
   c.textContent = t("shareCopied");
   c.hidden = false;
   btn.classList.add("done");
@@ -2075,9 +2085,6 @@ function wire() {
   $("findcap").oninput = searchSoon;
 
   $("share").onclick = doShare;
-  $("share2").onclick = doShare;
-  $("share3").onclick = doShare;
-  $("share4").onclick = doShare;
 
   // Tree controls. The index field and its nav mirror Elements; Fit re-frames
   // the whole tree; Rotate swaps top-down for left-right; Associativity overlays

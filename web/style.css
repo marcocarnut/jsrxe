@@ -241,6 +241,8 @@ main {
            padding: 0; display: inline-flex; align-items: center; }
 .infobtn svg { width: 15px; height: 15px; display: block; }
 .infobtn:hover { color: var(--accent); }
+/* The caveat icon reads as sunk next to the SET SIZE cap; lift it a few px. */
+#dupinfo { position: relative; top: -3px; }
 /* Until the reader has clicked it once, the caveat icon pulses to catch the
    eye -- colour and a gentle swell, so it reads as "look here". */
 .infobtn.pulse { animation: duppulse 1.15s ease-in-out infinite; }
@@ -314,8 +316,6 @@ main {
 #treeassoc.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 #treeassoc.on:hover { color: #fff; }
 .treenav .iconbtn { background: var(--bg); }
-#tree-view #share3 { margin-left: auto; background: var(--accent-bg);
-    color: var(--accent); border-color: var(--accent); }
 #treehint { margin: .5rem 0 .5rem; }
 #cywrap { position: relative; height: min(68vh, 620px); border: 1px solid var(--line);
     border-radius: 9px; background: var(--panel); overflow: hidden; }
@@ -376,6 +376,11 @@ main {
 #share { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
 #share.done { background: var(--accent); color: var(--panel); }
 .copiedtip { align-self: center; color: var(--accent); font-size: .82rem; }
+/* The single Share button lives on the tab-title row, pushed to the right. */
+.etabs .iconbtn { padding: .25rem .45rem; display: inline-flex; align-items: center;
+    border: 1px solid var(--accent); border-radius: 6px; cursor: pointer; }
+.etabs .iconbtn svg { width: 17px; height: 17px; display: block; }
+.tabshare { margin-left: auto; align-self: center; }
 #exportrun { margin: .7rem 0 .2rem; }
 #exportprog { width: 100%; height: .7rem; }
 

@@ -248,6 +248,8 @@ main {
            padding: 0; display: inline-flex; align-items: center; }
 .infobtn svg { width: 15px; height: 15px; display: block; }
 .infobtn:hover { color: var(--accent); }
+/* The caveat icon reads as sunk next to the SET SIZE cap; lift it a few px. */
+#dupinfo { position: relative; top: -3px; }
 /* Until the reader has clicked it once, the caveat icon pulses to catch the
    eye -- colour and a gentle swell, so it reads as "look here". */
 .infobtn.pulse { animation: duppulse 1.15s ease-in-out infinite; }
@@ -321,8 +323,6 @@ main {
 #treeassoc.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 #treeassoc.on:hover { color: #fff; }
 .treenav .iconbtn { background: var(--bg); }
-#tree-view #share3 { margin-left: auto; background: var(--accent-bg);
-    color: var(--accent); border-color: var(--accent); }
 #treehint { margin: .5rem 0 .5rem; }
 #cywrap { position: relative; height: min(68vh, 620px); border: 1px solid var(--line);
     border-radius: 9px; background: var(--panel); overflow: hidden; }
@@ -383,6 +383,11 @@ main {
 #share { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
 #share.done { background: var(--accent); color: var(--panel); }
 .copiedtip { align-self: center; color: var(--accent); font-size: .82rem; }
+/* The single Share button lives on the tab-title row, pushed to the right. */
+.etabs .iconbtn { padding: .25rem .45rem; display: inline-flex; align-items: center;
+    border: 1px solid var(--accent); border-radius: 6px; cursor: pointer; }
+.etabs .iconbtn svg { width: 17px; height: 17px; display: block; }
+.tabshare { margin-left: auto; align-self: center; }
 #exportrun { margin: .7rem 0 .2rem; }
 #exportprog { width: 100%; height: .7rem; }
 
@@ -628,6 +633,10 @@ dialog menu button { background: var(--bg); color: var(--fg);
         <button class="etab" data-etab="search" data-t="searchTab"></button>
         <button class="etab" data-etab="tree" data-t="treeTab"></button>
         <button class="etab" data-etab="crack" data-t="crackTab"></button>
+        <button id="share" class="iconbtn tabshare" aria-label="share">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+        </button>
+        <span id="copied" class="copiedtip" hidden></span>
       </div>
 
       <div id="elements-view">
@@ -648,10 +657,6 @@ dialog menu button { background: var(--bg); color: var(--fg);
           <button id="export" class="iconbtn" data-ttip="exportBtn" aria-label="export">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 9.5 12 14l4.5-4.5"/><path d="M4 20h16"/></svg>
           </button>
-          <button id="share" class="iconbtn" aria-label="share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          </button>
-          <span id="copied" class="copiedtip" hidden></span>
         </div>
 
         <div id="bookmarks"></div>
@@ -668,10 +673,6 @@ dialog menu button { background: var(--bg); color: var(--fg);
           <label class="ctl"><span data-t="searchCap"></span>
             <input id="findcap" type="number" min="1" max="1000" value="50"></label>
           <button type="button" class="zerotgl" aria-pressed="true" data-ttip="zeroOffset" aria-label="numbering">0/1</button>
-          <button id="share2" class="iconbtn" aria-label="share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          </button>
-          <span id="copied2" class="copiedtip" hidden></span>
         </div>
         <div id="searchstatus" class="dim"></div>
       </div>
@@ -695,10 +696,6 @@ dialog menu button { background: var(--bg); color: var(--fg);
           <button type="button" id="treeassoc" class="iconbtn" aria-pressed="false" data-ttip="treeAssoc" aria-label="associativity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 8H6"/><path d="M10 4 6 8l4 4"/><path d="M4 16h14"/><path d="M14 12l4 4-4 4"/></svg></button>
           <button id="treefit" class="iconbtn" type="button" data-ttip="treeFit" aria-label="fit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
           <button id="treedir" class="iconbtn" type="button" data-ttip="treeDir" aria-label="rotate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/></svg></button>
-          <button id="share3" class="iconbtn" aria-label="share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          </button>
-          <span id="copied3" class="copiedtip" hidden></span>
         </div>
         <div id="treehint" class="dim" data-t="treeHint"></div>
         <div id="cywrap">
@@ -724,10 +721,6 @@ dialog menu button { background: var(--bg); color: var(--fg);
           <button id="crackgears" class="iconbtn" data-ttip="crackKnobs" aria-label="knobs">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
-          <button id="share4" class="iconbtn" aria-label="share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          </button>
-          <span id="copied4" class="copiedtip" hidden></span>
         </div>
         <label class="ctl grow" for="cracktgts"><span data-t="crackTargets"></span></label>
         <textarea id="cracktgts" rows="4" data-tplace="crackTargetsPlace" spellcheck="false"></textarea>
@@ -7344,6 +7337,40 @@ const BUILTIN = [
     }
   },
   {
+    id: "bf-policy7",
+    highlight: true,
+    family: { en: "Brute Force", pt: "Força Bruta" },
+    pattern: "([:lower:]|[:digit:]){{7!+,1}}",
+    flags: "",
+    crack: { hash: "md5",
+             targets: { en: "6ad9cf3b48767777a935a93d58ce3d81",
+                        pt: "5a385c9c1f0981aefa411e4579f59f1b" } },
+    name: { en: "Password Policy (MD5)", pt: "Política de Senha (MD5)" },
+    note: {
+      en: "Seven lowercase-or-digit characters, but with a rule: at least one " +
+          "digit. The {{7!+,1}} says exactly that -- a floor of one on the " +
+          "digits, and the + marks lowercase as the soaker that takes up the " +
+          "slack. This is the policy operator, a password composition rule that " +
+          "a plain regex can only fake with a lookahead. Better still, the set " +
+          "is walked minimal-compliance-first, so the passwords people actually " +
+          "choose -- mostly letters with a digit tucked in -- come first. The " +
+          "whole space is about 70 billion, hours to exhaust, yet this password " +
+          "sits in the first fraction of a percent, so it falls almost as soon " +
+          "as you press Crack.",
+      pt: "Sete caracteres minúsculos ou dígitos, mas com uma regra: pelo menos " +
+          "um dígito. É o que diz o {{7!+,1}} -- piso de um nos dígitos, e o + " +
+          "marca as minúsculas como o soaker que absorve o resto. Este é o " +
+          "operador de política, uma regra de composição de senha que uma " +
+          "regex comum só consegue imitar com um lookahead. Melhor ainda: o " +
+          "conjunto é percorrido em ordem de conformidade-mínima-primeiro, " +
+          "então as senhas que as pessoas realmente escolhem -- quase tudo " +
+          "letra com um dígito no meio -- vêm primeiro. O espaço inteiro tem " +
+          "cerca de 70 bilhões, horas para esgotar, mas esta senha está na " +
+          "primeira fração de um por cento, então cai quase assim que você " +
+          "aperta Quebrar."
+    }
+  },
+  {
     id: "bf-passphrase",
     family: { en: "Brute Force", pt: "Força Bruta" },
     pattern: "([:effshort1:] ){3}[:effshort1:]",
@@ -10168,6 +10195,13 @@ function examplePattern(ex) {
   return typeof ex.pattern === "string" ? ex.pattern
                                         : (ex.pattern[lang] || ex.pattern.en);
 }
+// An example's crack targets, resolving a per-language {en,pt} form (a demo may
+// hide a different plaintext in each language) or a plain shared string.
+function crackTargets(cr) {
+  if (!cr || !cr.targets) return "";
+  return typeof cr.targets === "string" ? cr.targets
+                                        : (cr.targets[lang] || cr.targets.en || "");
+}
 
 // The helper code can carry language variants too, like the pattern and note:
 // an example whose members are letters standing for people wants the names
@@ -10387,7 +10421,7 @@ function selectExample(ex) {
   refreshCodeToggle();
   // A Brute Force example ships a demo hash and target digest, so opening it and
   // switching to the Brute Force tab lands on a crack that is ready to run.
-  if (ex.crack) { $("crackalg").value = ex.crack.hash; $("cracktgts").value = ex.crack.targets || ""; }
+  if (ex.crack) { $("crackalg").value = ex.crack.hash; $("cracktgts").value = crackTargets(ex.crack); }
   state.from = 0n;
   renderLibrary();
   renderNote();
@@ -11451,6 +11485,9 @@ function currentShareState() {
     const tg = $("cracktgts").value.trim();
     if (tg) s.ct = tg;
   }
+  // The timing pane (the hourglass) and its speed slider ride along, so a link
+  // reopens showing the same "how long would it take" estimate.
+  if (!$("timebox").hidden) { s.tm = 1; if ($("timespeed").value !== "0") s.ts = $("timespeed").value; }
   // A link to an example carries its id and the language it was read in, so
   // the receiver lands on the same example -- note, bookmarks and all -- and,
   // for one whose regex differs by language (Powerball vs Mega-Sena), on the
@@ -11489,9 +11526,13 @@ function applyShareState(s) {
   // carry the user's own. The example's defaults go in first, then the link's
   // own fields win over them, so a shared crack reopens exactly as it was sent.
   const cr = ex && ex.crack;
-  if (cr) { $("crackalg").value = cr.hash; $("cracktgts").value = cr.targets || ""; }
+  if (cr) { $("crackalg").value = cr.hash; $("cracktgts").value = crackTargets(cr); }
   if (typeof s.ca === "string") $("crackalg").value = s.ca;
   if (typeof s.ct === "string") $("cracktgts").value = s.ct;
+  // Reopen the timing pane at the saved speed if the link carried it (reparse,
+  // below, renders the estimate once the box is visible).
+  if (typeof s.ts === "string") $("timespeed").value = s.ts;
+  if (s.tm) { show($("timebox"), true); $("timebtn").classList.add("on"); }
   // The shuffle now lives in the pattern (its (?~key:...) wrapper), so the
   // separate global key stays empty.
   state.key = "";
@@ -11546,17 +11587,13 @@ function readShareHash() {
 
 function setShareLabel() {
   // The button is an icon now; its label lives in the tooltip.
-  $("share").title = $("share2").title = $("share3").title = $("share4").title =
-    navigator.share ? t("share") : t("shareCopy");
+  $("share").title = navigator.share ? t("share") : t("shareCopy");
 }
 
 let flashTimer = null;
 function flashCopied() {
-  // Flash the share button of whichever tab is showing -- each has its own.
-  const c = $(state.tab === "search" ? "copied2" : state.tab === "tree" ? "copied3"
-              : state.tab === "crack" ? "copied4" : "copied");
-  const btn = $(state.tab === "search" ? "share2" : state.tab === "tree" ? "share3"
-                : state.tab === "crack" ? "share4" : "share");
+  // One share button now, up on the tab row.
+  const c = $("copied"), btn = $("share");
   c.textContent = t("shareCopied");
   c.hidden = false;
   btn.classList.add("done");
@@ -11786,9 +11823,6 @@ function wire() {
   $("findcap").oninput = searchSoon;
 
   $("share").onclick = doShare;
-  $("share2").onclick = doShare;
-  $("share3").onclick = doShare;
-  $("share4").onclick = doShare;
 
   // Tree controls. The index field and its nav mirror Elements; Fit re-frames
   // the whole tree; Rotate swaps top-down for left-right; Associativity overlays

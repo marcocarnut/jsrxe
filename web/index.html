@@ -149,6 +149,10 @@
         <button class="etab" data-etab="search" data-t="searchTab"></button>
         <button class="etab" data-etab="tree" data-t="treeTab"></button>
         <button class="etab" data-etab="crack" data-t="crackTab"></button>
+        <button id="share" class="iconbtn tabshare" aria-label="share">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+        </button>
+        <span id="copied" class="copiedtip" hidden></span>
       </div>
 
       <div id="elements-view">
@@ -169,10 +173,6 @@
           <button id="export" class="iconbtn" data-ttip="exportBtn" aria-label="export">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 9.5 12 14l4.5-4.5"/><path d="M4 20h16"/></svg>
           </button>
-          <button id="share" class="iconbtn" aria-label="share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          </button>
-          <span id="copied" class="copiedtip" hidden></span>
         </div>
 
         <div id="bookmarks"></div>
@@ -189,10 +189,6 @@
           <label class="ctl"><span data-t="searchCap"></span>
             <input id="findcap" type="number" min="1" max="1000" value="50"></label>
           <button type="button" class="zerotgl" aria-pressed="true" data-ttip="zeroOffset" aria-label="numbering">0/1</button>
-          <button id="share2" class="iconbtn" aria-label="share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          </button>
-          <span id="copied2" class="copiedtip" hidden></span>
         </div>
         <div id="searchstatus" class="dim"></div>
       </div>
@@ -216,10 +212,6 @@
           <button type="button" id="treeassoc" class="iconbtn" aria-pressed="false" data-ttip="treeAssoc" aria-label="associativity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 8H6"/><path d="M10 4 6 8l4 4"/><path d="M4 16h14"/><path d="M14 12l4 4-4 4"/></svg></button>
           <button id="treefit" class="iconbtn" type="button" data-ttip="treeFit" aria-label="fit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
           <button id="treedir" class="iconbtn" type="button" data-ttip="treeDir" aria-label="rotate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/></svg></button>
-          <button id="share3" class="iconbtn" aria-label="share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          </button>
-          <span id="copied3" class="copiedtip" hidden></span>
         </div>
         <div id="treehint" class="dim" data-t="treeHint"></div>
         <div id="cywrap">
@@ -245,10 +237,6 @@
           <button id="crackgears" class="iconbtn" data-ttip="crackKnobs" aria-label="knobs">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
-          <button id="share4" class="iconbtn" aria-label="share">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 13.5a4.5 4.5 0 0 0 6.4 0l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14.5 10.5a4.5 4.5 0 0 0-6.4 0l-2.6 2.6a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          </button>
-          <span id="copied4" class="copiedtip" hidden></span>
         </div>
         <label class="ctl grow" for="cracktgts"><span data-t="crackTargets"></span></label>
         <textarea id="cracktgts" rows="4" data-tplace="crackTargetsPlace" spellcheck="false"></textarea>
