@@ -982,6 +982,119 @@ ${jvars}${body}    g = g + ${W}u * stride;
 }`;
 }
 
+// Reusable functions for the incremental kernel: the arrangement count
+// multinom(L; cv) and the multiset-permutation unrank (arrangement rank ->
+// class per position), as WGSL functions rather than inlined per candidate.
+function policyUnrankFns(po) {
+  const K = po.k, HI = Math.max(po.hi, 1), H1 = po.H1;
+  return `
+fn multinom_cv(cvp: array<u32, ${K}>, L: u32) -> vec2<u32> {
+  var ac = vec2<u32>(1u, 0u); var avail = L;
+  for (var t = 0u; t < ${K}u; t = t + 1u) { ac = u64mul32(ac, BINOMP[avail*${H1}u + cvp[t]]); avail = avail - cvp[t]; }
+  return ac;
+}
+fn unrank_arr(arr0: vec2<u32>, cvp: array<u32, ${K}>, L: u32, clsOut: ptr<function, array<u32, ${HI}>>) {
+  var rem: array<u32, ${K}>;
+  for (var t = 0u; t < ${K}u; t = t + 1u) { rem[t] = cvp[t]; }
+  var a = arr0;
+  for (var pp = 0u; pp < L; pp = pp + 1u) {
+    for (var t = 0u; t < ${K}u; t = t + 1u) {
+      if (rem[t] == 0u) { continue; }
+      rem[t] = rem[t] - 1u;
+      var ways = vec2<u32>(1u, 0u); var avail = L - pp - 1u;
+      for (var u = 0u; u < ${K}u; u = u + 1u) { ways = u64mul32(ways, BINOMP[avail*${H1}u + rem[u]]); avail = avail - rem[u]; }
+      if (u64lt(a, ways)) { (*clsOut)[pp] = t; break; }
+      a = u64sub(a, ways); rem[t] = rem[t] + 1u;
+    }
+  }
+}`;
+}
+
+// Lay the current member from the odometer state (L0, cls0[], cd0[]) into
+// msg0/pt0 + m0_k -- the same byte assembly policyLane does, but from the carried
+// character digits instead of a fresh unrank.
+function policyLayState(po, H) {
+  let s = `    var msg0: array<u32,16>; var pt0: array<u32,14>;\n`;
+  s += `    for (var z=0u; z<16u; z=z+1u){ msg0[z]=0u; } for (var z=0u; z<14u; z=z+1u){ pt0[z]=0u; }\n`;
+  s += `    for (var pp = 0u; pp < L0; pp = pp + 1u) { let b = POOL[CSTART[cls0[pp]] + cd0[pp]];\n`;
+  s += `      pt0[pp>>2u] |= b << ((pp&3u)*8u);\n`;
+  if (H.widen)                s += `      let mp = 2u*pp; msg0[mp>>2u] |= b << ((mp&3u)*8u);\n`;
+  else if (H.endian === "le") s += `      msg0[pp>>2u] |= b << ((pp&3u)*8u);\n`;
+  else                        s += `      msg0[pp>>2u] |= b << ((3u-(pp&3u))*8u);\n`;
+  s += `    }\n    let blen0 = L0;\n`;
+  if (H.widen)                s += `    { let e = 2u*blen0; msg0[e>>2u] |= 0x80u << ((e&3u)*8u); msg0[14] = e*8u; }\n`;
+  else if (H.endian === "le") s += `    msg0[blen0>>2u] |= 0x80u << ((blen0&3u)*8u); msg0[14] = blen0*8u;\n`;
+  else                        s += `    msg0[blen0>>2u] |= 0x80u << ((3u-(blen0&3u))*8u); msg0[15] = blen0*8u;\n`;
+  for (let k = 0; k < 16; k++) s += `    let m0_${k} = msg0[${k}];\n`;
+  return s;
+}
+
+// Incremental odometer, the policy sibling of serialShaderInc: each thread sweeps
+// a CONTIGUOUS run of the chunk, unranks its start once (segment search + the
+// u64/u64 split + multiset unrank), then advances by +1 per step -- carrying the
+// character digits (radix s of each position's class), and only when they wrap
+// re-unranking the next arrangement, and only when THAT wraps stepping to the
+// next segment. For a real policy char_size is large (26^7*10 for {{8!7,1}}), so
+// almost every step is a cheap carry, not a divide. Same set, same order.
+function policyIncShader(po, wg, fw, H) {
+  const K = po.k, HI = Math.max(po.hi, 1), NSEG = po.nseg, ndg = fw ? 1 : H.words;
+  const pt = { words: Array.from({ length: 14 }, (_, k) => `pt0[${k}]`), len: "blen0" };
+  const record = policyLayState(po, H) + H.compress(0, fw) + searchRecord(0, ndg, H, "true", pt);
+  const search = NSEG > 1
+    ? `    loop { if (slo >= shi) { break; } let sm = (slo + shi + 1u) >> 1u;
+      if (!u64lt(gi, vec2<u32>(segOff[sm*2u], segOff[sm*2u+1u]))) { slo = sm; } else { shi = sm - 1u; } }\n`
+    : ``;
+  const loadSeg = `    L0 = segL[seg];
+    for (var t = 0u; t < ${K}u; t = t + 1u) { cv[t] = segCV[seg*${K}u + t]; }
+    arrCount = multinom_cv(cv, L0);\n`;
+  return policyHead(po, H) + policyUnrankFns(po) + `
+@compute @workgroup_size(${wg})
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) nwg: vec3<u32>) {
+  let nthreads = nwg.x * ${wg}u;
+  let per = (P.count + nthreads - 1u) / nthreads;
+  let s0 = gid.x * per;
+  if (s0 >= P.count) { return; }
+  let e0 = min(s0 + per, P.count);
+  let gi = u64add32(vec2<u32>(P.baseLo, P.baseHi), s0);
+  var seg: u32; var L0: u32; var cv: array<u32, ${K}>;
+  var cls0: array<u32, ${HI}>; var cd0: array<u32, ${HI}>;
+  var arrIdx: vec2<u32>; var arrCount: vec2<u32>;
+  // --- unrank the run's start index once ---
+  var slo = 0u; var shi = ${NSEG - 1}u;
+${search}  seg = slo;
+${loadSeg}  var loc = u64sub(gi, vec2<u32>(segOff[seg*2u], segOff[seg*2u+1u]));
+  var cs = vec2<u32>(1u, 0u);
+  for (var t = 0u; t < ${K}u; t = t + 1u) { for (var c = 0u; c < cv[t]; c = c + 1u) { cs = u64mul32(cs, SVAL[t]); } }
+  let dm = u64divmod64(loc, cs); arrIdx = dm.xy; var chr = dm.zw;
+  unrank_arr(arrIdx, cv, L0, &cls0);
+  for (var pp: i32 = i32(L0) - 1; pp >= 0; pp = pp - 1) { let cl = cls0[u32(pp)]; let dq = u64divmod(chr, SVAL[cl]); chr = vec2<u32>(dq.x, dq.y); cd0[u32(pp)] = dq.z; }
+  var k = s0;
+  loop {
+${record}
+    k = k + 1u;
+    if (k >= e0) { break; }
+    // --- advance one member: carry the character digits, else the arrangement,
+    //     else the segment ---
+    var carry = 1u;
+    for (var pp: i32 = i32(L0) - 1; pp >= 0; pp = pp - 1) {
+      cd0[u32(pp)] = cd0[u32(pp)] + 1u;
+      if (cd0[u32(pp)] < SVAL[cls0[u32(pp)]]) { carry = 0u; break; }
+      cd0[u32(pp)] = 0u;
+    }
+    if (carry == 1u) {
+      arrIdx = u64add32(arrIdx, 1u);
+      if (u64lt(arrIdx, arrCount)) {
+        unrank_arr(arrIdx, cv, L0, &cls0);
+      } else {
+        seg = seg + 1u;
+${loadSeg}        arrIdx = vec2<u32>(0u, 0u);
+        unrank_arr(arrIdx, cv, L0, &cls0);
+      }
+    }
+  }
+}`;
+}
+
 // ---- host driver --------------------------------------------------------
 
 const cmpWords = (x, y) => { for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
@@ -1028,7 +1141,7 @@ export function buildShader({ plan, hash = "md5", knobs = {} }) {
   const fw = H.firstWord, wg = knobs.wg || 256, W = knobs.ww || 4, il = knobs.mode === "interleaved";
   const isPerm = !!fp.perm, isPolicy = !!fp.policy;
   let code;
-  if (isPolicy) { const PO = buildPolicy(fp); code = il ? policyInterleavedShader(PO, wg, W, fw, H) : policySerialShader(PO, wg, fw, H); }
+  if (isPolicy) { const PO = buildPolicy(fp); code = il ? policyInterleavedShader(PO, wg, W, fw, H) : (knobs.inc !== false ? policyIncShader(PO, wg, fw, H) : policySerialShader(PO, wg, fw, H)); }
   else if (isPerm) { const PM = buildPerm(fp); code = il ? permInterleavedShader(PM, wg, W, fw, H) : permSerialShader(PM, wg, fw, H); }
   else if (generic) { const G = buildGeneric(buildGA(fp).inner); code = il ? genericInterleavedShader(G, wg, W, fw, H) : genericSerialShader(G, wg, fw, H); }
   else { const A = buildA(fp); code = il ? interleavedShader(A, wg, W, A.width, fw, H) : (knobs.inc !== false ? serialShaderInc(A, wg, A.width, fw, H) : serialShader(A, wg, A.width, fw, H)); }
@@ -1096,7 +1209,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   // The fast-path kernels read A.width, so build them only in the fast branch --
   // A is null for the generic and perm paths.
   const code = isPolicy
-    ? (mode === "serial" ? policySerialShader(PO, wg, fw, H) : policyInterleavedShader(PO, wg, W, fw, H))
+    ? (mode === "serial" ? (inc ? policyIncShader(PO, wg, fw, H) : policySerialShader(PO, wg, fw, H)) : policyInterleavedShader(PO, wg, W, fw, H))
     : isPerm
     ? (mode === "serial" ? permSerialShader(PM, wg, fw, H) : permInterleavedShader(PM, wg, W, fw, H))
     : generic
