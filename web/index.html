@@ -282,7 +282,7 @@
       <textarea id="savenote" rows="4"></textarea></label>
     <p class="dim" data-t="savedHere"></p>
     <menu>
-      <button value="cancel" data-t="addCancel"></button>
+      <button value="cancel" formnovalidate data-t="addCancel"></button>
       <button id="savego" value="save" data-t="addSave"></button>
     </menu>
   </form>
@@ -292,14 +292,14 @@
 <dialog id="dictbox">
   <form method="dialog">
     <label><span data-t="dictName"></span>
-      <input id="dictname" type="text" required pattern="[A-Za-z0-9_]+"></label>
+      <input id="dictname" type="text" required></label>
     <p class="dim" data-t="dictNameHint"></p>
     <label><span data-t="dictWords"></span>
       <textarea id="dictwords" rows="8" spellcheck="false"></textarea></label>
     <p><input id="dictfile" type="file" accept=".txt,.dict,text/plain"></p>
     <p class="dim" data-t="savedHere"></p>
     <menu>
-      <button value="cancel" data-t="addCancel"></button>
+      <button value="cancel" formnovalidate data-t="addCancel"></button>
       <button value="save" data-t="addSave"></button>
     </menu>
   </form>
@@ -314,7 +314,7 @@
     <p class="dim" id="bmkeyline" hidden><span data-t="bmWith"></span>
        <code id="bmkey"></code></p>
     <menu>
-      <button value="cancel" data-t="addCancel"></button>
+      <button value="cancel" formnovalidate data-t="addCancel"></button>
       <button value="save" data-t="addSave"></button>
     </menu>
   </form>
