@@ -13,7 +13,7 @@
 // not rxe. The spike it grew from is jsrxe/spike/webgpu-md5.html.
 
 import { sha256 } from "./sha256.js";
-import { buildCpuKernel, buildCpuKernelSource, cpuSupports, SLICE } from "./crackcpu.js";
+import { buildCpuKernelSource, buildPolicyKernelSource, buildPermKernelSource, cpuSupports, SLICE } from "./crackcpu.js";
 
 const MAXHITS = 1024;
 const HITW = 16;                // u32 per hit record: [len, targetIdx, 14 plaintext words (56 bytes)]
@@ -1505,21 +1505,80 @@ function layCandidate(positions, gi) {
 // hashed in JS. Slow (this is the no-WebGPU fallback, and the headless oracle
 // the tests check the GPU path's plan against), but exact. Same result shape as
 // runCrack. Yields every ~200k candidates so the page stays live.
+// Full-precision CPU data for a policy plan: the segment table and small tables
+// as plain Numbers (exact on the CPU path, total <= 2^53) -- unlike buildPolicy,
+// whose BINOMP saturates at u32 for the GPU. Cloneable to a Worker as-is.
+function policyCpuData(fp) {
+  const po = fp.policy, K = po.k, H1 = po.H1, nseg = po.nseg;
+  const segOff = new Array(nseg + 1);
+  for (let i = 0; i <= nseg; i++) segOff[i] = Number(po.segOff[i]);
+  const binom = new Array(H1 * H1);
+  for (let a = 0; a < H1; a++) for (let b = 0; b < H1; b++) binom[a*H1 + b] = Number(po.B[a][b]);
+  return { k: K, hi: po.hi, lo: po.lo, nseg, H1,
+           segOff, segL: Array.from(po.segL.slice(0, nseg)),
+           segCV: Array.from(po.segCV.slice(0, nseg * K)),
+           pool: Array.from(po.bytes), sVal: Array.from(po.s), cstart: Array.from(po.cstart), binom };
+}
+
+// CPU data for a {{...}} choice: the pool flattened to bytes + (off,len) meta, a
+// full-precision Pascal (unordered colex unrank only) and the per-size blocks.
+function permCpuData(fp) {
+  const pm = fp.perm, n = pm.n, HI1 = pm.hi + 1, ordered = !!pm.ordered;
+  const poolArr = [], meta = new Int32Array(2 * n);
+  for (let i = 0; i < n; i++) {
+    const o = pm.itemOff(i), l = pm.itemLen(i);
+    meta[2*i] = poolArr.length; meta[2*i+1] = l;
+    for (let k = 0; k < l; k++) poolArr.push(pm.bytes[o + k]);
+  }
+  const binom = ordered ? [] : new Array((n + 1) * HI1);
+  if (!ordered) for (let c = 0; c <= n; c++) for (let k = 0; k < HI1; k++) binom[c*HI1 + k] = Number(pm.B[c][k]);
+  const blocks = [];
+  for (let s = pm.lo; s <= pm.hi; s++) blocks.push(Number(pm.block(s)));
+  return { n, lo: pm.lo, hi: pm.hi, ordered, chop: pm.chop | 0, maxWidth: fp.maxWidth,
+           pool: Uint8Array.from(poolArr), meta, binom, blocks };
+}
+
+// Pick the CPU kernel builder for a plan: the fixed-mask product, else a policy
+// composition or a {{...}} choice (all incremental). Returns { total, build() ->
+// {src,pbArgs,pb} } or { reason } (variable-width generics still fall to the
+// oracle). The 2^53 ceiling is the CPU path's (an exact JS number index).
+function cpuKernelFor(plan, hash) {
+  const MAXSAFE = BigInt(Number.MAX_SAFE_INTEGER);
+  const fp = analyzePlan(plan, hash);
+  if (fp.ok) {
+    if (fp.total > MAXSAFE) return { reason: "keyspace over 2^53 for the CPU path" };
+    return { total: fp.total, build: () => buildCpuKernelSource(fp.positions, hash) };
+  }
+  const g = analyzeGeneric(plan, hash);
+  if (g.ok && g.policy) {
+    if (g.total > MAXSAFE) return { reason: "keyspace over 2^53 for the CPU path" };
+    const P = policyCpuData(g);
+    return { total: g.total, build: () => buildPolicyKernelSource(P, hash) };
+  }
+  if (g.ok && g.perm) {
+    if (g.total > MAXSAFE) return { reason: "keyspace over 2^53 for the CPU path" };
+    const P = permCpuData(g);
+    return { total: g.total, build: () => buildPermKernelSource(P, hash) };
+  }
+  return { reason: fp.reason };        // a variable-width dict/alternation -> oracle
+}
+
 // Fast single-thread CPU crack: a JIT'd JS kernel (crackcpu.js) instead of the
-// BigInt/string oracle below -- ~10x+ on the fixed-width product path. Declines
-// (so the caller falls back to the oracle) for non-md5, variable-width/perm
-// plans, or a keyspace past 2^53. Same result shape as runCrack.
+// BigInt/string oracle below -- ~10x+ on the fixed-width product path, and the
+// incremental odometer for a {{...}} choice or policy (killing the ~1 MH/s
+// oracle there). Declines (so the caller falls back to the oracle) for non-md5-
+// set hashes, a variable-width dict, or a keyspace past 2^53. Same shape as runCrack.
 export async function runCpuFast({ plan, hash = "md5", targets, onProgress, onHit, control }) {
   if (!cpuSupports(hash)) return { supported: false, reason: `fast CPU path has no ${hash} kernel` };
   const H = HASHES[hash];
-  const fp = analyzePlan(plan, hash);
-  if (!fp.ok) return { supported: false, reason: fp.reason };        // variable-width/perm -> oracle
-  if (fp.total > BigInt(Number.MAX_SAFE_INTEGER)) return { supported: false, reason: "keyspace over 2^53 for the CPU path" };
+  const sel = cpuKernelFor(plan, hash);
+  if (!sel.build) return { supported: false, reason: sel.reason };   // variable-width -> oracle
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
-  const nt = rows.length, totalN = Number(fp.total);
+  const nt = rows.length, totalN = Number(sel.total);
   const T = new Uint32Array(nt * H.words); rows.forEach((r, i) => T.set(r.w, i * H.words));
-  const kern = buildCpuKernel(fp.positions, hash);
+  const { src, pbArgs, pb } = sel.build();
+  const kern = new Function(pbArgs, src)(...pb);
   const hits = [], found = new Set();
   const onH = (pt, idx) => {
     const hex = rows[idx].hex;
@@ -1545,7 +1604,7 @@ export async function runCpuFast({ plan, hash = "md5", targets, onProgress, onHi
   }
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000, rate = done / secs;
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
-  return { supported: true, hits, rate, total: fp.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound };
+  return { supported: true, hits, rate, total: sel.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound };
 }
 
 // A generic worker: it is handed the generated kernel as TEXT (so it needs no
@@ -1574,14 +1633,13 @@ export async function runCpuPool({ plan, hash = "md5", targets, knobs = {}, onPr
     return { supported: false, reason: "no Web Workers" };
   if (!cpuSupports(hash)) return { supported: false, reason: `fast CPU path has no ${hash} kernel` };
   const H = HASHES[hash];
-  const fp = analyzePlan(plan, hash);
-  if (!fp.ok) return { supported: false, reason: fp.reason };
-  if (fp.total > BigInt(Number.MAX_SAFE_INTEGER)) return { supported: false, reason: "keyspace over 2^53 for the CPU path" };
+  const sel = cpuKernelFor(plan, hash);
+  if (!sel.build) return { supported: false, reason: sel.reason };
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
-  const nt = rows.length, totalN = Number(fp.total);
+  const nt = rows.length, totalN = Number(sel.total);
   const T = new Uint32Array(nt * H.words); rows.forEach((r, i) => T.set(r.w, i * H.words));
-  const { src, pbArgs, pb } = buildCpuKernelSource(fp.positions, hash);
+  const { src, pbArgs, pb } = sel.build();
 
   const nw = Math.max(1, Math.min(knobs.cores || navigator.hardwareConcurrency, 32));
   let url, workers;
@@ -1638,7 +1696,7 @@ export async function runCpuPool({ plan, hash = "md5", targets, knobs = {}, onPr
 
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000, rate = done / secs;
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
-  return { supported: true, hits, rate, total: fp.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound, cores: nw };
+  return { supported: true, hits, rate, total: sel.total, ntgt: nt, raw: hits.length, capped: false, bogus: 0, fw: false, stopped, allFound, cores: nw };
 }
 
 export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onHit, control }) {
@@ -1655,7 +1713,9 @@ export async function runCrackCPU({ plan, hash = "md5", targets, onProgress, onH
   if (!rows.length) return { supported: true, empty: true };
   const want = new Set(rows.map(r => r.hex)), ntgt = rows.length;
   const total = fp.total, positions = fp.positions;
-  const lay = fp.perm ? (gi => layPerm(fp.perm, gi)) : (gi => layCandidate(positions, gi));
+  const lay = fp.perm ? (gi => layPerm(fp.perm, gi))
+            : fp.policy ? (gi => layPolicy(fp.policy, gi))
+            : (gi => layCandidate(positions, gi));
   const hits = [], seen = new Set();
   const t0 = performance.now();
   let stopped = false, allFound = false, done = 0n;

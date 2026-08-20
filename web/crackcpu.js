@@ -214,6 +214,196 @@ export function buildCpuKernel(positions, hash) {
   return new Function(pbArgs, src)(...pb);
 }
 
+// ---- the variable-width kernels (perm/combo, policy) --------------------
+// The fixed-mask kernel above bakes each message word from compile-time byte
+// offsets. A {{...}} choice or a policy composition instead varies its width per
+// candidate (different picks, different lengths), so these assemble the bytes
+// into a scratch buffer at run time -- the CPU siblings of crack.js's genericLane
+// / permLane / policyLane WGSL. Both are INCREMENTAL: the expensive unrank of the
+// slice's start index runs once (in BigInt, so the divides are exact), then each
+// step advances the odometer by +1 (a next-combination, a factorial-digit carry,
+// or a character carry) in plain Number arithmetic -- the same trick the WGSL
+// serialShaderInc / policyIncShader kernels use, killing the ~1 MH/s BigInt oracle.
+
+// Shared tail, emitted where pbuf[0..flen) already holds the candidate's bytes:
+// pack the message words (endian / NTLM-widen aware), run the hash unrolled, and
+// binary-search the sorted targets, calling onHit(plaintext, idx) on a match.
+// Uses only its own locals (pk/pby/zz/lo/hi/mid/bi/c{i}), disjoint from the hash
+// bodies' registers, so it composes after them.
+function packHashSearch(hash) {
+  const spec = HASHSPEC[hash];
+  const { words, endian, widen } = spec;
+  const packA = widen
+    ? `      var mp=2*pk; msg[mp>>2] |= pby << ((mp&3)*8);\n`
+    : endian === "le"
+      ? `      msg[pk>>2] |= pby << ((pk&3)*8);\n`
+      : `      msg[pk>>2] |= pby << ((3-(pk&3))*8);\n`;
+  let s = "    for (var zz=0;zz<16;zz++) msg[zz]=0;\n";
+  s += `    for (var pk=0;pk<flen;pk++){ var pby=pbuf[pk];\n${packA}    }\n`;
+  if (widen)                s += `    { var e=2*flen; msg[e>>2] |= 0x80 << ((e&3)*8); msg[14]=e*8; }\n`;
+  else if (endian === "le") s += `    msg[flen>>2] |= 0x80 << ((flen&3)*8); msg[14]=flen*8;\n`;
+  else                      s += `    msg[flen>>2] |= 0x80 << ((3-(flen&3))*8); msg[15]=flen*8;\n`;
+  for (let k = 0; k < 16; k++) s += `    var m${k}=msg[${k}];\n`;
+  s += spec.body();
+  let cmp = "";
+  for (let i = 0; i < words; i++)
+    cmp += `        var c${i}=T[bi+${i}]; if(w${i}<c${i}){hi=mid-1;continue;} if(w${i}>c${i}){lo=mid+1;continue;}\n`;
+  s += `    { var lo=0, hi=nt-1;
+      while(lo<=hi){ var mid=(lo+hi)>>1, bi=mid*${words};
+${cmp}        onHit(String.fromCharCode.apply(null, pbuf.subarray(0, flen)), mid); break;
+      } }\n`;
+  return s;
+}
+
+// The policy kernel. P carries the segment table (segOff cumulative counts, segL
+// lengths, segCV count-vectors) plus the small tables (pool bytes, branch sizes
+// SVAL, union starts CSTART, a full-precision Pascal triangle BINOM). Mirrors
+// crack.js's policyIncShader: unrank the start once, then carry the character
+// digits, re-unranking the arrangement only when they wrap and stepping the
+// segment only when the arrangement wraps.
+export function buildPolicyKernelSource(P, hash) {
+  if (!HASHSPEC[hash]) throw new Error(`cpu policy kernel: ${hash} not supported`);
+  const K = P.k, HI = Math.max(P.hi, 1), H1 = P.H1, NSEG = P.nseg, maxW = Math.max(P.hi, 1);
+  const pbArgs = "SEGOFF, SEGL, SEGCV, POOL, SVAL, CSTART, BINOM";
+  const pb = [P.segOff, P.segL, P.segCV, P.pool, P.sVal, P.cstart, P.binom];
+
+  const segSearch = NSEG > 1
+    ? `  var slo=0, shi=${NSEG - 1};
+  while (slo<shi){ var sm=(slo+shi+1)>>1; if (BigInt(SEGOFF[sm])<=giB) slo=sm; else shi=sm-1; }
+  var seg=slo;\n`
+    : "  var seg=0;\n";
+  // multiset-permutation unrank of arrangement rank `a` (a Number < arrCount, so
+  // exact) into cls[0..L) -- division-free, only binomial products/compares.
+  const unrankArr = `  function unrankArr(a){
+    for (var t=0;t<${K};t++) rem[t]=cv[t];
+    for (var pp=0;pp<L;pp++){
+      for (var t=0;t<${K};t++){
+        if (rem[t]===0) continue;
+        rem[t]--;
+        var ways=1, avail=L-pp-1;
+        for (var u=0;u<${K};u++){ ways*=BINOM[avail*${H1}+rem[u]]; avail-=rem[u]; }
+        if (a<ways){ cls[pp]=t; break; }
+        a-=ways; rem[t]++;
+      }
+    }
+  }\n`;
+  const loadSeg = `    L=SEGL[seg];
+    for (var t=0;t<${K};t++) cv[t]=SEGCV[seg*${K}+t];
+    { var ac=1, av=L; for (var t=0;t<${K};t++){ ac*=BINOM[av*${H1}+cv[t]]; av-=cv[t]; } arrCount=ac; }\n`;
+
+  const src = `"use strict";
+return function crack(base, count, T, nt, onHit) {
+  var msg=new Int32Array(16), pbuf=new Uint8Array(${maxW});
+  var cls=new Int32Array(${HI}), cd=new Int32Array(${HI});
+  var cv=new Int32Array(${K}), rem=new Int32Array(${K});
+  var L=0, arrIdx=0, arrCount=0;
+${unrankArr}  // decode the run's start index once (BigInt keeps the divides exact)
+  var giB=BigInt(base);
+${segSearch}${loadSeg}  var locB=giB-BigInt(SEGOFF[seg]);
+  var csB=1n;
+  for (var t=0;t<${K};t++){ var sB=BigInt(SVAL[t]); for (var c=0;c<cv[t];c++) csB*=sB; }
+  arrIdx=Number(locB/csB);
+  var chrB=locB%csB;
+  unrankArr(arrIdx);
+  for (var pp=L-1; pp>=0; pp--){ var sv=SVAL[cls[pp]]; cd[pp]=Number(chrB%BigInt(sv)); chrB=chrB/BigInt(sv); }
+  var it=0;
+  for (;;) {
+    for (var pp=0;pp<L;pp++) pbuf[pp]=POOL[CSTART[cls[pp]]+cd[pp]];
+    var flen=L;
+${packHashSearch(hash)}    it++; if (it>=count) break;
+    // advance one member: carry the characters, else the arrangement, else the segment
+    var carry=1;
+    for (var pp=L-1; pp>=0; pp--){ cd[pp]++; if (cd[pp]<SVAL[cls[pp]]){ carry=0; break; } cd[pp]=0; }
+    if (carry){
+      arrIdx++;
+      if (arrIdx<arrCount){ unrankArr(arrIdx); }
+      else { seg++;
+${loadSeg}        arrIdx=0; unrankArr(0);
+        for (var pp=0;pp<L;pp++) cd[pp]=0;
+      }
+    }
+  }
+};`;
+  return { src, pbArgs, pb };
+}
+
+// The perm/combo kernel. P carries the pool (POOL bytes + META (off,len) per
+// item), a full-precision Pascal BINOM (unordered colex unrank) and the per-size
+// block counts BLOCKS. Ordered picks carry factorial digits + re-expand; unordered
+// picks step by next-combination in colex order -- the same order layPerm ranks.
+export function buildPermKernelSource(P, hash) {
+  if (!HASHSPEC[hash]) throw new Error(`cpu perm kernel: ${hash} not supported`);
+  const n = P.n, lo = P.lo, hi = P.hi, ordered = !!P.ordered, chop = P.chop | 0, HI1 = hi + 1;
+  const HI = Math.max(hi, 1), maxW = Math.max(P.maxWidth, 1) + chop + 4;
+  const pbArgs = "POOL, META, BINOM, BLOCKS";
+  const pb = [P.pool, P.meta, P.binom, P.blocks];
+
+  const sizeScan = lo < hi
+    ? `  var s=${lo}, rrB=giB;
+  while (true){ var blkB=BigInt(BLOCKS[s-${lo}]); if (rrB<blkB) break; rrB-=blkB; s++; }\n`
+    : `  var s=${lo}, rrB=giB;\n`;
+
+  // decode rrB (BigInt) into the current pick, and the stepping helpers.
+  let decode, helpers;
+  if (ordered) {
+    decode = `  var remB=rrB;
+  for (var pp=0; pp<s; pp++){ var blkB=1n; for (var tt=0; tt<s-1-pp; tt++) blkB*=BigInt(${n}-1-pp-tt);
+    cd[pp]=Number(remB/blkB); remB=remB%blkB; }
+  expand(0);\n`;
+    helpers = `  function expand(from){
+    var uc=0, i, a, ins;
+    for (i=0;i<from;i++){ a=idx[i]; ins=uc; while(ins>0 && used[ins-1]>a){ used[ins]=used[ins-1]; ins--; } used[ins]=a; uc++; }
+    for (var pp=from; pp<s; pp++){ a=cd[pp];
+      for (var u=0;u<uc;u++){ if (used[u]<=a) a++; }
+      idx[pp]=a; ins=uc; while(ins>0 && used[ins-1]>a){ used[ins]=used[ins-1]; ins--; } used[ins]=a; uc++;
+    }
+  }
+  function nextPick(){
+    for (var pp=s-1; pp>=0; pp--){ cd[pp]++; if (cd[pp]<=${n}-1-pp){ expand(pp); return true; } cd[pp]=0; }
+    return false;
+  }
+  function firstPick(){ for (var i=0;i<s;i++) cd[i]=0; expand(0); }\n`;
+  } else {
+    decode = `  var jj=rrB, up=${n};
+  for (var k=s; k>=1; k--){ var loC=k-1, hiC=up-1;
+    while (loC<hiC){ var mid=(loC+hiC+1)>>1; if (BigInt(BINOM[mid*${HI1}+k])<=jj) loC=mid; else hiC=mid-1; }
+    jj-=BigInt(BINOM[loC*${HI1}+k]); idx[k-1]=loC; up=loC; }\n`;
+    helpers = `  function nextPick(){
+    for (var j=0;j<s;j++){ var lim=(j===s-1)?${n}:idx[j+1]; if (idx[j]+1<lim){ idx[j]++; for (var i=0;i<j;i++) idx[i]=i; return true; } }
+    return false;
+  }
+  function firstPick(){ for (var i=0;i<s;i++) idx[i]=i; }\n`;
+  }
+  const chopExpr = chop > 0 ? `(s>0 ? blen-${chop} : blen)` : "blen";
+
+  const src = `"use strict";
+return function crack(base, count, T, nt, onHit) {
+  var msg=new Int32Array(16), pbuf=new Uint8Array(${maxW});
+  var idx=new Int32Array(${HI}), cd=new Int32Array(${HI}), used=new Int32Array(${HI});
+${helpers}  // decode the run's start index once (BigInt), then step incrementally
+  var giB=BigInt(base);
+${sizeScan}${decode}  var it=0;
+  for (;;) {
+    var blen=0;
+    for (var pp=0; pp<s; pp++){ var iti=idx[pp], o=META[iti*2], l=META[iti*2+1];
+      for (var q=0;q<l;q++) pbuf[blen++]=POOL[o+q]; }
+    var flen=${chopExpr};
+${packHashSearch(hash)}    it++; if (it>=count) break;
+    if (!nextPick()){ s++; firstPick(); }
+  }
+};`;
+  return { src, pbArgs, pb };
+}
+
+export function buildPolicyKernel(P, hash) {
+  const { src, pbArgs, pb } = buildPolicyKernelSource(P, hash);
+  return new Function(pbArgs, src)(...pb);
+}
+export function buildPermKernel(P, hash) {
+  const { src, pbArgs, pb } = buildPermKernelSource(P, hash);
+  return new Function(pbArgs, src)(...pb);
+}
+
 // Work-slice size: ~1M candidates (~0.1s at 10 MH/s), so the main thread yields
 // between slices to stay live; a worker uses it as its message granularity.
 export const SLICE = 1 << 20;

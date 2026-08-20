@@ -125,6 +125,7 @@ test: bin/rxenum.js build/librxe-node.mjs web/librxe.js bundle
 	cd $(RXE) && RXENUM=$(CURDIR)/bin/rxenum-wasm $(MAKE) test
 	$(NODE) tests/node.mjs
 	$(NODE) tests/browser.mjs
+	$(NODE) tests/crackcpu-check.mjs
 
 # A no-store dev server, so a rebuilt .wasm or edited module is picked up on
 # reload rather than served stale. python -m http.server sends no Cache-Control
