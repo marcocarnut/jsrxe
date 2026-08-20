@@ -31,16 +31,20 @@ body {
 
 header { display: flex; align-items: baseline; flex-wrap: wrap;
          gap: .1rem .55rem; padding: .9rem 1.4rem .7rem; }
-header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; }
+header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; order: 0; }
 header .sep { color: var(--dim); font-weight: 300; }
 header .sub { color: var(--dim); font-size: .95rem; }
-header .repo { font-size: .88rem; }
+/* Title row: the repo link and the language selector ride to the right of
+   "rxenum"; the tagline (:: subtitle) drops to its own full-width line below,
+   so a phone spends one line on the masthead instead of three. */
+header .repo { font-size: .88rem; order: 1; margin-left: auto; }
 #lang {
-  margin-left: auto; align-self: center;
+  order: 2; margin-left: .5rem; align-self: center;
   background: var(--panel); color: var(--fg);
   border: 1px solid var(--line); border-radius: 6px; padding: .2rem .4rem;
   font-size: .85rem;
 }
+header .tagline { order: 3; flex-basis: 100%; }
 
 main {
   display: grid; grid-template-columns: 20rem 1fr; gap: 1rem;

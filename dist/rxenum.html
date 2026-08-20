@@ -38,16 +38,20 @@ body {
 
 header { display: flex; align-items: baseline; flex-wrap: wrap;
          gap: .1rem .55rem; padding: .9rem 1.4rem .7rem; }
-header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; }
+header h1 { margin: 0; font-size: 1.4rem; letter-spacing: -.01em; order: 0; }
 header .sep { color: var(--dim); font-weight: 300; }
 header .sub { color: var(--dim); font-size: .95rem; }
-header .repo { font-size: .88rem; }
+/* Title row: the repo link and the language selector ride to the right of
+   "rxenum"; the tagline (:: subtitle) drops to its own full-width line below,
+   so a phone spends one line on the masthead instead of three. */
+header .repo { font-size: .88rem; order: 1; margin-left: auto; }
 #lang {
-  margin-left: auto; align-self: center;
+  order: 2; margin-left: .5rem; align-self: center;
   background: var(--panel); color: var(--fg);
   border: 1px solid var(--line); border-radius: 6px; padding: .2rem .4rem;
   font-size: .85rem;
 }
+header .tagline { order: 3; flex-basis: 100%; }
 
 main {
   display: grid; grid-template-columns: 20rem 1fr; gap: 1rem;
@@ -493,8 +497,8 @@ dialog menu button { background: var(--bg); color: var(--fg);
 
 <header>
   <h1 data-t="title">rxenum</h1>
-  <span class="sep">::</span>
-  <span class="sub" data-t="subtitle"></span>
+  <span class="tagline"><span class="sep">::</span>
+    <span class="sub" data-t="subtitle"></span></span>
   <span class="repo">(<a id="repo" href="https://github.com/marcocarnut/jsrxe"
      target="_blank" rel="noopener" data-t="repoTag"></a>)</span>
   <select id="lang" aria-label="Language"></select>
@@ -5522,7 +5526,7 @@ const STRINGS = {
     treeEmpty:        "Enter a valid expression to see its tree.",
     treeLoading:      "Loading the tree view…",
     treeEmptyStr:     "∅",                // shown for a node that produced ""
-    crackTab:         "Brute Force",
+    crackTab:         "Crack",
     crackHint:        "Recover the plaintext behind a hash by hashing every "
                     + "member of the set on the GPU. The finiteness a regex "
                     + "buys you is the point: a tight expression is a tiny "
@@ -5639,7 +5643,7 @@ const STRINGS = {
 
   pt: {
     title:            "rxenum",
-    subtitle:         "expressões regulares como conjuntos que se pode percorrer",
+    subtitle:         "expressões regulares como conjuntos navegáveis",
     repoTag:          "repo",
     orientWarn:       "Esta página fica muito melhor numa tela larga — vire o aparelho de lado (modo paisagem).",
     orientDismiss:    "Dispensar",
@@ -5774,7 +5778,7 @@ const STRINGS = {
     treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
     treeLoading:      "Carregando a árvore…",
     treeEmptyStr:     "∅",
-    crackTab:         "Força Bruta",
+    crackTab:         "Quebrar",
     crackHint:        "Recupere o texto por trás de um hash calculando o hash "
                     + "de cada membro do conjunto na GPU. A finitude que uma "
                     + "regex garante é o ponto: uma expressão enxuta é um "

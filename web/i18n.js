@@ -139,7 +139,7 @@ export const STRINGS = {
     treeEmpty:        "Enter a valid expression to see its tree.",
     treeLoading:      "Loading the tree view…",
     treeEmptyStr:     "∅",                // shown for a node that produced ""
-    crackTab:         "Brute Force",
+    crackTab:         "Crack",
     crackHint:        "Recover the plaintext behind a hash by hashing every "
                     + "member of the set on the GPU. The finiteness a regex "
                     + "buys you is the point: a tight expression is a tiny "
@@ -256,7 +256,7 @@ export const STRINGS = {
 
   pt: {
     title:            "rxenum",
-    subtitle:         "expressões regulares como conjuntos que se pode percorrer",
+    subtitle:         "expressões regulares como conjuntos navegáveis",
     repoTag:          "repo",
     orientWarn:       "Esta página fica muito melhor numa tela larga — vire o aparelho de lado (modo paisagem).",
     orientDismiss:    "Dispensar",
@@ -391,7 +391,7 @@ export const STRINGS = {
     treeEmpty:        "Digite uma expressão válida para ver sua árvore.",
     treeLoading:      "Carregando a árvore…",
     treeEmptyStr:     "∅",
-    crackTab:         "Força Bruta",
+    crackTab:         "Quebrar",
     crackHint:        "Recupere o texto por trás de um hash calculando o hash "
                     + "de cada membro do conjunto na GPU. A finitude que uma "
                     + "regex garante é o ponto: uma expressão enxuta é um "
