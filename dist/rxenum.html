@@ -77,6 +77,11 @@ main {
   #left.lib-collapsed #addown,
   #left.lib-collapsed #helpers-view,
   #left.lib-collapsed #dicts-view { display: none; }
+  /* Keep the four view tabs on one line: trim the label size and the gaps so
+     Elementos/Buscar/Árvore/Crack fit a phone without wrapping. */
+  .etab { font-size: 1rem; margin-right: .35rem; }
+  /* The masthead "::" is decoration; drop it on a phone to save the width. */
+  header .sep { display: none; }
 }
 
 .panel {
@@ -5532,7 +5537,7 @@ const STRINGS = {
                     + "buys you is the point: a tight expression is a tiny "
                     + "search space.",
     crackHashAlg:     "Hash",
-    crackGo:          "Crack",
+    crackGo:          "Start",
     crackPause:       "Pause",
     crackResume:      "Resume",
     crackStop:        "Stop",
@@ -5784,7 +5789,7 @@ const STRINGS = {
                     + "regex garante é o ponto: uma expressão enxuta é um "
                     + "espaço de busca minúsculo.",
     crackHashAlg:     "Hash",
-    crackGo:          "Quebrar",
+    crackGo:          "Iniciar",
     crackPause:       "Pausar",
     crackResume:      "Retomar",
     crackStop:        "Parar",

@@ -145,7 +145,7 @@ export const STRINGS = {
                     + "buys you is the point: a tight expression is a tiny "
                     + "search space.",
     crackHashAlg:     "Hash",
-    crackGo:          "Crack",
+    crackGo:          "Start",
     crackPause:       "Pause",
     crackResume:      "Resume",
     crackStop:        "Stop",
@@ -397,7 +397,7 @@ export const STRINGS = {
                     + "regex garante é o ponto: uma expressão enxuta é um "
                     + "espaço de busca minúsculo.",
     crackHashAlg:     "Hash",
-    crackGo:          "Quebrar",
+    crackGo:          "Iniciar",
     crackPause:       "Pausar",
     crackResume:      "Retomar",
     crackStop:        "Parar",

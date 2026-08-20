@@ -70,6 +70,11 @@ main {
   #left.lib-collapsed #addown,
   #left.lib-collapsed #helpers-view,
   #left.lib-collapsed #dicts-view { display: none; }
+  /* Keep the four view tabs on one line: trim the label size and the gaps so
+     Elementos/Buscar/Árvore/Crack fit a phone without wrapping. */
+  .etab { font-size: 1rem; margin-right: .35rem; }
+  /* The masthead "::" is decoration; drop it on a phone to save the width. */
+  header .sep { display: none; }
 }
 
 .panel {
