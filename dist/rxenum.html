@@ -7347,27 +7347,17 @@ const BUILTIN = [
                         pt: "5a385c9c1f0981aefa411e4579f59f1b" } },
     name: { en: "Password Policy (MD5)", pt: "Política de Senha (MD5)" },
     note: {
-      en: "Seven lowercase-or-digit characters, but with a rule: at least one " +
-          "digit. The {{7!+,1}} says exactly that -- a floor of one on the " +
-          "digits, and the + marks lowercase as the soaker that takes up the " +
-          "slack. This is the policy operator, a password composition rule that " +
-          "a plain regex can only fake with a lookahead. Better still, the set " +
-          "is walked minimal-compliance-first, so the passwords people actually " +
-          "choose -- mostly letters with a digit tucked in -- come first. The " +
-          "whole space is about 70 billion, hours to exhaust, yet this password " +
-          "sits in the first fraction of a percent, so it falls almost as soon " +
-          "as you press Crack.",
-      pt: "Sete caracteres minúsculos ou dígitos, mas com uma regra: pelo menos " +
-          "um dígito. É o que diz o {{7!+,1}} -- piso de um nos dígitos, e o + " +
-          "marca as minúsculas como o soaker que absorve o resto. Este é o " +
-          "operador de política, uma regra de composição de senha que uma " +
-          "regex comum só consegue imitar com um lookahead. Melhor ainda: o " +
-          "conjunto é percorrido em ordem de conformidade-mínima-primeiro, " +
-          "então as senhas que as pessoas realmente escolhem -- quase tudo " +
-          "letra com um dígito no meio -- vêm primeiro. O espaço inteiro tem " +
-          "cerca de 70 bilhões, horas para esgotar, mas esta senha está na " +
-          "primeira fração de um por cento, então cai quase assim que você " +
-          "aperta Quebrar."
+      en: "A composition policy: seven lowercase/digit characters, at least one " +
+          "digit. {{7!+,1}} sets that floor, with + letting lowercase soak up " +
+          "the rest -- what a plain regex needs a lookahead for. And it walks " +
+          "minimal-compliance-first, so this mostly-letters-plus-a-digit " +
+          "password sits near the front of the 70 billion and cracks at once.",
+      pt: "Uma política de composição: sete caracteres minúsculos ou dígitos, " +
+          "com pelo menos um dígito. O {{7!+,1}} fixa esse piso, e o + deixa as " +
+          "minúsculas absorverem o resto -- o que uma regex comum só faz com " +
+          "lookahead. E percorre em conformidade-mínima-primeiro, então esta " +
+          "senha (quase tudo letra, um dígito) fica perto do início dos 70 " +
+          "bilhões e cai de imediato."
     }
   },
   {
@@ -10419,9 +10409,13 @@ function selectExample(ex) {
   $("code").value = exampleCode(ex);
   setCodeVisible(!!exampleCode(ex));
   refreshCodeToggle();
-  // A Brute Force example ships a demo hash and target digest, so opening it and
-  // switching to the Brute Force tab lands on a crack that is ready to run.
-  if (ex.crack) { $("crackalg").value = ex.crack.hash; $("cracktgts").value = crackTargets(ex.crack); }
+  // A Brute Force example ships a demo hash and target digest; open it straight
+  // on the Crack tab, so it lands on a crack that is ready to run.
+  if (ex.crack) {
+    $("crackalg").value = ex.crack.hash;
+    $("cracktgts").value = crackTargets(ex.crack);
+    setTab("crack");
+  }
   state.from = 0n;
   renderLibrary();
   renderNote();

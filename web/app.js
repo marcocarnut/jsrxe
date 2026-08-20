@@ -681,9 +681,13 @@ function selectExample(ex) {
   $("code").value = exampleCode(ex);
   setCodeVisible(!!exampleCode(ex));
   refreshCodeToggle();
-  // A Brute Force example ships a demo hash and target digest, so opening it and
-  // switching to the Brute Force tab lands on a crack that is ready to run.
-  if (ex.crack) { $("crackalg").value = ex.crack.hash; $("cracktgts").value = crackTargets(ex.crack); }
+  // A Brute Force example ships a demo hash and target digest; open it straight
+  // on the Crack tab, so it lands on a crack that is ready to run.
+  if (ex.crack) {
+    $("crackalg").value = ex.crack.hash;
+    $("cracktgts").value = crackTargets(ex.crack);
+    setTab("crack");
+  }
   state.from = 0n;
   renderLibrary();
   renderNote();
