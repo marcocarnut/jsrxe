@@ -485,6 +485,10 @@ dialog menu button { background: var(--bg); color: var(--fg);
           border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
 #crack-view .iconbtn svg { width: 18px; height: 18px; display: block; }
 #crack-view .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
+#crack-view .iconbtn.resume { background: var(--accent-bg); color: var(--accent);
+          border-color: var(--accent); animation: resumepulse 1.4s ease-in-out infinite; }
+@keyframes resumepulse { 0%,100% { box-shadow: 0 0 0 0 transparent; }
+          50% { box-shadow: 0 0 0 3px var(--accent-bg); } }
 #cracktgts { width: 100%; box-sizing: border-box; margin-top: .3rem;
           font-family: ui-monospace, monospace; font-size: .85rem;
           background: var(--bg); color: var(--fg);

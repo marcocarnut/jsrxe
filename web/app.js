@@ -3,7 +3,8 @@ import { BUILTIN } from "./patterns.js";
 import { makeWorkerTransport } from "./transport.js";
 import { HELPER_DOCS } from "./sandbox.js";
 import { BUILTIN_DICTS } from "./dicts.js";
-import { runCrack, runCrackCPU, runCpuFast, runCpuPool, analyzePlan, analyzeGeneric, gpuAdapterInfo } from "./crack.js";
+import { runCrack, runCrackResilient, runCrackCPU, runCpuFast, runCpuPool, analyzePlan, analyzeGeneric, gpuAdapterInfo,
+         setGpuCooldown, setGpuCooldownCap, setGpuCooldownStability, setGpuMaxResets, onGpuStatus, getGpuResets } from "./crack.js";
 
 /* --------------------------------------------------------------- transport */
 
@@ -997,7 +998,7 @@ function makeControl() {
 }
 
 const ICON_PLAY  = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
-const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="5" width="3.6" height="14" rx="1" fill="currentColor"/><rect x="13.4" y="5" width="3.6" height="14" rx="1" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="3.5" height="14" rx="1" fill="currentColor"/></svg>';
 const ICON_STOP  = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
 const ICON_BROOM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 4.5 11 13"/><path d="M9 11l4 4"/><path d="M13 15l-3.5 3.5a2 2 0 0 1-2.8 0l-1.2-1.2a2 2 0 0 1 0-2.8L9 11"/><path d="M6.2 15.2l2.6 2.6"/></svg>';
 
@@ -1008,6 +1009,9 @@ function crackButtons() {
   const running = crackRun.state === "running", idle = crackRun.state === "idle";
   go.innerHTML = running ? ICON_PAUSE : ICON_PLAY;
   go.title = t(running ? "crackPause" : crackRun.state === "paused" ? "crackResume" : "crackGo");
+  // While paused the play button IS the resume control -- highlight it so it
+  // reads as the live action rather than a twin of the idle Start button.
+  go.classList.toggle("resume", crackRun.state === "paused");
   sc.innerHTML = idle ? ICON_BROOM : ICON_STOP;
   sc.title = t(idle ? "crackClear" : "crackStop");
 }
@@ -1058,7 +1062,11 @@ function readKnobs() {
            drainEnd: q.get("crackdrain") === "end",
            pollMs: +q.get("crackpoll") || 0,
            chunkSec: +q.get("crackchunk") || 0,
-           inc: q.get("crackinc") !== "off" };   // incremental odometer (fast serial); ?crackinc=off to A/B
+           inc: q.get("crackinc") !== "off",   // incremental odometer (fast serial); ?crackinc=off to A/B
+           // GPU recovery params live in the gear dialog (#knobcool etc.), applied in
+           // startCrack; ?crackcool/crackcap/crackstab/crackmax are raw dev overrides.
+           // ?cracklosssim=N simulates one device loss at global index N (testing).
+           ...(q.get("cracklosssim") ? { __lossSim: { at: BigInt(q.get("cracklosssim")), fired: false } } : {}) };
 }
 
 // A rate in hashes/s as a friendly MH/s or GH/s.
@@ -1137,8 +1145,26 @@ async function startCrack() {
   const onProgress = (frac, rate, eta) => {
     prog.value = Math.round(frac * 1000);
     st.className = "dim";
-    st.textContent = gpuNote + (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta);
+    st.textContent = gpuNote + (frac*100).toFixed(1) + "% · " + fmtRate(rate) + " · ETA " + fmtEta(eta)
+      + (getGpuResets() > 0 ? " · " + t("crackRecovered").replace("{n}", getGpuResets()) : "");
   };
+  // GPU device-loss recovery: apply the gear-dialog settings (s/min in the UI ->
+  // ms), with optional ?crack* URL overrides (dev, raw ms/count), then wire the
+  // live cool-down countdown. See runCrackResilient / crack.js.
+  if (knobs.backend !== "cpu") {
+    const q = new URLSearchParams(location.search);
+    setGpuCooldown(+q.get("crackcool") || (+$("knobcool").value * 1000));
+    setGpuCooldownCap(+q.get("crackcap") || (+$("knobcoolcap").value * 60000));
+    setGpuCooldownStability(+q.get("crackstab") || (+$("knobcoolstab").value * 60000));
+    setGpuMaxResets(+q.get("crackmax") || (+$("knobmaxreset").value));
+    onGpuStatus((s) => {
+      if (s.cooling) {
+        st.className = "err";
+        st.textContent = gpuNote + t("crackCoolingCountdown")
+          .replace("{s}", Math.ceil(s.remainingMs / 1000)).replace("{n}", s.restart).replace("{m}", s.maxResets);
+      } else { st.className = "dim"; st.textContent = gpuNote + t("crackReinit"); }
+    });
+  }
   // CPU: multicore Web Worker pool where it applies, else the JIT'd single-thread
   // kernel, else the pure-JS oracle. Each declines (supported:false) in turn --
   // the pool on a file:// origin or spawn failure, the fast path on a variable-
@@ -1155,7 +1181,7 @@ async function startCrack() {
     if (knobs.backend === "cpu") {
       res = await cpuRun();
     } else {
-      res = await runCrack({ plan, hash, targets, knobs, onProgress, onHit: crackWriteHit, control });
+      res = await runCrackResilient({ plan, hash, targets, knobs, onProgress, onHit: crackWriteHit, control });
       // No GPU (or a pattern the GPU path can't lay yet): fall back to the pure-JS
       // CPU crack -- slower, but it works and is honest about it.
       if (!res.supported) {
@@ -1206,7 +1232,8 @@ function renderCrackResults(res, note = "", elapsed = 0) {
   st.textContent = note + head + " · " + fmtRate(res.rate) + " · " + fmtDur(elapsed)
     + (res.cores ? " · " + res.cores + " cores" : "") + " · " + res.hits.length + "/" + res.ntgt + " " + t("crackCracked")
     + (res.fw && res.bogus ? " (" + res.bogus + " " + t("crackRechecked") + ")" : "")
-    + (res.capped ? " (" + res.raw + " raw, capped)" : "");
+    + (res.capped ? " (" + res.raw + " raw, capped)" : "")
+    + (res.gpuResets ? " · " + t("crackRecovered").replace("{n}", res.gpuResets) : "");
 }
 
 // The numbering toggle appears in both tabs' controls; both reflect the one
@@ -2029,6 +2056,11 @@ function wire() {
 
   $("pattern").oninput = () => {
     state.selected = null; renderNote(); renderLibrary(); renderBookmarks();
+    // Editing the regex drops the example, so its explanatory note no longer
+    // applies. renderNote() cleared state.note, but the tooltip only re-reads on
+    // mouseenter -- while the user keeps typing (no mouseleave) a note shown from
+    // the just-clicked example would otherwise linger. Hide it now.
+    $("tooltip").hidden = true;
     scheduleReparse();
   };
   $("code").oninput = () => {

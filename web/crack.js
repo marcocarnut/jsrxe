@@ -1194,6 +1194,22 @@ export async function gpuAdapterInfo() {
 // between dispatches: control.stopped() ends it, await control.gate() blocks
 // while paused. Resolves to { hits: [{hex, plaintext}], rate, total, supported,
 // stopped } or { supported:false, reason }.
+// A device-loss error surfaces many ways across browsers/drivers: mapAsync
+// throwing "a valid external Instance reference no longer exists", a rejected
+// onSubmittedWorkDone, or an operation on an already-lost device. Match the
+// device-loss shapes so a genuine logic bug still surfaces instead of looping.
+function looksLikeGpuLoss(e) {
+  const m = ((e && (e.message || (e.toString && e.toString()))) || "").toLowerCase();
+  if (m.includes("webgpu not available") || m.includes("no webgpu")) return false;   // permanent: no GPU at all
+  // A hard crash escalates: after the device dies requestAdapter() itself returns
+  // null ("adapter") for a window while the driver comes back -- that is retryable
+  // (the cool-down gives it time). Kept in sync with the bip39 cracker's set.
+  return (m.includes("device") && m.includes("lost"))
+      || m.includes("external instance") || m.includes("no longer exists")
+      || m.includes("destroyed") || m.includes("mapasync") || m.includes("adapter")
+      || (m.includes("invalid") && m.includes("device")) || m.includes("context lost");
+}
+
 export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProgress, onHit, control }) {
   const H = HASHES[hash];
   if (!H) return { supported: false, reason: `${hash} not wired yet` };
@@ -1210,8 +1226,18 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   // pick can be the integrated or a software adapter, and MD5 runs ~100x slower
   // on software (Chrome's SwiftShader) than on real hardware.
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  if (!adapter) return { supported: false, reason: "no GPU adapter" };
+  // After a device crash requestAdapter() can return null for a window while the
+  // driver comes back -> retryable. runCrackResilient treats a FIRST-attempt null
+  // (no usable GPU) as permanent, but a null during recovery as transient.
+  if (!adapter) throw Object.assign(new Error("no GPU adapter"), { gpuLost: true, adapterNull: true });
   const device = await adapter.requestDevice();
+  // A long run on an iGPU can lose the device mid-flight (thermal reset, the OS
+  // GPU watchdog, or Chrome recycling the GPU process) -- it surfaces as e.g.
+  // mapAsync throwing "a valid external Instance reference no longer exists". We
+  // flag it, tag the throw with a safe resume index, and let runCrackResilient
+  // cool down and continue rather than restart.
+  let deviceLost = false;
+  device.lost.then(info => { if (info && info.reason !== "destroyed") deviceLost = true; });
 
   const rows = parseTargets(targets, H);
   if (!rows.length) return { supported: true, empty: true };
@@ -1318,7 +1344,12 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   uScal[2] = ntgt;                       // lo (base) and hi are set per chunk below
 
   const t0 = performance.now();
-  let done = 0n;
+  // Resume support: runCrackResilient re-invokes from the last safely-drained
+  // index after a GPU reset, so no candidate is skipped -- the [resume, death)
+  // window is simply re-run and its hits dedup downstream.
+  const startIndex = knobs.startIndex ? BigInt(knobs.startIndex) : 0n;
+  let done = startIndex;
+  let safeDone = startIndex;   // everything below this is dispatched, completed, AND drained
   const total = fp.total;
   // Fill the prefix bytes for outer counter value `oi` (BigInt).
   const digits = new Array(outer.length);
@@ -1439,15 +1470,28 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
     return false;
   };
 
+  // Resume point -> (outer index, inner position). spanTotal is constant across
+  // outer prefixes, so the flat global index splits cleanly.
+  const oiStart = spanTotal > 0n ? startIndex / spanTotal : 0n;
+  const basePosStart = spanTotal > 0n ? startIndex % spanTotal : 0n;
+  try {
   outer:
-  for (let oi = 0n; oi < outerN; oi++) {
+  for (let oi = oiStart; oi < outerN; oi++) {
     if (control && control.stopped()) { stopped = true; break; }
+    if (deviceLost) throw Object.assign(new Error("GPU device lost"), { gpuLost: true });
     setPrefix(oi);
     // Sweep the inner span in chunks. `basePos` is a BigInt so the perm path can
     // range over the full 64-bit keyspace; each chunk is <= CHUNK_MAX (2^30), so
     // `count` is always a safe number and the perm base fits two u32 words.
-    let basePos = 0n;
+    let basePos = (oi === oiStart) ? basePosStart : 0n;
     while (basePos < spanTotal) {
+      if (deviceLost) throw Object.assign(new Error("GPU device lost"), { gpuLost: true });
+      // Test hook (dev only): simulate one device loss when `done` crosses .at,
+      // to exercise the recovery path without waiting for a real thermal event.
+      if (knobs.__lossSim && !knobs.__lossSim.fired && done >= knobs.__lossSim.at) {
+        knobs.__lossSim.fired = true; deviceLost = true;
+        throw Object.assign(new Error("simulated GPU loss"), { gpuLost: true });
+      }
       // Back-pressure: before reusing a ring slot, wait for the chunk that used
       // it CAP submits ago -- capping in-flight work at CAP while the GPU stays
       // busy on the CAP-1 chunks still queued. (No-op for the first CAP submits.)
@@ -1481,6 +1525,7 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
       // chunk -- the GPU has a full CAP-deep backlog to work while we do.
       if (!drainEnd && performance.now() - lastPoll >= pollMs) {
         if (await poll()) break outer;
+        safeDone = done;      // poll() drained all work submitted so far -> a safe resume boundary
         lastPoll = performance.now();
         await new Promise(res => setTimeout(res));    // let the page breathe + UI events land
         if (control) {
@@ -1497,14 +1542,109 @@ export async function runCrack({ plan, hash = "md5", targets, knobs = {}, onProg
   }
   await device.queue.onSubmittedWorkDone();
   await drainHits();                                  // catch any hit from the final chunk
+  } catch (e) {
+    // A lost device (thermal / GPU watchdog / GPU-process reset) -> tag the throw
+    // with the safe resume index so runCrackResilient can cool down and CONTINUE
+    // from there rather than restart. Anything else is a genuine bug -> rethrow.
+    if (deviceLost || looksLikeGpuLoss(e)) {
+      try { device.destroy(); } catch (_) {}
+      throw Object.assign(new Error(`GPU device lost: ${e && e.message ? e.message : e}`),
+                          { gpuLost: true, resumeIndex: safeDone });
+    }
+    throw e;
+  }
   const secs = (performance.now() - t0) / 1000 - pausedMs / 1000;
-  const rate = Number(done) / secs;
+  const rate = Number(done - startIndex) / secs;       // candidates swept THIS attempt
   if (onProgress && !stopped) onProgress(1, rate, 0);  // land the bar at 100% on a clean finish
   device.destroy();
 
   hits.sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
   return { supported: true, hits, rate, total, ntgt, raw: lastNhits, capped: lastNhits > MAXHITS,
-           bogus, fw, stopped, allFound };
+           bogus, fw, stopped, allFound, gpuResets: 0 };
+}
+
+// ---- GPU device-loss recovery: config + stats -------------------------------
+// API and behaviour mirror the bip39 cracker's gpucrack.js for cross-tool
+// consistency. Cool-down is an ADAPTIVE exponential backoff: wait `base` (the
+// minimum) on a loss, DOUBLE it per consecutive loss up to `cap`, and reset to
+// `base` only once the GPU has run clean past `stability` since the last resume
+// -- so a cluster of losses keeps escalating while a one-off blip is forgiven.
+// Losses restart the clean clock (keyed off the last resume); good batches don't.
+// Defaults: base 60s, cap 30min, stability 30min, maxResets 20.
+const GPU_CFG = { base: 60000, cap: 1800000, stability: 1800000, maxResets: 20 };
+let _gpuCur = GPU_CFG.base, _gpuLastResumeAt = 0, _gpuResets = 0, _onGpuStatus = null;
+export function setGpuCooldown(ms)          { GPU_CFG.base = Math.max(0, ms | 0); }
+export function getGpuCooldown()            { return GPU_CFG.base; }
+export function setGpuCooldownCap(ms)       { GPU_CFG.cap = Math.max(GPU_CFG.base, ms | 0); }
+export function getGpuCooldownCap()         { return GPU_CFG.cap; }
+export function setGpuCooldownStability(ms) { GPU_CFG.stability = Math.max(0, ms | 0); }
+export function getGpuCooldownStability()   { return GPU_CFG.stability; }
+export function setGpuMaxResets(n)          { GPU_CFG.maxResets = Math.max(0, n | 0); }
+export function getGpuMaxResets()           { return GPU_CFG.maxResets; }
+export function getGpuCooldownCurrent()     { return _gpuCur; }
+export function getGpuResets()              { return _gpuResets; }
+export function resetGpuStats()             { _gpuResets = 0; _gpuCur = GPU_CFG.base; _gpuLastResumeAt = 0; }
+// onGpuStatus(fn): fn gets {cooling:true, remainingMs, cooldownMs, restart,
+// maxResets} each second during a cool-down, then {cooling:false, ...} on resume.
+export function onGpuStatus(fn)             { _onGpuStatus = fn; }
+
+// GPU keycracking with device-loss recovery. A long run on an iGPU can lose the
+// device (overheat, the OS GPU watchdog, or the browser recycling the GPU
+// process). This wraps runCrack: on a tagged gpuLost throw it counts the reset,
+// cools down (adaptive backoff, see GPU_CFG), then re-runs from the last safely-
+// drained index -- no candidate skipped (the re-run window dedups). The result
+// carries gpuResets; getGpuResets()/onGpuStatus surface it live.
+export async function runCrackResilient(opts) {
+  const { onHit, control } = opts;
+  resetGpuStats();
+
+  const allHits = [], seen = new Set();
+  const collectHit = (h) => { if (!seen.has(h.hex)) { seen.add(h.hex); allHits.push(h); } if (onHit) onHit(h); };
+  const merge = (list) => { for (const h of list || []) if (!seen.has(h.hex)) { seen.add(h.hex); allHits.push(h); } };
+  const sortHits = () => allHits.slice().sort((a, b) => a.plaintext < b.plaintext ? -1 : 1);
+
+  // Cool for `ms`, emitting an onGpuStatus countdown each second. Honours Stop
+  // promptly (abort-during-cooldown) -- returns true if aborted.
+  const coolDown = async (ms) => {
+    const end = performance.now() + ms;
+    while (performance.now() < end) {
+      if (control && control.stopped()) return true;
+      if (control && control.paused && control.paused()) { await control.gate(); if (control.stopped()) return true; }
+      if (_onGpuStatus) _onGpuStatus({ cooling: true, remainingMs: Math.max(0, end - performance.now()),
+                                       cooldownMs: ms, restart: _gpuResets, maxResets: GPU_CFG.maxResets });
+      await new Promise(r => setTimeout(r, Math.min(1000, Math.max(0, end - performance.now()))));
+    }
+    if (_onGpuStatus) _onGpuStatus({ cooling: false, restart: _gpuResets, maxResets: GPU_CFG.maxResets });
+    return false;
+  };
+
+  let resume = 0n;
+  for (;;) {
+    try {
+      const res = await runCrack({ ...opts, knobs: { ...(opts.knobs || {}), startIndex: resume.toString() }, onHit: collectHit });
+      if (!res.supported || res.empty) return res;   // no WebGPU / shader error / no targets -> as-is
+      merge(res.hits);
+      return { ...res, hits: sortHits(), gpuResets: _gpuResets };
+    } catch (e) {
+      if (!(e && e.gpuLost)) throw e;                 // a genuine error -> surface it
+      // A null adapter on the FIRST acquire == no usable GPU (permanent); a null
+      // during recovery == the transient post-crash window -> keep retrying.
+      if (e.adapterNull && _gpuResets === 0) return { supported: false, reason: e.message };
+      // Check-before-increment (matches gpucrack.js): give up once maxResets
+      // recoveries are already done, and the counter reads the true count.
+      if (_gpuResets >= GPU_CFG.maxResets)
+        throw new Error(`GPU gave up after ${_gpuResets} recoveries (max ${GPU_CFG.maxResets}) — it appears unstable. Let it cool and try again, or raise the limit.`);
+      _gpuResets++;
+      if (e.resumeIndex != null) resume = e.resumeIndex;
+      // adaptive backoff: forgive if it ran clean past `stability`, else escalate
+      const now = performance.now();
+      if (_gpuLastResumeAt && (now - _gpuLastResumeAt) > GPU_CFG.stability) _gpuCur = GPU_CFG.base;
+      else if (_gpuLastResumeAt) _gpuCur = Math.min(_gpuCur * 2, GPU_CFG.cap);
+      const aborted = await coolDown(_gpuCur);
+      _gpuLastResumeAt = performance.now();
+      if (aborted) return { supported: true, hits: sortHits(), gpuResets: _gpuResets, stopped: true };
+    }
+  }
 }
 
 // ---- CPU reference / fallback ------------------------------------------
